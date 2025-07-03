@@ -238,6 +238,8 @@ class AgentBase(
         self._params = {}
         self._global_data = {}
         self._function_includes = []
+        self._prompt_llm_params = {}
+        self._post_prompt_llm_params = {}
         
         # Dynamic configuration callback
         self._dynamic_config_callback = None
@@ -763,6 +765,34 @@ class AgentBase(
                 # Add global_data if any
                 if agent_to_use._global_data:
                     ai_config["global_data"] = agent_to_use._global_data
+                
+                # Add LLM parameters to prompt if any are set
+                if hasattr(agent_to_use, '_prompt_llm_params') and agent_to_use._prompt_llm_params:
+                    # Ensure prompt exists in the config
+                    if "prompt" in ai_config:
+                        # Update existing prompt with LLM params
+                        if isinstance(ai_config["prompt"], dict):
+                            ai_config["prompt"].update(agent_to_use._prompt_llm_params)
+                        elif isinstance(ai_config["prompt"], str):
+                            # Convert string prompt to dict format
+                            ai_config["prompt"] = {
+                                "text": ai_config["prompt"],
+                                **agent_to_use._prompt_llm_params
+                            }
+                    
+                # Add LLM parameters to post_prompt if any are set
+                if hasattr(agent_to_use, '_post_prompt_llm_params') and agent_to_use._post_prompt_llm_params and post_prompt:
+                    # Ensure post_prompt exists in the config
+                    if "post_prompt" in ai_config:
+                        # Update existing post_prompt with LLM params
+                        if isinstance(ai_config["post_prompt"], dict):
+                            ai_config["post_prompt"].update(agent_to_use._post_prompt_llm_params)
+                        elif isinstance(ai_config["post_prompt"], str):
+                            # Convert string post_prompt to dict format
+                            ai_config["post_prompt"] = {
+                                "text": ai_config["post_prompt"],
+                                **agent_to_use._post_prompt_llm_params
+                            }
                     
             except ValueError as e:
                 if not agent_to_use._suppress_logs:

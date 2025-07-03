@@ -556,6 +556,53 @@ if __name__ == "__main__":
     agent.serve(host="0.0.0.0", port=8000)
 ```
 
+### Customizing LLM Parameters
+
+The SDK allows you to customize LLM parameters for both the main prompt and post-prompt, giving you fine control over the AI's behavior:
+
+```python
+from signalwire_agents import AgentBase
+
+class PreciseAgent(AgentBase):
+    def __init__(self):
+        super().__init__(name="precise", route="/precise")
+        
+        # Configure the agent's personality
+        self.prompt_add_section("Role", "You are a precise technical assistant.")
+        self.prompt_add_section("Instructions", "Provide accurate, detailed information.")
+        
+        # Set custom LLM parameters for the main prompt
+        self.set_prompt_llm_params(
+            temperature=0.3,        # Low temperature for more consistent responses
+            top_p=0.9,             # Slightly reduced for focused responses
+            confidence=0.7,        # Higher confidence threshold
+            presence_penalty=0.1,  # Slight penalty for repetition
+            frequency_penalty=0.2  # Encourage varied vocabulary
+        )
+        
+        # Set post-prompt for summaries
+        self.set_post_prompt("Provide a concise summary of the key points discussed.")
+        
+        # Different parameters for post-prompt (summaries should be even more focused)
+        self.set_post_prompt_llm_params(
+            temperature=0.2,       # Very low for consistent summaries
+            confidence=0.8        # High confidence for summaries
+        )
+
+agent = PreciseAgent()
+agent.serve()
+```
+
+#### Available LLM Parameters
+
+- **temperature** (0.0-1.0): Controls randomness. Lower = more focused, higher = more creative
+- **top_p** (0.0-1.0): Nucleus sampling. Lower = more focused on likely tokens
+- **confidence** (0.0-1.0): Minimum confidence threshold for responses
+- **presence_penalty** (-2.0-2.0): Penalizes tokens based on presence in conversation
+- **frequency_penalty** (-2.0-2.0): Penalizes tokens based on frequency of use
+
+For more details on LLM parameter tuning, see [LLM Parameters Guide](docs/llm_parameters.md).
+
 ### Using Prefab Agents
 
 ```python

@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- LLM parameter customization support via `set_prompt_llm_params()` and `set_post_prompt_llm_params()` methods
+- Fine-grained control over AI behavior with temperature, top_p, confidence, presence_penalty, and frequency_penalty
+- pgvector backend support for search system with PostgreSQL vector database
+- `--overwrite` flag for search index building to replace existing collections
+- SearchService now supports both SQLite and pgvector backends
+
+### Documentation
+- Added comprehensive LLM Parameters Guide (docs/llm_parameters.md)
+- Updated README with LLM parameter examples
+- Updated agent_guide.md with LLM parameter configuration section
+- Updated API reference with new LLM parameter methods
+- Enhanced search system documentation with pgvector information
+
 ## [0.1.36] - 2025-07-01
 
 - Version bump

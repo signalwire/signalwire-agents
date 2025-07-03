@@ -1122,6 +1122,36 @@ self.set_global_data({
 })
 ```
 
+### Customizing LLM Parameters
+
+The SDK provides methods to fine-tune the Language Model parameters for both the main prompt and post-prompt, giving you precise control over the AI's behavior:
+
+```python
+# Set LLM parameters for the main prompt
+self.set_prompt_llm_params(
+    temperature=0.7,        # Controls randomness (0.0-1.0)
+    top_p=0.9,             # Nucleus sampling threshold
+    confidence=0.6,        # Minimum confidence for responses
+    presence_penalty=0.0,  # Penalizes token repetition
+    frequency_penalty=0.0  # Penalizes frequent word usage
+)
+
+# Set different parameters for the post-prompt
+self.set_post_prompt_llm_params(
+    temperature=0.3,       # Lower temperature for consistent summaries
+    confidence=0.8        # Higher confidence for summaries
+)
+```
+
+**Common Use Cases:**
+
+- **Customer Service**: Low temperature (0.2-0.4) for consistent, professional responses
+- **Creative Tasks**: Higher temperature (0.7-0.9) for varied, creative outputs
+- **Technical Support**: Very low temperature (0.1-0.3) with high confidence for accuracy
+- **General Assistant**: Medium temperature (0.5-0.7) for balanced interaction
+
+For detailed information about each parameter and advanced tuning strategies, see [LLM Parameters Guide](llm_parameters.md).
+
 ## Dynamic Agent Configuration
 
 Dynamic agent configuration allows you to configure agents per-request based on parameters from the HTTP request (query parameters, body data, headers). This enables powerful patterns like multi-tenant applications, A/B testing, personalization, and localization.

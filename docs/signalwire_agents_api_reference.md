@@ -129,6 +129,65 @@ Set additional text to append after the main prompt.
 agent.set_post_prompt("Always be polite and professional.")
 ```
 
+#### LLM Parameter Configuration
+
+##### `set_prompt_llm_params`
+
+```python
+def set_prompt_llm_params(
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    confidence: Optional[float] = None,
+    presence_penalty: Optional[float] = None,
+    frequency_penalty: Optional[float] = None
+) -> AgentBase
+```
+Set Language Model parameters for the main prompt.
+
+**Parameters:**
+- `temperature` (Optional[float]): Controls randomness (0.0-1.0). Lower = more focused
+- `top_p` (Optional[float]): Nucleus sampling threshold (0.0-1.0)
+- `confidence` (Optional[float]): Minimum confidence for responses (0.0-1.0)
+- `presence_penalty` (Optional[float]): Penalizes token repetition (-2.0-2.0)
+- `frequency_penalty` (Optional[float]): Penalizes frequent words (-2.0-2.0)
+
+**Usage:**
+```python
+# Configure for consistent, professional responses
+agent.set_prompt_llm_params(
+    temperature=0.3,
+    top_p=0.9,
+    confidence=0.7,
+    presence_penalty=0.1,
+    frequency_penalty=0.2
+)
+```
+
+##### `set_post_prompt_llm_params`
+
+```python
+def set_post_prompt_llm_params(
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    confidence: Optional[float] = None,
+    presence_penalty: Optional[float] = None,
+    frequency_penalty: Optional[float] = None
+) -> AgentBase
+```
+Set Language Model parameters for the post-prompt.
+
+**Parameters:**
+- Same as `set_prompt_llm_params`
+
+**Usage:**
+```python
+# Configure for focused summaries
+agent.set_post_prompt_llm_params(
+    temperature=0.2,
+    confidence=0.8
+)
+```
+
 #### Structured Prompts (POM)
 
 ##### `prompt_add_section`
