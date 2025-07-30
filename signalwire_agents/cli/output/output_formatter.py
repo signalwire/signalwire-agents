@@ -231,7 +231,19 @@ def format_result(result: Any) -> str:
     from signalwire_agents.core.function_result import SwaigFunctionResult
     
     if isinstance(result, SwaigFunctionResult):
-        return f"SwaigFunctionResult: {result.response}"
+        output = [f"SwaigFunctionResult: {result.response}"]
+        
+        # Show actions if present
+        if hasattr(result, 'action') and result.action:
+            output.append("\nActions:")
+            for action in result.action:
+                output.append(json.dumps(action, indent=2))
+        
+        # Show post_process flag if set
+        if hasattr(result, 'post_process') and result.post_process:
+            output.append(f"\nPost-process: {result.post_process}")
+            
+        return "\n".join(output)
     elif isinstance(result, dict):
         if 'response' in result:
             return f"Response: {result['response']}"
