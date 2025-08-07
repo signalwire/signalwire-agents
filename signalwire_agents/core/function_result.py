@@ -260,6 +260,87 @@ class SwaigFunctionResult:
         """
         return self.add_action("set_global_data", data)
 
+    def swml_user_event(self, event_data: Dict[str, Any]) -> 'SwaigFunctionResult':
+        """
+        Send a user event through SWML to update the client UI.
+        
+        This is a convenience method for sending user events to connected clients,
+        commonly used for real-time UI updates in interactive applications.
+        
+        Args:
+            event_data: Dictionary containing the event type and any associated data
+                       Example: {"type": "cards_dealt", "player_hand": [...], "score": 21}
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            result = (
+                SwaigFunctionResult("You have blackjack!")
+                .swml_user_event({
+                    "type": "cards_dealt",
+                    "player_hand": player_cards,
+                    "dealer_hand": dealer_cards,
+                    "player_score": 21
+                })
+            )
+        """
+        swml_action = {
+            "sections": {
+                "main": [{
+                    "user_event": {
+                        "event": event_data
+                    }
+                }]
+            },
+            "version": "1.0.0"
+        }
+        
+        return self.add_action("SWML", swml_action)
+    
+    def swml_change_step(self, step_name: str) -> 'SwaigFunctionResult':
+        """
+        Change the conversation step in the AI agent's workflow.
+        
+        This is a convenience method for transitioning between conversation steps,
+        allowing dynamic workflow control based on user interactions or game state.
+        
+        Args:
+            step_name: Name of the step to transition to (e.g., "betting", "playing", "hand_complete")
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            result = (
+                SwaigFunctionResult("Starting a new hand")
+                .swml_change_step("betting")
+                .swml_user_event({"type": "game_reset", "chips": 1000})
+            )
+        """
+        return self.add_action("change_step", step_name)
+    
+    def swml_change_context(self, context_name: str) -> 'SwaigFunctionResult':
+        """
+        Change the conversation context in the AI agent's workflow.
+        
+        This is a convenience method for switching between different conversation contexts,
+        useful for agents that handle multiple distinct workflows or service modes.
+        
+        Args:
+            context_name: Name of the context to transition to (e.g., "support", "sales", "technical")
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            result = (
+                SwaigFunctionResult("Transferring you to technical support")
+                .swml_change_context("technical_support")
+            )
+        """
+        return self.add_action("change_context", context_name)
+    
     def execute_swml(self, swml_content, transfer: bool = False) -> 'SwaigFunctionResult':
         """
         Execute SWML content with optional transfer behavior.
