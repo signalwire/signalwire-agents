@@ -1003,6 +1003,19 @@ class AgentBase(
         ephemeral_agent._global_data = copy.deepcopy(self._global_data)
         ephemeral_agent._function_includes = copy.deepcopy(self._function_includes)
         
+        # Deep copy LLM parameters
+        ephemeral_agent._prompt_llm_params = copy.deepcopy(self._prompt_llm_params)
+        ephemeral_agent._post_prompt_llm_params = copy.deepcopy(self._post_prompt_llm_params)
+        
+        # Copy internal fillers if they exist
+        if hasattr(self, '_internal_fillers'):
+            ephemeral_agent._internal_fillers = copy.deepcopy(self._internal_fillers)
+        
+        # Copy contexts builder state if it exists
+        if hasattr(self, '_contexts_builder'):
+            ephemeral_agent._contexts_builder = copy.deepcopy(self._contexts_builder)
+            ephemeral_agent._contexts_defined = self._contexts_defined
+        
         # Deep copy the POM object if it exists to prevent sharing prompt sections
         if hasattr(self, 'pom') and self.pom:
             ephemeral_agent.pom = copy.deepcopy(self.pom)
@@ -1020,9 +1033,12 @@ class AgentBase(
         
         # Create new prompt manager for the ephemeral agent
         ephemeral_agent._prompt_manager = PromptManager(ephemeral_agent)
-        # Copy the prompt sections data
+        # Copy ALL PromptManager state
         if hasattr(self._prompt_manager, '_sections'):
             ephemeral_agent._prompt_manager._sections = copy.deepcopy(self._prompt_manager._sections)
+        ephemeral_agent._prompt_manager._prompt_text = copy.deepcopy(self._prompt_manager._prompt_text)
+        ephemeral_agent._prompt_manager._post_prompt_text = copy.deepcopy(self._prompt_manager._post_prompt_text)
+        ephemeral_agent._prompt_manager._contexts = copy.deepcopy(self._prompt_manager._contexts)
         
         # Create new tool registry for the ephemeral agent
         ephemeral_agent._tool_registry = ToolRegistry(ephemeral_agent)
