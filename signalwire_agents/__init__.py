@@ -31,6 +31,9 @@ from signalwire_agents.core.function_result import SwaigFunctionResult
 from signalwire_agents.core.swaig_function import SWAIGFunction
 from signalwire_agents.agents.bedrock import BedrockAgent
 
+# Import WebService for static file serving
+from signalwire_agents.web import WebService
+
 # Lazy import skills to avoid slow startup for CLI tools
 # Skills are now loaded on-demand when requested
 def _get_skill_registry():
@@ -138,6 +141,7 @@ __all__ = [
     "Context", 
     "Step",
     "create_simple_context",
+    "WebService",
     "start_agent",
     "run_agent",
     "list_skills",
