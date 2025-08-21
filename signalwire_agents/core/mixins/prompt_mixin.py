@@ -7,7 +7,13 @@ Licensed under the MIT License.
 See LICENSE file in the project root for full license information.
 """
 
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from signalwire_agents.core.agent_base import AgentBase
+    from signalwire_agents.core.contexts import ContextBuilder
+else:
+    from signalwire_agents.core.contexts import ContextBuilder
 
 
 class PromptMixin:
@@ -112,7 +118,7 @@ class PromptMixin:
                                             bullets=sub_bullets if sub_bullets else None
                                         )
     
-    def define_contexts(self, contexts=None) -> Optional['ContextBuilder']:
+    def define_contexts(self, contexts=None) -> Union['AgentBase', 'ContextBuilder']:
         """
         Define contexts and steps for this agent (alternative to POM/prompt)
         
@@ -132,14 +138,21 @@ class PromptMixin:
             return self
         else:
             # Legacy behavior - return ContextBuilder
-            # Import here to avoid circular imports
-            from signalwire_agents.core.contexts import ContextBuilder
-            
             if self._contexts_builder is None:
                 self._contexts_builder = ContextBuilder(self)
                 self._contexts_defined = True
             
             return self._contexts_builder
+    
+    @property
+    def contexts(self) -> 'ContextBuilder':
+        """
+        Get the ContextBuilder for this agent
+        
+        Returns:
+            ContextBuilder instance for defining contexts
+        """
+        return self.define_contexts()
     
     def _validate_prompt_mode_exclusivity(self):
         """
