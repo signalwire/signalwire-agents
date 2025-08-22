@@ -134,22 +134,18 @@ agent.set_post_prompt("Always be polite and professional.")
 ##### `set_prompt_llm_params`
 
 ```python
-def set_prompt_llm_params(
-    temperature: Optional[float] = None,
-    top_p: Optional[float] = None,
-    confidence: Optional[float] = None,
-    presence_penalty: Optional[float] = None,
-    frequency_penalty: Optional[float] = None
-) -> AgentBase
+def set_prompt_llm_params(**params) -> AgentBase
 ```
-Set Language Model parameters for the main prompt.
+Set Language Model parameters for the main prompt. Accepts any parameters which will be passed through to the SignalWire server. The server validates and applies parameters based on the target model's capabilities.
 
-**Parameters:**
-- `temperature` (Optional[float]): Controls randomness (0.0-1.5). Lower = more focused. Default: 0.3
-- `top_p` (Optional[float]): Nucleus sampling threshold (0.0-1.0). Default: 1.0
-- `barge_confidence` (Optional[float]): ASR confidence to interrupt (0.0-1.0). Default: 0.0
-- `presence_penalty` (Optional[float]): Topic diversity (-2.0-2.0). Default: 0.1
-- `frequency_penalty` (Optional[float]): Repetition control (-2.0-2.0). Default: 0.1
+**Common Parameters:**
+- `temperature`: Controls randomness. Lower = more focused
+- `top_p`: Nucleus sampling threshold
+- `barge_confidence`: ASR confidence to interrupt
+- `presence_penalty`: Topic diversity control
+- `frequency_penalty`: Repetition control
+
+Note: No defaults are sent unless explicitly set. Invalid parameters for the selected model will be handled/ignored by the server.
 
 **Usage:**
 ```python
@@ -166,22 +162,17 @@ agent.set_prompt_llm_params(
 ##### `set_post_prompt_llm_params`
 
 ```python
-def set_post_prompt_llm_params(
-    temperature: Optional[float] = None,
-    top_p: Optional[float] = None,
-    presence_penalty: Optional[float] = None,
-    frequency_penalty: Optional[float] = None
-) -> AgentBase
+def set_post_prompt_llm_params(**params) -> AgentBase
 ```
-Set Language Model parameters for the post-prompt.
+Set Language Model parameters for the post-prompt. Accepts any parameters which will be passed through to the SignalWire server. The server validates and applies parameters based on the target model's capabilities.
 
-**Parameters:**
-- `temperature` (Optional[float]): Controls randomness (0.0-1.5). Default: 0.0
-- `top_p` (Optional[float]): Nucleus sampling threshold (0.0-1.0). Default: 1.0
-- `presence_penalty` (Optional[float]): Topic diversity (-2.0-2.0). Default: 0.0
-- `frequency_penalty` (Optional[float]): Repetition control (-2.0-2.0). Default: 0.0
+**Common Parameters:**
+- `temperature`: Controls randomness. Lower = more focused
+- `top_p`: Nucleus sampling threshold
+- `presence_penalty`: Topic diversity control
+- `frequency_penalty`: Repetition control
 
-Note: barge_confidence is not available for post-prompt.
+Note: barge_confidence is not applicable to post-prompt. No defaults are sent unless explicitly set.
 
 **Usage:**
 ```python

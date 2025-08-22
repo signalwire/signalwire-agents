@@ -1128,8 +1128,9 @@ The SDK provides methods to fine-tune the Language Model parameters for both the
 
 ```python
 # Set LLM parameters for the main prompt
+# These parameters are passed to the server which validates them based on the model
 self.set_prompt_llm_params(
-    temperature=0.7,        # Controls randomness (0.0-1.5)
+    temperature=0.7,        # Controls randomness
     top_p=0.9,             # Nucleus sampling threshold
     barge_confidence=0.6,  # ASR confidence to interrupt
     presence_penalty=0.0,  # Penalizes token repetition
