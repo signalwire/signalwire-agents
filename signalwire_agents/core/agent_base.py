@@ -562,6 +562,7 @@ class AgentBase(
             SWML document as a string
         """
         self.log.debug("_render_swml_called", 
+                      call_id=call_id,
                       has_modifications=bool(modifications),
                       use_ephemeral=bool(modifications and modifications.get("__use_ephemeral_agent")),
                       has_dynamic_callback=bool(self._dynamic_config_callback))
@@ -618,6 +619,9 @@ class AgentBase(
         # Generate a call ID if needed
         if call_id is None:
             call_id = agent_to_use._session_manager.create_session()
+            self.log.debug("generated_call_id", call_id=call_id)
+        else:
+            self.log.debug("using_provided_call_id", call_id=call_id)
             
         # Start with any SWAIG query params that were set
         query_params = agent_to_use._swaig_query_params.copy() if agent_to_use._swaig_query_params else {}
@@ -679,6 +683,7 @@ class AgentBase(
                 token = None
                 if func.secure and call_id:
                     token = agent_to_use._create_tool_token(tool_name=name, call_id=call_id)
+                    self.log.debug("created_token_for_function", function=name, call_id=call_id, token_prefix=token[:20] if token else None)
                     
                 # Prepare function entry
                 function_entry = {

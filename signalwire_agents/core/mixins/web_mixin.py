@@ -494,6 +494,10 @@ class WebMixin:
                     
                 # Get call_id from body if present
                 call_id = body.get("call_id")
+                if not call_id and "call" in body:
+                    # Sometimes it might be nested under 'call'
+                    call_id = body.get("call", {}).get("call_id")
+                req_log.debug("extracted_call_id_from_body", call_id=call_id, body_keys=list(body.keys()))
             else:
                 # Get call_id from query params for GET
                 call_id = request.query_params.get("call_id")
