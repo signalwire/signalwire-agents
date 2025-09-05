@@ -692,9 +692,25 @@ class AgentBase(
                     "parameters": func._ensure_parameter_structure()
                 }
                 
-                # Add fillers if present
-                if func.fillers:
-                    function_entry["fillers"] = func.fillers
+                # Add wait_file if present (SignalWire SWML expects wait_file, not fillers)
+                if hasattr(func, 'wait_file') and func.wait_file:
+                    wait_file_url = func.wait_file
+                    # If wait_file is a relative URL, convert it to absolute using agent's base URL
+                    if wait_file_url and not wait_file_url.startswith(('http://', 'https://', '//')):
+                        # Build full URL using the agent's base URL
+                        base_url = agent_to_use._get_base_url(include_auth=False)
+                        # Handle relative paths appropriately
+                        if not wait_file_url.startswith('/'):
+                            wait_file_url = '/' + wait_file_url
+                        wait_file_url = f"{base_url}{wait_file_url}"
+                    function_entry["wait_file"] = wait_file_url
+                elif func.fillers:
+                    # Backward compatibility: use fillers as wait_file if wait_file not specified
+                    function_entry["wait_file"] = func.fillers
+                
+                # Add wait_file_loops if present
+                if hasattr(func, 'wait_file_loops') and func.wait_file_loops is not None:
+                    function_entry["wait_file_loops"] = func.wait_file_loops
                 
                 # Handle webhook URL
                 if hasattr(func, 'webhook_url') and func.webhook_url:

@@ -40,6 +40,8 @@ class ToolRegistry:
         handler: Callable,
         secure: bool = True,
         fillers: Optional[Dict[str, List[str]]] = None,
+        wait_file: Optional[str] = None,
+        wait_file_loops: Optional[int] = None,
         webhook_url: Optional[str] = None,
         required: Optional[List[str]] = None,
         **swaig_fields
@@ -53,7 +55,9 @@ class ToolRegistry:
             parameters: JSON Schema of parameters
             handler: Function to call when invoked
             secure: Whether to require token validation
-            fillers: Optional dict mapping language codes to arrays of filler phrases
+            fillers: Optional dict mapping language codes to arrays of filler phrases (deprecated)
+            wait_file: Optional URL to audio file to play while function executes
+            wait_file_loops: Optional number of times to loop the wait_file
             webhook_url: Optional external webhook URL to use instead of local handling
             required: Optional list of required parameter names
             **swaig_fields: Additional SWAIG fields to include in function definition
@@ -71,6 +75,8 @@ class ToolRegistry:
             handler=handler,
             secure=secure,
             fillers=fillers,
+            wait_file=wait_file,
+            wait_file_loops=wait_file_loops,
             webhook_url=webhook_url,
             required=required,
             **swaig_fields
@@ -132,6 +138,8 @@ class ToolRegistry:
                     parameters = tool_params_copy.pop("parameters", {})
                     secure = tool_params_copy.pop("secure", True)
                     fillers = tool_params_copy.pop("fillers", None)
+                    wait_file = tool_params_copy.pop("wait_file", None)
+                    wait_file_loops = tool_params_copy.pop("wait_file_loops", None)
                     webhook_url = tool_params_copy.pop("webhook_url", None)
                     required = tool_params_copy.pop("required", None)
                     
@@ -143,6 +151,8 @@ class ToolRegistry:
                         handler=attr.__get__(self.agent, cls),  # Bind the method to this instance
                         secure=secure,
                         fillers=fillers,
+                        wait_file=wait_file,
+                        wait_file_loops=wait_file_loops,
                         webhook_url=webhook_url,
                         required=required,
                         **tool_params_copy  # Pass through any additional swaig_fields

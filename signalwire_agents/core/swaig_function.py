@@ -30,6 +30,8 @@ class SWAIGFunction:
         parameters: Dict[str, Dict] = None,
         secure: bool = False,
         fillers: Optional[Dict[str, List[str]]] = None,
+        wait_file: Optional[str] = None,
+        wait_file_loops: Optional[int] = None,
         webhook_url: Optional[str] = None,
         required: Optional[List[str]] = None,
         **extra_swaig_fields
@@ -43,7 +45,9 @@ class SWAIGFunction:
             description: Human-readable description of the function
             parameters: Dictionary of parameters, keys are parameter names, values are param definitions
             secure: Whether this function requires token validation
-            fillers: Optional dictionary of filler phrases by language code
+            fillers: Optional dictionary of filler phrases by language code (deprecated, use wait_file)
+            wait_file: Optional URL to audio file to play while function executes
+            wait_file_loops: Optional number of times to loop the wait_file
             webhook_url: Optional external webhook URL to use instead of local handling
             required: Optional list of required parameter names
             **extra_swaig_fields: Additional SWAIG fields to include in function definition
@@ -53,7 +57,9 @@ class SWAIGFunction:
         self.description = description
         self.parameters = parameters or {}
         self.secure = secure
-        self.fillers = fillers
+        self.fillers = fillers  # Keep for backward compatibility
+        self.wait_file = wait_file or fillers  # Use wait_file if provided, else fall back to fillers
+        self.wait_file_loops = wait_file_loops
         self.webhook_url = webhook_url
         self.required = required or []
         self.extra_swaig_fields = extra_swaig_fields
