@@ -372,28 +372,22 @@ class AIConfigMixin:
             self._function_includes = valid_includes
         return self
     
-    def set_prompt_llm_params(
-        self,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        barge_confidence: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None
-    ) -> 'AgentBase':
+    def set_prompt_llm_params(self, **params) -> 'AgentBase':
         """
         Set LLM parameters for the main prompt.
         
-        Args:
-            temperature: Randomness setting (0.0-1.5). Lower values make output more deterministic.
-                        Default: 0.3
-            top_p: Alternative to temperature (0.0-1.0). Controls nucleus sampling.
-                   Default: 1.0
-            barge_confidence: ASR confidence to interrupt (0.0-1.0). Higher values make it harder to interrupt.
-                             Default: 0.0
-            presence_penalty: Topic diversity (-2.0 to 2.0). Positive values encourage new topics.
-                             Default: 0.1
-            frequency_penalty: Repetition control (-2.0 to 2.0). Positive values reduce repetition.
-                              Default: 0.1
+        Accepts any parameters which will be passed through to the SignalWire server.
+        The server will validate and apply parameters based on the target model's capabilities.
+        
+        Common parameters include:
+            temperature: Randomness setting. Lower values make output more deterministic.
+            top_p: Alternative to temperature. Controls nucleus sampling.
+            barge_confidence: ASR confidence to interrupt. Higher values make it harder to interrupt.
+            presence_penalty: Topic diversity. Positive values encourage new topics.
+            frequency_penalty: Repetition control. Positive values reduce repetition.
+        
+        Note: Parameters are model-specific and will be validated by the server.
+        Invalid parameters for the selected model will be handled/ignored by the server.
         
         Returns:
             Self for method chaining
@@ -405,57 +399,28 @@ class AIConfigMixin:
                 barge_confidence=0.6
             )
         """
-        # Validate and set temperature
-        if temperature is not None:
-            if not 0.0 <= temperature <= 1.5:
-                raise ValueError("temperature must be between 0.0 and 1.5")
-            self._prompt_llm_params['temperature'] = temperature
-        
-        # Validate and set top_p
-        if top_p is not None:
-            if not 0.0 <= top_p <= 1.0:
-                raise ValueError("top_p must be between 0.0 and 1.0")
-            self._prompt_llm_params['top_p'] = top_p
-        
-        # Validate and set barge_confidence
-        if barge_confidence is not None:
-            if not 0.0 <= barge_confidence <= 1.0:
-                raise ValueError("barge_confidence must be between 0.0 and 1.0")
-            self._prompt_llm_params['barge_confidence'] = barge_confidence
-        
-        # Validate and set presence_penalty
-        if presence_penalty is not None:
-            if not -2.0 <= presence_penalty <= 2.0:
-                raise ValueError("presence_penalty must be between -2.0 and 2.0")
-            self._prompt_llm_params['presence_penalty'] = presence_penalty
-        
-        # Validate and set frequency_penalty
-        if frequency_penalty is not None:
-            if not -2.0 <= frequency_penalty <= 2.0:
-                raise ValueError("frequency_penalty must be between -2.0 and 2.0")
-            self._prompt_llm_params['frequency_penalty'] = frequency_penalty
+        # Accept any parameters without validation
+        if params:
+            self._prompt_llm_params.update(params)
         
         return self
     
-    def set_post_prompt_llm_params(
-        self,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None
-    ) -> 'AgentBase':
+    def set_post_prompt_llm_params(self, **params) -> 'AgentBase':
         """
         Set LLM parameters for the post-prompt.
         
-        Args:
-            temperature: Randomness setting (0.0-1.5). Lower values make output more deterministic.
-                        Default: 0.0
-            top_p: Alternative to temperature (0.0-1.0). Controls nucleus sampling.
-                   Default: 1.0
-            presence_penalty: Topic diversity (-2.0 to 2.0). Positive values encourage new topics.
-                             Default: 0.0
-            frequency_penalty: Repetition control (-2.0 to 2.0). Positive values reduce repetition.
-                              Default: 0.0
+        Accepts any parameters which will be passed through to the SignalWire server.
+        The server will validate and apply parameters based on the target model's capabilities.
+        
+        Common parameters include:
+            temperature: Randomness setting. Lower values make output more deterministic.
+            top_p: Alternative to temperature. Controls nucleus sampling.
+            presence_penalty: Topic diversity. Positive values encourage new topics.
+            frequency_penalty: Repetition control. Positive values reduce repetition.
+        
+        Note: Parameters are model-specific and will be validated by the server.
+        Invalid parameters for the selected model will be handled/ignored by the server.
+        barge_confidence is not applicable to post-prompt.
         
         Returns:
             Self for method chaining
@@ -466,28 +431,8 @@ class AIConfigMixin:
                 top_p=0.9
             )
         """
-        # Validate and set temperature
-        if temperature is not None:
-            if not 0.0 <= temperature <= 1.5:
-                raise ValueError("temperature must be between 0.0 and 1.5")
-            self._post_prompt_llm_params['temperature'] = temperature
-        
-        # Validate and set top_p
-        if top_p is not None:
-            if not 0.0 <= top_p <= 1.0:
-                raise ValueError("top_p must be between 0.0 and 1.0")
-            self._post_prompt_llm_params['top_p'] = top_p
-        
-        # Validate and set presence_penalty
-        if presence_penalty is not None:
-            if not -2.0 <= presence_penalty <= 2.0:
-                raise ValueError("presence_penalty must be between -2.0 and 2.0")
-            self._post_prompt_llm_params['presence_penalty'] = presence_penalty
-        
-        # Validate and set frequency_penalty
-        if frequency_penalty is not None:
-            if not -2.0 <= frequency_penalty <= 2.0:
-                raise ValueError("frequency_penalty must be between -2.0 and 2.0")
-            self._post_prompt_llm_params['frequency_penalty'] = frequency_penalty
+        # Accept any parameters without validation
+        if params:
+            self._post_prompt_llm_params.update(params)
         
         return self
