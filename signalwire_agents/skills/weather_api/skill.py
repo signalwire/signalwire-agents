@@ -176,7 +176,7 @@ class WeatherApiSkill(SkillBase):
             "data_map": {
                 "webhooks": [
                     {
-                        "url": f"https://api.weatherapi.com/v1/current.json?key={self.api_key}&q=${{args.location}}&aqi=no",
+                        "url": f"https://api.weatherapi.com/v1/current.json?key={self.api_key}&q=${{lc:enc:args.location}}&aqi=no",
                         "method": "GET",
                         "output": SwaigFunctionResult(weather_template).to_dict()
                     }
