@@ -572,6 +572,7 @@ class PreciseAgent(AgentBase):
         self.prompt_add_section("Instructions", "Provide accurate, detailed information.")
         
         # Set custom LLM parameters for the main prompt
+        # These parameters are passed to the server which validates them based on the model
         self.set_prompt_llm_params(
             temperature=0.3,        # Low temperature for more consistent responses
             top_p=0.9,             # Slightly reduced for focused responses
@@ -593,13 +594,17 @@ agent = PreciseAgent()
 agent.serve()
 ```
 
-#### Available LLM Parameters
+#### Common LLM Parameters
 
-- **temperature** (0.0-1.5): Controls randomness. Lower = more focused, higher = more creative
-- **top_p** (0.0-1.0): Nucleus sampling. Lower = more focused on likely tokens
-- **barge_confidence** (0.0-1.0): ASR confidence to interrupt. Higher = harder to interrupt
-- **presence_penalty** (-2.0-2.0): Topic diversity. Positive = new topics
-- **frequency_penalty** (-2.0-2.0): Repetition control. Positive = varied vocabulary
+The SDK accepts any parameters which are passed to the server for validation based on the model. Common parameters include:
+
+- **temperature**: Controls randomness. Lower = more focused, higher = more creative
+- **top_p**: Nucleus sampling. Lower = more focused on likely tokens
+- **barge_confidence**: ASR confidence to interrupt. Higher = harder to interrupt (main prompt only)
+- **presence_penalty**: Topic diversity. Positive = new topics
+- **frequency_penalty**: Repetition control. Positive = varied vocabulary
+
+Note: No defaults are sent unless explicitly set. The server handles validation and applies appropriate defaults based on the model.
 
 For more details on LLM parameter tuning, see [LLM Parameters Guide](docs/llm_parameters.md).
 

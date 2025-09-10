@@ -250,20 +250,9 @@ class AgentBase(
         self._params = {}
         self._global_data = {}
         self._function_includes = []
-        # Initialize with default LLM params
-        self._prompt_llm_params = {
-            'temperature': 0.3,
-            'top_p': 1.0,
-            'barge_confidence': 0.0,
-            'presence_penalty': 0.1,
-            'frequency_penalty': 0.1
-        }
-        self._post_prompt_llm_params = {
-            'temperature': 0.0,
-            'top_p': 1.0,
-            'presence_penalty': 0.0,
-            'frequency_penalty': 0.0
-        }
+        # Initialize LLM params as empty - only send if explicitly set
+        self._prompt_llm_params = {}
+        self._post_prompt_llm_params = {}
         
         # Dynamic configuration callback
         self._dynamic_config_callback = None
@@ -833,27 +822,29 @@ class AgentBase(
                 
                 # Always add LLM parameters to prompt
                 if "prompt" in ai_config:
-                    # Update existing prompt with LLM params
-                    if isinstance(ai_config["prompt"], dict):
-                        ai_config["prompt"].update(agent_to_use._prompt_llm_params)
-                    elif isinstance(ai_config["prompt"], str):
-                        # Convert string prompt to dict format
-                        ai_config["prompt"] = {
-                            "text": ai_config["prompt"],
-                            **agent_to_use._prompt_llm_params
-                        }
+                    # Only add LLM params if explicitly set
+                    if agent_to_use._prompt_llm_params:
+                        if isinstance(ai_config["prompt"], dict):
+                            ai_config["prompt"].update(agent_to_use._prompt_llm_params)
+                        elif isinstance(ai_config["prompt"], str):
+                            # Convert string prompt to dict format
+                            ai_config["prompt"] = {
+                                "text": ai_config["prompt"],
+                                **agent_to_use._prompt_llm_params
+                            }
                     
-                # Always add LLM parameters to post_prompt if post_prompt exists
+                # Only add LLM parameters to post_prompt if explicitly set
                 if post_prompt and "post_prompt" in ai_config:
-                    # Update existing post_prompt with LLM params
-                    if isinstance(ai_config["post_prompt"], dict):
-                        ai_config["post_prompt"].update(agent_to_use._post_prompt_llm_params)
-                    elif isinstance(ai_config["post_prompt"], str):
-                        # Convert string post_prompt to dict format
-                        ai_config["post_prompt"] = {
-                            "text": ai_config["post_prompt"],
-                            **agent_to_use._post_prompt_llm_params
-                        }
+                    # Only add LLM params if explicitly set
+                    if agent_to_use._post_prompt_llm_params:
+                        if isinstance(ai_config["post_prompt"], dict):
+                            ai_config["post_prompt"].update(agent_to_use._post_prompt_llm_params)
+                        elif isinstance(ai_config["post_prompt"], str):
+                            # Convert string post_prompt to dict format
+                            ai_config["post_prompt"] = {
+                                "text": ai_config["post_prompt"],
+                                **agent_to_use._post_prompt_llm_params
+                            }
                     
             except ValueError as e:
                 if not agent_to_use._suppress_logs:
