@@ -681,7 +681,7 @@ class AgentBase(
                     "parameters": func._ensure_parameter_structure()
                 }
                 
-                # Add wait_file if present (SignalWire SWML expects wait_file, not fillers)
+                # Add wait_file if present (audio/video file URL)
                 if hasattr(func, 'wait_file') and func.wait_file:
                     wait_file_url = func.wait_file
                     # If wait_file is a relative URL, convert it to absolute using agent's base URL
@@ -693,9 +693,10 @@ class AgentBase(
                             wait_file_url = '/' + wait_file_url
                         wait_file_url = f"{base_url}{wait_file_url}"
                     function_entry["wait_file"] = wait_file_url
-                elif func.fillers:
-                    # Backward compatibility: use fillers as wait_file if wait_file not specified
-                    function_entry["wait_file"] = func.fillers
+                
+                # Add fillers if present (text phrases to say while processing)
+                if hasattr(func, 'fillers') and func.fillers:
+                    function_entry["fillers"] = func.fillers
                 
                 # Add wait_file_loops if present
                 if hasattr(func, 'wait_file_loops') and func.wait_file_loops is not None:
