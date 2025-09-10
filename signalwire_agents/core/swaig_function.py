@@ -57,8 +57,8 @@ class SWAIGFunction:
         self.description = description
         self.parameters = parameters or {}
         self.secure = secure
-        self.fillers = fillers  # Keep for backward compatibility
-        self.wait_file = wait_file or fillers  # Use wait_file if provided, else fall back to fillers
+        self.fillers = fillers  # Text phrases to say while processing
+        self.wait_file = wait_file  # URL to audio/video file to play while waiting
         self.wait_file_loops = wait_file_loops
         self.webhook_url = webhook_url
         self.required = required or []
