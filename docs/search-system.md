@@ -184,6 +184,9 @@ sw-search docs --file-types md,txt,py
 
 # Exclude patterns
 sw-search docs --exclude "**/test/**,**/__pycache__/**"
+
+# JSON-based chunking (for pre-chunked content)
+sw-search api_chunks.json --chunking-strategy json --file-types json
 ```
 
 ### Advanced Index Building
@@ -213,6 +216,59 @@ sw-search docs/signalwire_agents_concepts_guide.md ./examples README.md \
 | Word Documents | `.docx` | `search-full` |
 | HTML | `.html` | `search-full` |
 | JSON | `.json` | Built-in |
+
+### Chunking Strategies
+
+The search system supports multiple chunking strategies to optimize for different use cases:
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| `sentence` | Groups sentences together (default: 5 per chunk) | General documentation |
+| `sliding` | Sliding window with overlap | Long-form content |
+| `paragraph` | Splits on paragraph boundaries | Structured documents |
+| `page` | Preserves page boundaries | PDFs, presentations |
+| `semantic` | Groups semantically similar content | Technical docs |
+| `topic` | Groups by topic changes | Mixed content |
+| `qa` | Optimized for question-answering | FAQs, tutorials |
+| `json` | Uses pre-chunked JSON input | Custom preprocessing |
+
+#### JSON Chunking Strategy
+
+The `json` strategy allows you to provide pre-chunked content in a structured format. This is useful when you need custom control over how documents are split and indexed.
+
+Expected JSON format:
+```json
+{
+  "chunks": [
+    {
+      "chunk_id": "unique_id",
+      "type": "content",
+      "content": "The actual text content",
+      "metadata": {
+        "section": "Introduction",
+        "url": "https://example.com/docs/intro",
+        "custom_field": "any_value"
+      },
+      "tags": ["intro", "getting-started"]
+    }
+  ]
+}
+```
+
+Example usage:
+```bash
+# First preprocess your documents into JSON chunks
+python your_preprocessor.py input.txt -o chunks.json
+
+# Then build the index using JSON strategy
+sw-search chunks.json --chunking-strategy json --file-types json
+```
+
+This strategy is particularly useful for:
+- API documentation with complex structure
+- Documents that need custom parsing logic
+- Preserving specific metadata relationships
+- Integration with external preprocessing tools
 
 ### Index Structure
 

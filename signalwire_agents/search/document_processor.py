@@ -140,6 +140,8 @@ class DocumentProcessor:
             return self._chunk_by_topics(content, filename, file_type)
         elif self.chunking_strategy == 'qa':
             return self._chunk_by_qa_optimization(content, filename, file_type)
+        elif self.chunking_strategy == 'json':
+            return self._chunk_from_json(content, filename, file_type)
         else:
             # Fallback to sentence-based chunking
             return self._chunk_by_sentences(content, filename, file_type)
@@ -1022,4 +1024,103 @@ class DocumentProcessor:
             ))
         
         return chunks if chunks else [self._create_chunk(content, filename, "QA Section 1",
-                                                       metadata={'chunk_method': 'qa_optimized', 'chunk_index': 0})] 
+                                                       metadata={'chunk_method': 'qa_optimized', 'chunk_index': 0})]
+    
+    def _chunk_from_json(self, content: str, filename: str, file_type: str) -> List[Dict[str, Any]]:
+        """
+        Create chunks from pre-processed JSON content
+        
+        This strategy expects content to be a JSON string with the following structure:
+        {
+            "chunks": [
+                {
+                    "chunk_id": "unique_id",
+                    "type": "content|toc",
+                    "content": "text content",
+                    "metadata": {
+                        "url": "https://...",
+                        "section_number": 1,
+                        "related_toc": "toc_id",
+                        ...
+                    }
+                },
+                ...
+            ]
+        }
+        
+        Args:
+            content: JSON string containing pre-chunked content
+            filename: Name of the source file
+            file_type: Should be 'json'
+            
+        Returns:
+            List of chunk dictionaries formatted for the search index
+        """
+        try:
+            # Parse JSON content
+            data = json.loads(content)
+            
+            if not isinstance(data, dict) or 'chunks' not in data:
+                logger.error(f"Invalid JSON structure in {filename}: expected 'chunks' key")
+                # Fallback to treating it as plain text
+                return self._chunk_by_sentences(content, filename, file_type)
+            
+            chunks = []
+            for idx, json_chunk in enumerate(data['chunks']):
+                if not isinstance(json_chunk, dict) or 'content' not in json_chunk:
+                    logger.warning(f"Skipping invalid chunk {idx} in {filename}")
+                    continue
+                
+                # Extract metadata from JSON chunk
+                json_metadata = json_chunk.get('metadata', {})
+                chunk_type = json_chunk.get('type', 'content')
+                
+                # Build chunk metadata
+                metadata = {
+                    'chunk_method': 'json',
+                    'chunk_index': idx,
+                    'chunk_type': chunk_type,
+                    'original_chunk_id': json_chunk.get('chunk_id', f'chunk_{idx}')
+                }
+                
+                # Merge JSON metadata
+                metadata.update(json_metadata)
+                
+                # Determine section name
+                if chunk_type == 'toc':
+                    section = f"TOC: {json_chunk.get('content', '')[:50]}"
+                else:
+                    section = json_metadata.get('section', f"Section {json_metadata.get('section_number', idx + 1)}")
+                
+                # Create chunk with proper structure
+                chunk = self._create_chunk(
+                    content=json_chunk['content'],
+                    filename=filename,
+                    section=section,
+                    metadata=metadata
+                )
+                
+                # Add any additional fields from JSON
+                if 'tags' in json_chunk:
+                    chunk['tags'] = json_chunk['tags']
+                
+                # For TOC entries, we might want to add special tags
+                if chunk_type == 'toc' and 'tags' not in chunk:
+                    chunk['tags'] = ['toc', 'navigation']
+                
+                chunks.append(chunk)
+            
+            if not chunks:
+                logger.warning(f"No valid chunks found in JSON file {filename}")
+                return self._chunk_by_sentences(str(data), filename, file_type)
+            
+            logger.info(f"Created {len(chunks)} chunks from JSON file {filename}")
+            return chunks
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON in {filename}: {e}")
+            # Fallback to sentence chunking
+            return self._chunk_by_sentences(content, filename, file_type)
+        except Exception as e:
+            logger.error(f"Unexpected error processing JSON chunks in {filename}: {e}")
+            return self._chunk_by_sentences(content, filename, file_type) 

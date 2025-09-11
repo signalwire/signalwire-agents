@@ -66,6 +66,11 @@ Examples:
   sw-search ./docs \\
     --chunking-strategy qa
 
+
+  # JSON-based chunking (pre-chunked content)
+  sw-search ./api_chunks.json \
+    --chunking-strategy json \
+    --file-types json
   # Full configuration example
   sw-search ./docs ./examples README.md \\
     --output ./knowledge.swsearch \\
@@ -141,7 +146,7 @@ Examples:
     
     parser.add_argument(
         '--chunking-strategy',
-        choices=['sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa'],
+        choices=['sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa', 'json'],
         default='sentence',
         help='Chunking strategy to use (default: sentence)'
     )

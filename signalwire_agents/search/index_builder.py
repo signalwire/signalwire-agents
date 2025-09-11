@@ -55,7 +55,7 @@ class IndexBuilder:
         
         Args:
             model_name: Name of the sentence transformer model to use
-            chunking_strategy: Strategy for chunking documents ('sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa')
+            chunking_strategy: Strategy for chunking documents ('sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa', 'json')
             max_sentences_per_chunk: For sentence strategy (default: 5)
             chunk_size: For sliding strategy - words per chunk (default: 50)
             chunk_overlap: For sliding strategy - overlap in words (default: 10)
