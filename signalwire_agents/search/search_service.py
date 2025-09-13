@@ -270,7 +270,11 @@ class SearchService:
             else:
                 # SQLite backend
                 self.indexes[index_name] = index_path
-                self.search_engines[index_name] = SearchEngine(index_path, self.model)
+                self.search_engines[index_name] = SearchEngine(
+                    backend='sqlite',
+                    index_path=index_path,
+                    model=self.model
+                )
                 return {"status": "reloaded", "index": index_name, "backend": "sqlite"}
     
     def _load_resources(self):
@@ -305,7 +309,11 @@ class SearchService:
             # Load search engines for each index
             for index_name, index_path in self.indexes.items():
                 try:
-                    self.search_engines[index_name] = SearchEngine(index_path, self.model)
+                    self.search_engines[index_name] = SearchEngine(
+                        backend='sqlite',
+                        index_path=index_path,
+                        model=self.model
+                    )
                 except Exception as e:
                     logger.error(f"Error loading search engine for {index_name}: {e}")
     

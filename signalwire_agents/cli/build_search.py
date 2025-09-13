@@ -10,6 +10,7 @@ See LICENSE file in the project root for full license information.
 import argparse
 import sys
 from pathlib import Path
+from datetime import datetime
 
 def main():
     """Main entry point for the build-search command"""
@@ -71,6 +72,23 @@ Examples:
   sw-search ./api_chunks.json \
     --chunking-strategy json \
     --file-types json
+
+  # Export chunks to JSON for review (single file)
+  sw-search ./docs \\
+    --output-format json \\
+    --output all_chunks.json
+
+  # Export chunks to JSON (one file per source)
+  sw-search ./docs \\
+    --output-format json \\
+    --output-dir ./chunks/
+
+  # Build index from exported JSON chunks
+  sw-search ./chunks/ \\
+    --chunking-strategy json \\
+    --file-types json \\
+    --output final.swsearch
+
   # Full configuration example
   sw-search ./docs ./examples README.md \\
     --output ./knowledge.swsearch \\
@@ -124,6 +142,18 @@ Examples:
     parser.add_argument(
         '--output', 
         help='Output .swsearch file (default: sources.swsearch) or collection name for pgvector'
+    )
+    
+    parser.add_argument(
+        '--output-dir',
+        help='Output directory for results (creates one file per source file when used with --output-format json, or auto-names index files)'
+    )
+    
+    parser.add_argument(
+        '--output-format',
+        choices=['index', 'json'],
+        default='index',
+        help='Output format: index (create search index) or json (export chunks as JSON) (default: index)'
     )
     
     parser.add_argument(
@@ -259,8 +289,35 @@ Examples:
         print("Error: --connection-string is required for pgvector backend")
         sys.exit(1)
     
-    # Default output filename
-    if not args.output:
+    # Validate output options
+    if args.output and args.output_dir:
+        print("Error: Cannot specify both --output and --output-dir")
+        sys.exit(1)
+    
+    # Handle JSON output format differently
+    if args.output_format == 'json':
+        # JSON export doesn't use backend
+        if args.backend != 'sqlite':
+            print("Warning: --backend is ignored when using --output-format json")
+        
+        # Determine output location
+        if args.output_dir:
+            # Multiple files mode
+            output_path = Path(args.output_dir)
+            if not output_path.exists():
+                output_path.mkdir(parents=True, exist_ok=True)
+        elif args.output:
+            # Single file mode
+            output_path = Path(args.output)
+            if not output_path.suffix:
+                output_path = output_path.with_suffix('.json')
+        else:
+            # Default to single file
+            output_path = Path('chunks.json')
+            args.output = str(output_path)
+    
+    # Default output filename (for index format)
+    if args.output_format == 'index' and not args.output and not args.output_dir:
         if args.backend == 'sqlite':
             if len(valid_sources) == 1:
                 # Single source - use its name
@@ -277,8 +334,25 @@ Examples:
             else:
                 args.output = "documents"
     
-    # Ensure output has .swsearch extension for sqlite
-    if args.backend == 'sqlite' and not args.output.endswith('.swsearch'):
+    # Handle --output-dir for index format
+    if args.output_format == 'index' and args.output_dir:
+        # Auto-generate output filename in the directory
+        if len(valid_sources) == 1:
+            source_name = valid_sources[0].stem if valid_sources[0].is_file() else valid_sources[0].name
+        else:
+            source_name = "combined"
+        
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        if args.backend == 'sqlite':
+            args.output = str(output_dir / f"{source_name}.swsearch")
+        else:
+            # For pgvector, still use the name as collection
+            args.output = source_name
+    
+    # Ensure output has .swsearch extension for sqlite (but not for JSON format)
+    if args.output_format == 'index' and args.backend == 'sqlite' and args.output and not args.output.endswith('.swsearch'):
         args.output += '.swsearch'
     
     # Parse lists
@@ -325,6 +399,103 @@ Examples:
         print()
     
     try:
+        # Handle JSON export mode
+        if args.output_format == 'json':
+            # Import what we need for chunking
+            from signalwire_agents.search.index_builder import IndexBuilder
+            import json
+            
+            builder = IndexBuilder(
+                chunking_strategy=args.chunking_strategy,
+                max_sentences_per_chunk=args.max_sentences_per_chunk,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.overlap_size,
+                split_newlines=args.split_newlines,
+                index_nlp_backend=args.index_nlp_backend,
+                verbose=args.verbose,
+                semantic_threshold=args.semantic_threshold,
+                topic_threshold=args.topic_threshold
+            )
+            
+            # Process files and export chunks
+            all_chunks = []
+            chunk_files_created = []
+            
+            # Discover files from sources
+            files = builder._discover_files_from_sources(valid_sources, file_types, exclude_patterns)
+            
+            if args.verbose:
+                print(f"Processing {len(files)} files...")
+            
+            for file_path in files:
+                try:
+                    # Determine base directory for relative paths
+                    base_dir = builder._get_base_directory_for_file(file_path, valid_sources)
+                    
+                    # Process file into chunks
+                    chunks = builder._process_file(file_path, base_dir, tags)
+                    
+                    if args.output_dir:
+                        # Create individual JSON file
+                        relative_path = file_path.relative_to(base_dir) if base_dir else file_path.name
+                        json_filename = relative_path.with_suffix('.json')
+                        json_path = Path(args.output_dir) / json_filename
+                        
+                        # Create subdirectories if needed
+                        json_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Save chunks to JSON
+                        chunk_data = {
+                            "chunks": chunks,
+                            "metadata": {
+                                "source_file": str(relative_path),
+                                "total_chunks": len(chunks),
+                                "chunking_strategy": args.chunking_strategy,
+                                "processing_date": datetime.now().isoformat()
+                            }
+                        }
+                        
+                        with open(json_path, 'w', encoding='utf-8') as f:
+                            json.dump(chunk_data, f, indent=2, ensure_ascii=False)
+                        
+                        chunk_files_created.append(json_path)
+                        if args.verbose:
+                            print(f"  Created: {json_path} ({len(chunks)} chunks)")
+                    else:
+                        # Accumulate all chunks for single file output
+                        all_chunks.extend(chunks)
+                        
+                except Exception as e:
+                    print(f"Error processing {file_path}: {e}")
+                    if args.verbose:
+                        import traceback
+                        traceback.print_exc()
+            
+            # Handle single file output
+            if not args.output_dir:
+                output_data = {
+                    "chunks": all_chunks,
+                    "metadata": {
+                        "total_chunks": len(all_chunks),
+                        "total_files": len(files),
+                        "chunking_strategy": args.chunking_strategy,
+                        "processing_date": datetime.now().isoformat()
+                    }
+                }
+                
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    json.dump(output_data, f, indent=2, ensure_ascii=False)
+                
+                print(f"✓ Exported {len(all_chunks)} chunks to {args.output}")
+            else:
+                print(f"✓ Created {len(chunk_files_created)} JSON files in {args.output_dir}")
+                total_chunks = sum(len(json.load(open(f))['chunks']) for f in chunk_files_created)
+                print(f"  Total chunks: {total_chunks}")
+            
+            # Exit early for JSON format
+            return
+        
+        # Regular index building mode
         # Create index builder - import only when actually needed
         from signalwire_agents.search.index_builder import IndexBuilder
         builder = IndexBuilder(

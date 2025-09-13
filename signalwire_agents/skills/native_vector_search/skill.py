@@ -136,6 +136,11 @@ class NativeVectorSearchSkill(SkillBase):
                 "default": "",
                 "required": False
             },
+            "response_format_callback": {
+                "type": "callable",
+                "description": "Optional callback function to format/transform the response. Called with (response, agent, query, results, args). Must return a string.",
+                "required": False
+            },
             "description": {
                 "type": "string",
                 "description": "Tool description",
@@ -226,10 +231,26 @@ class NativeVectorSearchSkill(SkillBase):
         )
         self.response_prefix = self.params.get('response_prefix', '')
         self.response_postfix = self.params.get('response_postfix', '')
+        self.response_format_callback = self.params.get('response_format_callback')
         
         # Remote search server configuration
-        self.remote_url = self.params.get('remote_url')  # e.g., "http://localhost:8001"
+        self.remote_url = self.params.get('remote_url')  # e.g., "http://user:pass@localhost:8001"
         self.index_name = self.params.get('index_name', 'default')  # For remote searches
+        
+        # Parse auth from URL if present
+        self.remote_auth = None
+        self.remote_base_url = self.remote_url
+        if self.remote_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(self.remote_url)
+            if parsed.username and parsed.password:
+                self.remote_auth = (parsed.username, parsed.password)
+                # Reconstruct URL without auth for display
+                self.remote_base_url = f"{parsed.scheme}://{parsed.hostname}"
+                if parsed.port:
+                    self.remote_base_url += f":{parsed.port}"
+                if parsed.path:
+                    self.remote_base_url += parsed.path
         
         # SWAIG fields for function fillers
         self.swaig_fields = self.params.get('swaig_fields', {})
@@ -244,11 +265,20 @@ class NativeVectorSearchSkill(SkillBase):
             # Test remote connection (lightweight check)
             try:
                 import requests
-                response = requests.get(f"{self.remote_url}/health", timeout=5)
+                # Use parsed base URL and auth
+                response = requests.get(
+                    f"{self.remote_base_url}/health", 
+                    auth=self.remote_auth,
+                    timeout=5
+                )
                 if response.status_code == 200:
-                    self.logger.info("Remote search server is available")
+                    self.logger.info(f"Remote search server is available at {self.remote_base_url}")
                     self.search_available = True
                     return True  # Success - skip all local setup
+                elif response.status_code == 401:
+                    self.logger.error("Authentication failed for remote search server. Check credentials.")
+                    self.search_available = False
+                    return False
                 else:
                     self.logger.error(f"Remote search server returned status {response.status_code}")
                     self.search_available = False
@@ -466,6 +496,25 @@ class NativeVectorSearchSkill(SkillBase):
                     no_results_msg = f"{self.response_prefix} {no_results_msg}"
                 if self.response_postfix:
                     no_results_msg = f"{no_results_msg} {self.response_postfix}"
+                
+                # Apply custom formatting callback for no results case
+                if self.response_format_callback and callable(self.response_format_callback):
+                    try:
+                        callback_context = {
+                            'response': no_results_msg,
+                            'agent': self.agent,
+                            'query': query,
+                            'results': [],  # Empty results
+                            'args': args,
+                            'count': count,
+                            'skill': self
+                        }
+                        formatted_response = self.response_format_callback(**callback_context)
+                        if isinstance(formatted_response, str):
+                            no_results_msg = formatted_response
+                    except Exception as e:
+                        self.logger.error(f"Error in response_format_callback (no results): {e}", exc_info=True)
+                
                 return SwaigFunctionResult(no_results_msg)
             
             # Format results
@@ -494,7 +543,37 @@ class NativeVectorSearchSkill(SkillBase):
             if self.response_postfix:
                 response_parts.append(self.response_postfix)
             
-            return SwaigFunctionResult("\n".join(response_parts))
+            # Build the initial response
+            response = "\n".join(response_parts)
+            
+            # Apply custom formatting callback if provided
+            if self.response_format_callback and callable(self.response_format_callback):
+                try:
+                    # Prepare callback context
+                    callback_context = {
+                        'response': response,
+                        'agent': self.agent,
+                        'query': query,
+                        'results': results,
+                        'args': args,
+                        'count': count,
+                        'skill': self
+                    }
+                    
+                    # Call the callback
+                    formatted_response = self.response_format_callback(**callback_context)
+                    
+                    # Validate callback returned a string
+                    if isinstance(formatted_response, str):
+                        response = formatted_response
+                    else:
+                        self.logger.warning(f"response_format_callback returned non-string type: {type(formatted_response)}")
+                        
+                except Exception as e:
+                    self.logger.error(f"Error in response_format_callback: {e}", exc_info=True)
+                    # Continue with original response if callback fails
+            
+            return SwaigFunctionResult(response)
             
         except Exception as e:
             # Log the full error details for debugging
@@ -531,8 +610,9 @@ class NativeVectorSearchSkill(SkillBase):
             }
             
             response = requests.post(
-                f"{self.remote_url}/search",
+                f"{self.remote_base_url}/search",
                 json=search_request,
+                auth=self.remote_auth,
                 timeout=30
             )
             
