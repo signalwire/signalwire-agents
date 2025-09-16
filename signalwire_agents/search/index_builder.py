@@ -183,10 +183,26 @@ class IndexBuilder:
                 )
                 
                 chunk['processed_content'] = processed['enhanced_text']
-                chunk['keywords'] = processed.get('keywords', [])
+                
+                # Include tags in keywords for better search matching
+                keywords = processed.get('keywords', [])
+                chunk_tags = chunk.get('tags', [])
+                if chunk_tags:
+                    # Add tags to keywords list for FTS matching
+                    keywords.extend(chunk_tags)
+                    # Remove duplicates while preserving order
+                    keywords = list(dict.fromkeys(keywords))
+                
+                chunk['keywords'] = keywords
+                
+                # For embedding, include tags in the text for better semantic matching
+                embedding_text = processed['enhanced_text']
+                if chunk_tags:
+                    # Append tags to the text for embedding generation
+                    embedding_text += " " + " ".join(chunk_tags)
                 
                 # Generate embedding (suppress progress bar)
-                embedding = self.model.encode(processed['enhanced_text'], show_progress_bar=False)
+                embedding = self.model.encode(embedding_text, show_progress_bar=False)
                 chunk['embedding'] = embedding.tobytes()
                 
                 if self.verbose and (i + 1) % 50 == 0:

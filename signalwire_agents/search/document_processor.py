@@ -1075,7 +1075,7 @@ class DocumentProcessor:
                 json_metadata = json_chunk.get('metadata', {})
                 chunk_type = json_chunk.get('type', 'content')
                 
-                # Build chunk metadata
+                # Build chunk metadata (excluding tags which go at top level)
                 metadata = {
                     'chunk_method': 'json',
                     'chunk_index': idx,
@@ -1083,7 +1083,11 @@ class DocumentProcessor:
                     'original_chunk_id': json_chunk.get('chunk_id', f'chunk_{idx}')
                 }
                 
-                # Merge JSON metadata
+                # Extract tags before merging metadata
+                tags = json_metadata.get('tags', [])
+                
+                # Merge JSON metadata (this includes all fields including tags)
+                # We'll keep tags in metadata for backward compatibility but also set at top level
                 metadata.update(json_metadata)
                 
                 # Determine section name
@@ -1100,12 +1104,11 @@ class DocumentProcessor:
                     metadata=metadata
                 )
                 
-                # Add any additional fields from JSON
-                if 'tags' in json_chunk:
-                    chunk['tags'] = json_chunk['tags']
-                
-                # For TOC entries, we might want to add special tags
-                if chunk_type == 'toc' and 'tags' not in chunk:
+                # Set tags at the top level for proper tag filtering
+                if tags:
+                    chunk['tags'] = tags
+                elif chunk_type == 'toc':
+                    # For TOC entries, add special tags if none provided
                     chunk['tags'] = ['toc', 'navigation']
                 
                 chunks.append(chunk)

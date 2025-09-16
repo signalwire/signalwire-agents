@@ -532,9 +532,20 @@ class NativeVectorSearchSkill(SkillBase):
                 score = result['score']
                 content = result['content']
                 
+                # Get tags from either top level or metadata
+                tags = result.get('tags', [])
+                if not tags and 'metadata' in result['metadata'] and 'tags' in result['metadata']['metadata']:
+                    # Handle double-nested metadata from older indexes
+                    tags = result['metadata']['metadata']['tags']
+                elif not tags and 'tags' in result['metadata']:
+                    # Check in metadata directly
+                    tags = result['metadata']['tags']
+                
                 result_text = f"**Result {i}** (from {filename}"
                 if section:
                     result_text += f", section: {section}"
+                if tags:
+                    result_text += f", tags: {', '.join(tags)}"
                 result_text += f", relevance: {score:.2f})\n{content}\n"
                 
                 response_parts.append(result_text)
