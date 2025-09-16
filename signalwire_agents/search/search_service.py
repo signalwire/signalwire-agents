@@ -31,13 +31,18 @@ try:
 except ImportError:
     SentenceTransformer = None
 
-from .query_processor import preprocess_query
+from .query_processor import preprocess_query, set_global_model
 from .search_engine import SearchEngine
 from signalwire_agents.core.security_config import SecurityConfig
 from signalwire_agents.core.config_loader import ConfigLoader
 from signalwire_agents.core.logging_config import get_logger
 
 logger = get_logger("search_service")
+
+# Simple LRU cache for query results
+from functools import lru_cache
+import hashlib
+import json
 
 # Pydantic models for API
 if BaseModel:
@@ -81,6 +86,17 @@ else:
             self.results = results
             self.query_analysis = query_analysis
 
+def _cache_key(query: str, index_name: str, count: int, tags: Optional[List[str]] = None) -> str:
+    """Generate cache key for query results"""
+    key_data = {
+        'query': query.lower().strip(),
+        'index': index_name,
+        'count': count,
+        'tags': sorted(tags) if tags else []
+    }
+    key_str = json.dumps(key_data, sort_keys=True)
+    return hashlib.md5(key_str.encode()).hexdigest()
+
 class SearchService:
     """Local search service with HTTP API supporting both SQLite and pgvector backends"""
     
@@ -102,6 +118,8 @@ class SearchService:
         
         self.search_engines = {}
         self.model = None
+        self._query_cache = {}  # Simple query result cache
+        self._cache_size = 100  # Max number of cached queries
         
         # Load security configuration with optional config file
         self.security = SecurityConfig(config_file=config_file, service_name="search")
@@ -302,6 +320,8 @@ class SearchService:
                 model_name = self._get_model_name(sample_index)
                 try:
                     self.model = SentenceTransformer(model_name)
+                    # Set the global model for query processor to avoid reloading
+                    set_global_model(self.model)
                 except Exception as e:
                     logger.warning(f"Could not load sentence transformer model: {e}")
                     self.model = None
@@ -338,12 +358,18 @@ class SearchService:
                 return 'sentence-transformers/all-mpnet-base-v2'
     
     async def _handle_search(self, request: SearchRequest) -> SearchResponse:
-        """Handle search request"""
+        """Handle search request with caching"""
         if request.index_name not in self.search_engines:
             if HTTPException:
                 raise HTTPException(status_code=404, detail=f"Index '{request.index_name}' not found")
             else:
                 raise ValueError(f"Index '{request.index_name}' not found")
+        
+        # Check cache first
+        cache_key = _cache_key(request.query, request.index_name, request.count, request.tags)
+        if cache_key in self._query_cache:
+            logger.info(f"Cache hit for query: {request.query[:50]}...")
+            return self._query_cache[cache_key]
         
         search_engine = self.search_engines[request.index_name]
         
@@ -385,7 +411,7 @@ class SearchService:
             for result in results
         ]
         
-        return SearchResponse(
+        response = SearchResponse(
             results=search_results,
             query_analysis={
                 'original_query': request.query,
@@ -394,6 +420,15 @@ class SearchService:
                 'pos_analysis': enhanced.get('POS')
             }
         )
+        
+        # Cache the result
+        if len(self._query_cache) >= self._cache_size:
+            # Simple FIFO eviction
+            first_key = next(iter(self._query_cache))
+            del self._query_cache[first_key]
+        self._query_cache[cache_key] = response
+        
+        return response
     
     def search_direct(self, query: str, index_name: str = "default", count: int = 3, 
                      distance: float = 0.0, tags: Optional[List[str]] = None, 

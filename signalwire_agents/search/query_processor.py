@@ -77,22 +77,71 @@ def load_spacy_model(language: str):
             _spacy_warning_shown = True
         return None
 
-def vectorize_query(query: str):
+# Global model cache
+_cached_model = None
+_model_lock = None
+
+def set_global_model(model):
+    """Set the global cached model instance"""
+    global _cached_model
+    _cached_model = model
+    logger.info("Global model set for query processor")
+
+def _get_cached_model():
+    """Get or create cached sentence transformer model"""
+    global _cached_model, _model_lock
+    
+    # Initialize lock if needed
+    if _model_lock is None:
+        import threading
+        _model_lock = threading.Lock()
+    
+    # Return cached model if available
+    if _cached_model is not None:
+        return _cached_model
+    
+    # Load model with lock to prevent race conditions
+    with _model_lock:
+        # Double check in case another thread loaded it
+        if _cached_model is not None:
+            return _cached_model
+            
+        try:
+            from sentence_transformers import SentenceTransformer
+            logger.info("Loading sentence transformer model (first time only)...")
+            _cached_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+            logger.info("Model loaded and cached successfully")
+            return _cached_model
+        except ImportError:
+            logger.error("sentence-transformers not available. Cannot load model.")
+            return None
+
+def vectorize_query(query: str, model=None):
     """
     Vectorize query using sentence transformers
     Returns numpy array of embeddings
+    
+    Args:
+        query: Query string to vectorize
+        model: Optional pre-loaded model instance. If not provided, uses cached model.
     """
     try:
-        from sentence_transformers import SentenceTransformer
         import numpy as np
         
-        # Use the same model as specified in the architecture
-        model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+        # Use provided model or get cached one
+        if model is None:
+            model = _get_cached_model()
+            if model is None:
+                return None
+        
         embedding = model.encode(query, show_progress_bar=False)
         return embedding
         
     except ImportError:
-        logger.error("sentence-transformers not available. Cannot vectorize query.")
+        logger.error("numpy not available. Cannot vectorize query.")
+        return None
+    except Exception as e:
+        logger.error(f"Error vectorizing query: {e}")
         return None
 
 # Language to NLTK stopwords mapping
