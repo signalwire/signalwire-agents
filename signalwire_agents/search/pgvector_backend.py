@@ -355,7 +355,8 @@ class PgVectorSearchBackend:
     
     def search(self, query_vector: List[float], enhanced_text: str,
               count: int = 5, distance_threshold: float = 0.0,
-              tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+              tags: Optional[List[str]] = None,
+              keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Perform hybrid search (vector + keyword)
         
@@ -365,6 +366,7 @@ class PgVectorSearchBackend:
             count: Number of results to return
             distance_threshold: Minimum similarity score
             tags: Filter by tags
+            keyword_weight: Manual keyword weight (0.0-1.0). If None, uses default weighting
             
         Returns:
             List of search results with scores and metadata
@@ -378,7 +380,7 @@ class PgVectorSearchBackend:
         keyword_results = self._keyword_search(enhanced_text, count * 2, tags)
         
         # Merge and rank results
-        merged_results = self._merge_results(vector_results, keyword_results)
+        merged_results = self._merge_results(vector_results, keyword_results, keyword_weight)
         
         # Filter by distance threshold
         filtered_results = [
@@ -479,30 +481,36 @@ class PgVectorSearchBackend:
             return results
     
     def _merge_results(self, vector_results: List[Dict[str, Any]], 
-                      keyword_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                      keyword_results: List[Dict[str, Any]],
+                      keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """Merge and rank results from vector and keyword search"""
+        # Use provided weights or defaults
+        if keyword_weight is None:
+            keyword_weight = 0.3
+        vector_weight = 1.0 - keyword_weight
+        
         # Create a map to track unique results
         results_map = {}
         
-        # Add vector results (weighted higher)
+        # Add vector results
         for result in vector_results:
             chunk_id = result['id']
             if chunk_id not in results_map:
                 results_map[chunk_id] = result
-                results_map[chunk_id]['score'] *= 0.7  # Weight vector results
+                results_map[chunk_id]['score'] *= vector_weight
             else:
                 # Combine scores if result appears in both
-                results_map[chunk_id]['score'] += result['score'] * 0.7
+                results_map[chunk_id]['score'] += result['score'] * vector_weight
         
         # Add keyword results
         for result in keyword_results:
             chunk_id = result['id']
             if chunk_id not in results_map:
                 results_map[chunk_id] = result
-                results_map[chunk_id]['score'] *= 0.3  # Weight keyword results
+                results_map[chunk_id]['score'] *= keyword_weight
             else:
                 # Combine scores if result appears in both
-                results_map[chunk_id]['score'] += result['score'] * 0.3
+                results_map[chunk_id]['score'] += result['score'] * keyword_weight
         
         # Sort by combined score
         merged = list(results_map.values())

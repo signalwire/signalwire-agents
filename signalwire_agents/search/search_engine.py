@@ -92,8 +92,7 @@ class SearchEngine:
         
         # Use pgvector backend if available
         if self.backend == 'pgvector':
-            # TODO: Pass keyword_weight to pgvector backend
-            return self._backend.search(query_vector, enhanced_text, count, distance_threshold, tags)
+            return self._backend.search(query_vector, enhanced_text, count, distance_threshold, tags, keyword_weight)
         
         # Original SQLite implementation
         if not np or not cosine_similarity:
