@@ -74,7 +74,8 @@ class SearchEngine:
     
     def search(self, query_vector: List[float], enhanced_text: str, 
               count: int = 3, distance_threshold: float = 0.0,
-              tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+              tags: Optional[List[str]] = None, 
+              keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Perform hybrid search (vector + keyword)
         
@@ -91,6 +92,7 @@ class SearchEngine:
         
         # Use pgvector backend if available
         if self.backend == 'pgvector':
+            # TODO: Pass keyword_weight to pgvector backend
             return self._backend.search(query_vector, enhanced_text, count, distance_threshold, tags)
         
         # Original SQLite implementation
@@ -105,23 +107,51 @@ class SearchEngine:
             logger.error(f"Error converting query vector: {e}")
             return self._keyword_search_only(enhanced_text, count, tags)
         
-        # Vector search
-        vector_results = self._vector_search(query_array, count * 2)
+        # If manual weight specified, use it
+        if keyword_weight is not None:
+            vector_weight = 1.0 - keyword_weight
+            vector_results = self._vector_search(query_array, count * 2)
+            keyword_results = self._keyword_search(enhanced_text, count * 2)
+            merged_results = self._merge_results(vector_results, keyword_results,
+                                               vector_weight=vector_weight,
+                                               keyword_weight=keyword_weight)
+            # Apply filters and return
+            if tags:
+                merged_results = self._filter_by_tags(merged_results, tags)
+            filtered_results = [r for r in merged_results if r['score'] >= distance_threshold]
+            return filtered_results[:count]
         
-        # Keyword search
-        keyword_results = self._keyword_search(enhanced_text, count * 2)
+        # Progressive search strategy
+        # 1. Try keyword-only first (fast)
+        keyword_results = self._keyword_search(enhanced_text, count)
         
-        # Merge and rank results
-        merged_results = self._merge_results(vector_results, keyword_results)
+        if len(keyword_results) >= count/2:
+            # Good keyword matches - blend with some vector
+            vector_results = self._vector_search(query_array, count)
+            merged_results = self._merge_results(vector_results, keyword_results, 
+                                               vector_weight=0.3, 
+                                               keyword_weight=0.7)
+        else:
+            # 2. Few keyword matches - try vector search
+            vector_results = self._vector_search(query_array, count * 2)
+            
+            if not vector_results or (vector_results and vector_results[0]['score'] < 0.3):
+                # Poor vector matches too - return keyword results anyway
+                merged_results = keyword_results
+            else:
+                # 3. Normal blending when both have results
+                merged_results = self._merge_results(vector_results, keyword_results,
+                                                   vector_weight=0.7,
+                                                   keyword_weight=0.3)
         
         # Filter by tags if specified
         if tags:
             merged_results = self._filter_by_tags(merged_results, tags)
         
-        # Filter by distance threshold
+        # Filter by distance threshold (only apply to vector results)
         filtered_results = [
             r for r in merged_results 
-            if r['score'] >= distance_threshold
+            if r.get('search_type') in ['keyword', 'fallback'] or r['score'] >= distance_threshold
         ]
         
         return filtered_results[:count]
@@ -235,6 +265,12 @@ class SearchEngine:
                 })
             
             conn.close()
+            
+            # If FTS returns no results, try fallback LIKE search
+            if not results:
+                logger.debug(f"FTS returned no results for '{enhanced_text}', trying fallback search")
+                return self._fallback_search(enhanced_text, count)
+                
             return results
             
         except Exception as e:
@@ -259,25 +295,54 @@ class SearchEngine:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
             
-            # Simple LIKE search
+            # Simple LIKE search with word boundaries
             search_terms = enhanced_text.lower().split()
             like_conditions = []
             params = []
             
             for term in search_terms[:5]:  # Limit to 5 terms to avoid too complex queries
-                like_conditions.append("LOWER(processed_content) LIKE ?")
-                params.append(f"%{term}%")
+                # Search for term with word boundaries (space or punctuation)
+                like_conditions.append("""
+                    (LOWER(processed_content) LIKE ? 
+                     OR LOWER(processed_content) LIKE ? 
+                     OR LOWER(processed_content) LIKE ?
+                     OR LOWER(processed_content) LIKE ?)
+                """)
+                params.extend([
+                    f"% {term} %",  # space on both sides
+                    f"{term} %",    # at beginning
+                    f"% {term}",    # at end
+                    f"{term}"       # exact match
+                ])
             
             if not like_conditions:
                 return []
             
+            # Also search in original content
+            content_conditions = []
+            for term in search_terms[:5]:
+                content_conditions.append("""
+                    (LOWER(content) LIKE ? 
+                     OR LOWER(content) LIKE ? 
+                     OR LOWER(content) LIKE ?
+                     OR LOWER(content) LIKE ?)
+                """)
+                params.extend([
+                    f"% {term} %",  # with spaces
+                    f"{term} %",    # at beginning
+                    f"% {term}",    # at end
+                    f"{term}"       # exact match
+                ])
+            
             query = f'''
                 SELECT id, content, filename, section, tags, metadata
                 FROM chunks
-                WHERE {" OR ".join(like_conditions)}
+                WHERE ({" OR ".join(like_conditions)}) 
+                   OR ({" OR ".join(content_conditions)})
                 LIMIT ?
             '''
             params.append(count)
+            
             
             cursor.execute(query, params)
             
@@ -285,9 +350,19 @@ class SearchEngine:
             for row in cursor.fetchall():
                 chunk_id, content, filename, section, tags_json, metadata_json = row
                 
-                # Simple scoring based on term matches
+                # Simple scoring based on term matches with word boundaries
                 content_lower = content.lower()
-                score = sum(1 for term in search_terms if term.lower() in content_lower) / len(search_terms)
+                # Check for whole word matches
+                word_matches = 0
+                for term in search_terms:
+                    term_lower = term.lower()
+                    # Check word boundaries
+                    if (f" {term_lower} " in f" {content_lower} " or 
+                        content_lower.startswith(f"{term_lower} ") or 
+                        content_lower.endswith(f" {term_lower}") or
+                        content_lower == term_lower):
+                        word_matches += 1
+                score = word_matches / len(search_terms) if search_terms else 0.0
                 
                 results.append({
                     'id': chunk_id,
@@ -306,14 +381,23 @@ class SearchEngine:
             
             # Sort by score
             results.sort(key=lambda x: x['score'], reverse=True)
+            
             return results
             
         except Exception as e:
             logger.error(f"Error in fallback search: {e}")
             return []
     
-    def _merge_results(self, vector_results: List[Dict], keyword_results: List[Dict]) -> List[Dict[str, Any]]:
+    def _merge_results(self, vector_results: List[Dict], keyword_results: List[Dict],
+                      vector_weight: Optional[float] = None, 
+                      keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """Merge and rank vector and keyword search results"""
+        # Use provided weights or defaults
+        if vector_weight is None:
+            vector_weight = 0.7
+        if keyword_weight is None:
+            keyword_weight = 0.3
+        
         # Create a combined list with weighted scores
         combined = {}
         
@@ -335,8 +419,6 @@ class SearchEngine:
                 combined[chunk_id]['keyword_score'] = result['score']
         
         # Calculate combined score (weighted average)
-        vector_weight = 0.7
-        keyword_weight = 0.3
         
         for chunk_id, result in combined.items():
             vector_score = result.get('vector_score', 0.0)

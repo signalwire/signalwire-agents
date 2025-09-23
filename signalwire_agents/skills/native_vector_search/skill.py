@@ -197,6 +197,14 @@ class NativeVectorSearchSkill(SkillBase):
                 "description": "Enable verbose logging",
                 "default": False,
                 "required": False
+            },
+            "keyword_weight": {
+                "type": "number",
+                "description": "Manual keyword weight (0.0-1.0). Overrides automatic weight detection",
+                "default": None,
+                "required": False,
+                "minimum": 0.0,
+                "maximum": 1.0
             }
         })
         return schema
@@ -232,6 +240,7 @@ class NativeVectorSearchSkill(SkillBase):
         self.response_prefix = self.params.get('response_prefix', '')
         self.response_postfix = self.params.get('response_postfix', '')
         self.response_format_callback = self.params.get('response_format_callback')
+        self.keyword_weight = self.params.get('keyword_weight')
         
         # Remote search server configuration
         self.remote_url = self.params.get('remote_url')  # e.g., "http://user:pass@localhost:8001"
@@ -487,7 +496,8 @@ class NativeVectorSearchSkill(SkillBase):
                     enhanced_text=enhanced['enhanced_text'],
                     count=count,
                     distance_threshold=self.distance_threshold,
-                    tags=self.tags
+                    tags=self.tags,
+                    keyword_weight=self.keyword_weight
                 )
             
             if not results:

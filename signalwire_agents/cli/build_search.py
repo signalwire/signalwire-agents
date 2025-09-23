@@ -607,11 +607,19 @@ def search_command():
     parser.add_argument('--tags', help='Comma-separated tags to filter by')
     parser.add_argument('--query-nlp-backend', choices=['nltk', 'spacy'], default='nltk', 
                        help='NLP backend for query processing: nltk (fast, default) or spacy (better quality, slower)')
+    parser.add_argument('--keyword-weight', type=float, default=None,
+                       help='Manual keyword weight (0.0-1.0). Overrides automatic weight detection.')
     parser.add_argument('--verbose', action='store_true', help='Show detailed information')
     parser.add_argument('--json', action='store_true', help='Output results as JSON')
     parser.add_argument('--no-content', action='store_true', help='Hide content in results (show only metadata)')
     
     args = parser.parse_args()
+    
+    # Validate keyword weight if provided
+    if args.keyword_weight is not None:
+        if args.keyword_weight < 0.0 or args.keyword_weight > 1.0:
+            print("Error: --keyword-weight must be between 0.0 and 1.0")
+            sys.exit(1)
     
     # Validate backend configuration
     if args.backend == 'pgvector' and not args.connection_string:
@@ -665,7 +673,8 @@ def search_command():
             enhanced_text=enhanced.get('enhanced_text', args.query),
             count=args.count,
             distance_threshold=args.distance_threshold,
-            tags=tags
+            tags=tags,
+            keyword_weight=args.keyword_weight
         )
         
         if args.json:
