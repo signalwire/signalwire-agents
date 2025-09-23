@@ -147,6 +147,7 @@ class IndexBuilder:
         
         # Process documents
         chunks = []
+        print(f"Processing {len(files)} files...")
         for file_path in files:
             try:
                 # For individual files, use the file's parent as the base directory
@@ -154,8 +155,8 @@ class IndexBuilder:
                 base_dir = self._get_base_directory_for_file(file_path, sources)
                 file_chunks = self._process_file(file_path, base_dir, tags)
                 chunks.extend(file_chunks)
-                if self.verbose:
-                    print(f"Processed {file_path}: {len(file_chunks)} chunks")
+                if self.verbose or file_path.suffix == '.json':
+                    print(f"  {file_path}: {len(file_chunks)} chunks")
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
                 if self.verbose:
@@ -171,7 +172,9 @@ class IndexBuilder:
         # Generate embeddings
         self._load_model()
         if self.verbose:
-            print("Generating embeddings...")
+            print(f"Generating embeddings for {len(chunks)} chunks...")
+        else:
+            print(f"Generating embeddings for {len(chunks)} chunks...")
         
         for i, chunk in enumerate(chunks):
             try:
@@ -205,9 +208,11 @@ class IndexBuilder:
                 embedding = self.model.encode(embedding_text, show_progress_bar=False)
                 chunk['embedding'] = embedding.tobytes()
                 
-                if self.verbose and (i + 1) % 50 == 0:
+                # Show progress more frequently
+                show_every = 50 if len(chunks) > 500 else max(10, len(chunks) // 10)
+                if (i + 1) % show_every == 0 or (i + 1) == len(chunks):
                     progress_pct = ((i + 1) / len(chunks)) * 100
-                    print(f"Generated embeddings: {i + 1}/{len(chunks)} chunks ({progress_pct:.1f}%)")
+                    print(f"  Progress: {i + 1}/{len(chunks)} chunks ({progress_pct:.1f}%)")
                     
             except Exception as e:
                 logger.error(f"Error processing chunk {i}: {e}")

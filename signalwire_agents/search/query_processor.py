@@ -87,36 +87,54 @@ def set_global_model(model):
     _cached_model = model
     logger.info("Global model set for query processor")
 
-def _get_cached_model():
-    """Get or create cached sentence transformer model"""
+def _get_cached_model(model_name: str = None):
+    """Get or create cached sentence transformer model
+    
+    Args:
+        model_name: Optional model name. If not provided, uses default.
+    """
     global _cached_model, _model_lock
+    
+    # Default model
+    if model_name is None:
+        model_name = 'sentence-transformers/all-mpnet-base-v2'
     
     # Initialize lock if needed
     if _model_lock is None:
         import threading
         _model_lock = threading.Lock()
     
-    # Return cached model if available
+    # Return cached model if available and same model
     if _cached_model is not None:
-        return _cached_model
+        # Check if it's the same model (simple check - assumes model has a name attribute)
+        try:
+            if hasattr(_cached_model, 'model_name') and _cached_model.model_name == model_name:
+                return _cached_model
+        except:
+            pass
     
     # Load model with lock to prevent race conditions
     with _model_lock:
         # Double check in case another thread loaded it
         if _cached_model is not None:
-            return _cached_model
+            try:
+                if hasattr(_cached_model, 'model_name') and _cached_model.model_name == model_name:
+                    return _cached_model
+            except:
+                pass
             
         try:
             from sentence_transformers import SentenceTransformer
-            logger.info("Loading sentence transformer model (first time only)...")
-            _cached_model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+            logger.info(f"Loading sentence transformer model: {model_name}")
+            _cached_model = SentenceTransformer(model_name)
+            _cached_model.model_name = model_name  # Store for later comparison
             logger.info("Model loaded and cached successfully")
             return _cached_model
         except ImportError:
             logger.error("sentence-transformers not available. Cannot load model.")
             return None
 
-def vectorize_query(query: str, model=None):
+def vectorize_query(query: str, model=None, model_name: str = None):
     """
     Vectorize query using sentence transformers
     Returns numpy array of embeddings
@@ -124,13 +142,14 @@ def vectorize_query(query: str, model=None):
     Args:
         query: Query string to vectorize
         model: Optional pre-loaded model instance. If not provided, uses cached model.
+        model_name: Optional model name to use if loading a new model
     """
     try:
         import numpy as np
         
         # Use provided model or get cached one
         if model is None:
-            model = _get_cached_model()
+            model = _get_cached_model(model_name)
             if model is None:
                 return None
         
@@ -249,7 +268,7 @@ def remove_duplicate_words(input_string: str) -> str:
 def preprocess_query(query: str, language: str = 'en', pos_to_expand: Optional[List[str]] = None, 
                     max_synonyms: int = 5, debug: bool = False, vector: bool = False, 
                     vectorize_query_param: bool = False, nlp_backend: str = None, 
-                    query_nlp_backend: str = 'nltk') -> Dict[str, Any]:
+                    query_nlp_backend: str = 'nltk', model_name: str = None) -> Dict[str, Any]:
     """
     Advanced query preprocessing with language detection, POS tagging, synonym expansion, and vectorization
     
@@ -414,7 +433,7 @@ def preprocess_query(query: str, language: str = 'en', pos_to_expand: Optional[L
     
     # Vectorize query if requested
     if vector:
-        vectorized_query = vectorize_query(final_query_str)
+        vectorized_query = vectorize_query(final_query_str, model_name=model_name)
         if vectorized_query is not None:
             formatted_output['vector'] = vectorized_query.tolist()
         else:

@@ -12,6 +12,15 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+# Model aliases for convenience
+MODEL_ALIASES = {
+    'mini': 'sentence-transformers/all-MiniLM-L6-v2',      # 384 dims, ~5x faster
+    'base': 'sentence-transformers/all-mpnet-base-v2',     # 768 dims, balanced
+    'large': 'sentence-transformers/all-mpnet-base-v2',    # Same as base for now
+}
+
+DEFAULT_MODEL = MODEL_ALIASES['mini']  # Default to fastest model
+
 def main():
     """Main entry point for the build-search command"""
     parser = argparse.ArgumentParser(
@@ -67,6 +76,13 @@ Examples:
   sw-search ./docs \\
     --chunking-strategy qa
 
+  # Model selection examples (performance vs quality tradeoff)
+  sw-search ./docs --model mini     # Fastest (~5x faster), 384 dims, good for most use cases
+  sw-search ./docs --model base     # Balanced speed/quality, 768 dims (previous default)
+  sw-search ./docs --model large    # Best quality (same as base currently)
+  # Or use full model names:
+  sw-search ./docs --model sentence-transformers/all-MiniLM-L6-v2
+  sw-search ./docs --model sentence-transformers/all-mpnet-base-v2
 
   # JSON-based chunking (pre-chunked content)
   sw-search ./api_chunks.json \
@@ -227,8 +243,8 @@ Examples:
     
     parser.add_argument(
         '--model', 
-        default='sentence-transformers/all-mpnet-base-v2',
-        help='Sentence transformer model name (default: sentence-transformers/all-mpnet-base-v2)'
+        default=DEFAULT_MODEL,
+        help=f'Sentence transformer model name or alias (mini/base/large). Default: mini ({DEFAULT_MODEL})'
     )
     
     parser.add_argument(
@@ -270,6 +286,10 @@ Examples:
     )
     
     args = parser.parse_args()
+    
+    # Resolve model aliases
+    if args.model in MODEL_ALIASES:
+        args.model = MODEL_ALIASES[args.model]
     
     # Validate sources
     valid_sources = []
@@ -541,7 +561,13 @@ Examples:
                 sys.exit(1)
         
         if args.backend == 'sqlite':
-            print(f"\n✓ Search index created successfully: {args.output}")
+            # Check if the index was actually created
+            import os
+            if os.path.exists(args.output):
+                print(f"\n✓ Search index created successfully: {args.output}")
+            else:
+                print(f"\n✗ Search index creation failed - no files were processed")
+                sys.exit(1)
         else:
             print(f"\n✓ Search collection created successfully: {args.output}")
             print(f"   Connection: {args.connection_string}")
@@ -612,8 +638,13 @@ def search_command():
     parser.add_argument('--verbose', action='store_true', help='Show detailed information')
     parser.add_argument('--json', action='store_true', help='Output results as JSON')
     parser.add_argument('--no-content', action='store_true', help='Hide content in results (show only metadata)')
+    parser.add_argument('--model', help='Override embedding model for query (mini/base/large or full model name)')
     
     args = parser.parse_args()
+    
+    # Resolve model aliases
+    if args.model and args.model in MODEL_ALIASES:
+        args.model = MODEL_ALIASES[args.model]
     
     # Validate keyword weight if provided
     if args.keyword_weight is not None:
@@ -655,14 +686,25 @@ def search_command():
         
         # Get index stats
         stats = engine.get_stats()
+        
+        # Get the model from index config if not overridden
+        model_to_use = args.model
+        if not model_to_use and 'config' in stats:
+            model_to_use = stats['config'].get('embedding_model')
+            
         if args.verbose:
             print(f"Index contains {stats['total_chunks']} chunks from {stats['total_files']} files")
             print(f"Searching for: '{args.query}'")
             print(f"Query NLP Backend: {args.query_nlp_backend}")
+            if args.model:
+                print(f"Override model: {args.model}")
+            elif model_to_use:
+                print(f"Using index model: {model_to_use}")
             print()
         
         # Preprocess query
-        enhanced = preprocess_query(args.query, vector=True, query_nlp_backend=args.query_nlp_backend)
+        enhanced = preprocess_query(args.query, vector=True, query_nlp_backend=args.query_nlp_backend, 
+                                  model_name=model_to_use)
         
         # Parse tags if provided
         tags = [tag.strip() for tag in args.tags.split(',')] if args.tags else None

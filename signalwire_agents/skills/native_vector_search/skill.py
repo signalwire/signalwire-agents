@@ -205,6 +205,12 @@ class NativeVectorSearchSkill(SkillBase):
                 "required": False,
                 "minimum": 0.0,
                 "maximum": 1.0
+            },
+            "model_name": {
+                "type": "string",
+                "description": "Embedding model to use. Options: 'mini' (fastest, 384 dims), 'base' (balanced, 768 dims), 'large' (same as base). Or specify full model name like 'sentence-transformers/all-MiniLM-L6-v2'",
+                "default": "mini",
+                "required": False
             }
         })
         return schema
@@ -241,6 +247,7 @@ class NativeVectorSearchSkill(SkillBase):
         self.response_postfix = self.params.get('response_postfix', '')
         self.response_format_callback = self.params.get('response_format_callback')
         self.keyword_weight = self.params.get('keyword_weight')
+        self.model_name = self.params.get('model_name', 'mini')
         
         # Remote search server configuration
         self.remote_url = self.params.get('remote_url')  # e.g., "http://user:pass@localhost:8001"
@@ -345,7 +352,19 @@ class NativeVectorSearchSkill(SkillBase):
                     self.logger.info(f"Building search index from {self.source_dir}...")
                     from signalwire_agents.search import IndexBuilder
                     
+                    # Resolve model alias if needed
+                    model_to_use = self.model_name
+                    # Model aliases for convenience  
+                    model_aliases = {
+                        'mini': 'sentence-transformers/all-MiniLM-L6-v2',
+                        'base': 'sentence-transformers/all-mpnet-base-v2', 
+                        'large': 'sentence-transformers/all-mpnet-base-v2',
+                    }
+                    if model_to_use in model_aliases:
+                        model_to_use = model_aliases[model_to_use]
+                    
                     builder = IndexBuilder(
+                        model_name=model_to_use,
                         verbose=self.params.get('verbose', False),
                         index_nlp_backend=self.index_nlp_backend
                     )
@@ -386,6 +405,12 @@ class NativeVectorSearchSkill(SkillBase):
                 try:
                     from signalwire_agents.search import SearchEngine
                     self.search_engine = SearchEngine(backend='sqlite', index_path=self.index_file)
+                    # The SearchEngine will auto-detect the model from the index
+                    # Get the model name from config for query processing
+                    if hasattr(self.search_engine, 'config'):
+                        index_model = self.search_engine.config.get('embedding_model')
+                        if index_model:
+                            self.logger.info(f"Using model from index: {index_model}")
                 except Exception as e:
                     self.logger.error(f"Failed to load search index {self.index_file}: {e}")
                     self.search_available = False
@@ -490,7 +515,19 @@ class NativeVectorSearchSkill(SkillBase):
             else:
                 # For local searches, preprocess the query locally
                 from signalwire_agents.search.query_processor import preprocess_query
-                enhanced = preprocess_query(query, language='en', vector=True, query_nlp_backend=self.query_nlp_backend)
+                
+                # Get model name from index config if available
+                model_for_query = None
+                if hasattr(self.search_engine, 'config'):
+                    model_for_query = self.search_engine.config.get('embedding_model')
+                
+                enhanced = preprocess_query(
+                    query, 
+                    language='en', 
+                    vector=True, 
+                    query_nlp_backend=self.query_nlp_backend,
+                    model_name=model_for_query  # Use model from index
+                )
                 results = self.search_engine.search(
                     query_vector=enhanced.get('vector', []),
                     enhanced_text=enhanced['enhanced_text'],

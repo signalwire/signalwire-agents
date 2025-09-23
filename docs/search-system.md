@@ -164,6 +164,23 @@ Ask your agent: *"How do I create a new agent?"* and it will search the comprehe
 
 Search indexes are SQLite databases with the `.swsearch` extension that contain processed documents, embeddings, and search metadata.
 
+### Model Selection
+
+The search system supports multiple embedding models with different performance tradeoffs:
+
+```bash
+# Fast model (default) - 5x faster, good for most use cases
+sw-search docs --model mini --output fast_index.swsearch
+
+# Balanced model - better quality, previous default
+sw-search docs --model base --output quality_index.swsearch
+
+# Best quality model (currently same as base)
+sw-search docs --model large --output best_index.swsearch
+```
+
+See [Search Models Documentation](search_models.md) for detailed model comparisons and recommendations.
+
 ### Basic Index Building
 
 ```bash
@@ -391,6 +408,9 @@ self.add_skill("native_vector_search", {
     "build_index": True,  # Auto-build if missing
     "source_dir": "./docs",  # Source for auto-build
     "file_types": ["md", "txt"],
+    
+    # Model selection (for auto-build)
+    "model_name": "mini",  # mini (fast), base (balanced), or large (best)
     
     # Search parameters
     "count": 5,  # Number of results
