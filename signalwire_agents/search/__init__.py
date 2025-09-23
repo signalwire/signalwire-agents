@@ -68,6 +68,7 @@ if _SEARCH_AVAILABLE:
         from .index_builder import IndexBuilder
         from .search_engine import SearchEngine
         from .search_service import SearchService
+        from .models import MODEL_ALIASES, DEFAULT_MODEL, resolve_model_alias
         
         __all__ = [
             'preprocess_query',
@@ -75,7 +76,10 @@ if _SEARCH_AVAILABLE:
             'DocumentProcessor',
             'IndexBuilder',
             'SearchEngine',
-            'SearchService'
+            'SearchService',
+            'MODEL_ALIASES',
+            'DEFAULT_MODEL',
+            'resolve_model_alias'
         ]
     except ImportError as e:
         # Some search components failed to import

@@ -211,6 +211,12 @@ class NativeVectorSearchSkill(SkillBase):
                 "description": "Embedding model to use. Options: 'mini' (fastest, 384 dims), 'base' (balanced, 768 dims), 'large' (same as base). Or specify full model name like 'sentence-transformers/all-MiniLM-L6-v2'",
                 "default": "mini",
                 "required": False
+            },
+            "overwrite": {
+                "type": "boolean",
+                "description": "Overwrite existing pgvector collection when building index (pgvector backend only)",
+                "default": False,
+                "required": False
             }
         })
         return schema
@@ -341,44 +347,72 @@ class NativeVectorSearchSkill(SkillBase):
         
         # Auto-build index if requested and search is available
         if self.build_index and self.source_dir and self.search_available:
-            if not self.index_file:
-                # Generate index filename from source directory
-                source_name = Path(self.source_dir).name
-                self.index_file = f"{source_name}.swsearch"
-            
-            # Build index if it doesn't exist
-            if not os.path.exists(self.index_file):
-                try:
-                    self.logger.info(f"Building search index from {self.source_dir}...")
-                    from signalwire_agents.search import IndexBuilder
-                    
-                    # Resolve model alias if needed
-                    model_to_use = self.model_name
-                    # Model aliases for convenience  
-                    model_aliases = {
-                        'mini': 'sentence-transformers/all-MiniLM-L6-v2',
-                        'base': 'sentence-transformers/all-mpnet-base-v2', 
-                        'large': 'sentence-transformers/all-mpnet-base-v2',
-                    }
-                    if model_to_use in model_aliases:
-                        model_to_use = model_aliases[model_to_use]
-                    
-                    builder = IndexBuilder(
-                        model_name=model_to_use,
-                        verbose=self.params.get('verbose', False),
-                        index_nlp_backend=self.index_nlp_backend
-                    )
-                    builder.build_index(
-                        source_dir=self.source_dir,
-                        output_file=self.index_file,
-                        file_types=self.params.get('file_types', ['md', 'txt']),
-                        exclude_patterns=self.params.get('exclude_patterns'),
-                        tags=self.params.get('global_tags')
-                    )
-                    self.logger.info(f"Search index created: {self.index_file}")
-                except Exception as e:
-                    self.logger.error(f"Failed to build search index: {e}")
-                    self.search_available = False
+            # Handle auto-build for different backends
+            if self.backend == 'sqlite':
+                if not self.index_file:
+                    # Generate index filename from source directory
+                    source_name = Path(self.source_dir).name
+                    self.index_file = f"{source_name}.swsearch"
+                
+                # Build index if it doesn't exist
+                if not os.path.exists(self.index_file):
+                    try:
+                        self.logger.info(f"Building search index from {self.source_dir}...")
+                        from signalwire_agents.search import IndexBuilder
+                        
+                        # Resolve model alias if needed
+                        from signalwire_agents.search.models import resolve_model_alias
+                        model_to_use = resolve_model_alias(self.model_name)
+                        
+                        builder = IndexBuilder(
+                            model_name=model_to_use,
+                            verbose=self.params.get('verbose', False),
+                            index_nlp_backend=self.index_nlp_backend
+                        )
+                        builder.build_index(
+                            source_dir=self.source_dir,
+                            output_file=self.index_file,
+                            file_types=self.params.get('file_types', ['md', 'txt']),
+                            exclude_patterns=self.params.get('exclude_patterns'),
+                            tags=self.params.get('global_tags')
+                        )
+                        self.logger.info(f"Search index created: {self.index_file}")
+                    except Exception as e:
+                        self.logger.error(f"Failed to build search index: {e}")
+                        self.search_available = False
+                        
+            elif self.backend == 'pgvector':
+                # Auto-build for pgvector
+                if self.connection_string and self.collection_name:
+                    try:
+                        self.logger.info(f"Building pgvector index from {self.source_dir}...")
+                        from signalwire_agents.search import IndexBuilder
+                        from signalwire_agents.search.models import resolve_model_alias
+                        
+                        model_to_use = resolve_model_alias(self.model_name)
+                        
+                        builder = IndexBuilder(
+                            backend='pgvector',
+                            connection_string=self.connection_string,
+                            model_name=model_to_use,
+                            verbose=self.params.get('verbose', False),
+                            index_nlp_backend=self.index_nlp_backend
+                        )
+                        
+                        builder.build_index(
+                            source_dir=self.source_dir,
+                            output_file=self.collection_name,  # pgvector uses this as collection name
+                            file_types=self.params.get('file_types', ['md', 'txt']),
+                            exclude_patterns=self.params.get('exclude_patterns'),
+                            tags=self.params.get('global_tags'),
+                            overwrite=self.params.get('overwrite', False)
+                        )
+                        self.logger.info(f"pgvector collection created: {self.collection_name}")
+                    except Exception as e:
+                        self.logger.error(f"Failed to build pgvector index: {e}")
+                        # Don't set search_available to False - we might be connecting to existing collection
+                else:
+                    self.logger.warning("pgvector auto-build requires connection_string and collection_name")
         
         # Initialize local search engine
         self.search_engine = None

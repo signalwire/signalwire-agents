@@ -12,14 +12,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-# Model aliases for convenience
-MODEL_ALIASES = {
-    'mini': 'sentence-transformers/all-MiniLM-L6-v2',      # 384 dims, ~5x faster
-    'base': 'sentence-transformers/all-mpnet-base-v2',     # 768 dims, balanced
-    'large': 'sentence-transformers/all-mpnet-base-v2',    # Same as base for now
-}
-
-DEFAULT_MODEL = MODEL_ALIASES['mini']  # Default to fastest model
+from signalwire_agents.search.models import MODEL_ALIASES, DEFAULT_MODEL, resolve_model_alias
 
 def main():
     """Main entry point for the build-search command"""
@@ -288,8 +281,7 @@ Examples:
     args = parser.parse_args()
     
     # Resolve model aliases
-    if args.model in MODEL_ALIASES:
-        args.model = MODEL_ALIASES[args.model]
+    args.model = resolve_model_alias(args.model)
     
     # Validate sources
     valid_sources = []
