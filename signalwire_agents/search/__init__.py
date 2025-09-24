@@ -69,6 +69,7 @@ if _SEARCH_AVAILABLE:
         from .search_engine import SearchEngine
         from .search_service import SearchService
         from .models import MODEL_ALIASES, DEFAULT_MODEL, resolve_model_alias
+        from .migration import SearchIndexMigrator
         
         __all__ = [
             'preprocess_query',
@@ -79,7 +80,8 @@ if _SEARCH_AVAILABLE:
             'SearchService',
             'MODEL_ALIASES',
             'DEFAULT_MODEL',
-            'resolve_model_alias'
+            'resolve_model_alias',
+            'SearchIndexMigrator'
         ]
     except ImportError as e:
         # Some search components failed to import

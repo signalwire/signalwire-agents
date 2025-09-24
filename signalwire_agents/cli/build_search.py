@@ -122,6 +122,12 @@ Examples:
   sw-search remote http://localhost:8001 "how to create an agent" --index-name docs
   sw-search remote localhost:8001 "API reference" --index-name docs --count 3 --verbose
 
+  # Migrate between backends
+  sw-search migrate ./docs.swsearch --to-pgvector \\
+    --connection-string "postgresql://user:pass@localhost/db" \\
+    --collection-name docs_collection
+  sw-search migrate --info ./docs.swsearch
+
   # PostgreSQL pgvector backend
   sw-search ./docs \\
     --backend pgvector \\
@@ -777,6 +783,142 @@ def search_command():
             traceback.print_exc()
         sys.exit(1)
 
+def migrate_command():
+    """Migrate search indexes between backends"""
+    parser = argparse.ArgumentParser(
+        description='Migrate search indexes between SQLite and pgvector backends',
+        epilog="""
+Examples:
+  # Migrate SQLite to pgvector
+  sw-search migrate ./docs.swsearch \\
+    --to-pgvector \\
+    --connection-string "postgresql://user:pass@localhost/db" \\
+    --collection-name docs_collection
+  
+  # Migrate with overwrite
+  sw-search migrate ./docs.swsearch \\
+    --to-pgvector \\
+    --connection-string "postgresql://user:pass@localhost/db" \\
+    --collection-name docs_collection \\
+    --overwrite
+  
+  # Get index information
+  sw-search migrate --info ./docs.swsearch
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Source argument (optional if using --info)
+    parser.add_argument('source', nargs='?', help='Source index file or collection')
+    
+    # Migration direction
+    migration_group = parser.add_mutually_exclusive_group()
+    migration_group.add_argument('--to-pgvector', action='store_true',
+                                help='Migrate SQLite index to pgvector')
+    migration_group.add_argument('--to-sqlite', action='store_true',
+                                help='Migrate pgvector collection to SQLite (not yet implemented)')
+    migration_group.add_argument('--info', action='store_true',
+                                help='Show information about an index')
+    
+    # pgvector options
+    parser.add_argument('--connection-string', 
+                       help='PostgreSQL connection string for pgvector')
+    parser.add_argument('--collection-name',
+                       help='Collection name for pgvector')
+    parser.add_argument('--overwrite', action='store_true',
+                       help='Overwrite existing collection')
+    
+    # SQLite options
+    parser.add_argument('--output',
+                       help='Output .swsearch file path (for --to-sqlite)')
+    
+    # Common options
+    parser.add_argument('--batch-size', type=int, default=100,
+                       help='Number of chunks to process at once (default: 100)')
+    parser.add_argument('--verbose', action='store_true',
+                       help='Show detailed progress')
+    
+    args = parser.parse_args()
+    
+    # Handle --info flag
+    if args.info:
+        if not args.source:
+            print("Error: Source index required with --info")
+            sys.exit(1)
+            
+        try:
+            from signalwire_agents.search.migration import SearchIndexMigrator
+            migrator = SearchIndexMigrator(verbose=args.verbose)
+            info = migrator.get_index_info(args.source)
+            
+            print(f"Index Information: {args.source}")
+            print(f"  Type: {info['type']}")
+            if info['type'] == 'sqlite':
+                print(f"  Total chunks: {info['total_chunks']}")
+                print(f"  Total files: {info['total_files']}")
+                print(f"  Model: {info['config'].get('embedding_model', 'Unknown')}")
+                print(f"  Dimensions: {info['config'].get('embedding_dimensions', 'Unknown')}")
+                print(f"  Created: {info['config'].get('created_at', 'Unknown')}")
+                if args.verbose:
+                    print("\n  Full configuration:")
+                    for key, value in info['config'].items():
+                        print(f"    {key}: {value}")
+            else:
+                print("  Unable to determine index type")
+        except Exception as e:
+            print(f"Error getting index info: {e}")
+            sys.exit(1)
+        return
+    
+    # Validate arguments for migration
+    if not args.source:
+        print("Error: Source index required for migration")
+        sys.exit(1)
+    
+    if not args.to_pgvector and not args.to_sqlite:
+        print("Error: Must specify migration direction (--to-pgvector or --to-sqlite)")
+        sys.exit(1)
+    
+    try:
+        from signalwire_agents.search.migration import SearchIndexMigrator
+        migrator = SearchIndexMigrator(verbose=args.verbose)
+        
+        if args.to_pgvector:
+            # Validate pgvector arguments
+            if not args.connection_string:
+                print("Error: --connection-string required for pgvector migration")
+                sys.exit(1)
+            if not args.collection_name:
+                print("Error: --collection-name required for pgvector migration")
+                sys.exit(1)
+            
+            # Perform migration
+            print(f"Migrating {args.source} to pgvector collection '{args.collection_name}'...")
+            stats = migrator.migrate_sqlite_to_pgvector(
+                sqlite_path=args.source,
+                connection_string=args.connection_string,
+                collection_name=args.collection_name,
+                overwrite=args.overwrite,
+                batch_size=args.batch_size
+            )
+            
+            print(f"\n✓ Migration completed successfully!")
+            print(f"  Chunks migrated: {stats['chunks_migrated']}")
+            print(f"  Errors: {stats['errors']}")
+            
+        elif args.to_sqlite:
+            print("Error: pgvector to SQLite migration not yet implemented")
+            print("This feature is planned for future development")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"\nError during migration: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 def remote_command():
     """Search via remote API endpoint"""
     parser = argparse.ArgumentParser(description='Search via remote API endpoint')
@@ -1051,6 +1193,11 @@ Examples:
             # Remove 'remote' from argv and call remote_command
             sys.argv.pop(1)
             remote_command()
+            return
+        elif sys.argv[1] == 'migrate':
+            # Remove 'migrate' from argv and call migrate_command
+            sys.argv.pop(1)
+            migrate_command()
             return
     
     # Regular build command
