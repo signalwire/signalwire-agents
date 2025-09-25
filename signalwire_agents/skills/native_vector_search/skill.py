@@ -560,7 +560,9 @@ class NativeVectorSearchSkill(SkillBase):
                     language='en', 
                     vector=True, 
                     query_nlp_backend=self.query_nlp_backend,
-                    model_name=model_for_query  # Use model from index
+                    model_name=model_for_query,  # Use model from index
+                    preserve_original=True,  # Keep original query terms
+                    max_synonyms=2  # Reduce synonym expansion
                 )
                 results = self.search_engine.search(
                     query_vector=enhanced.get('vector', []),
@@ -568,7 +570,8 @@ class NativeVectorSearchSkill(SkillBase):
                     count=count,
                     distance_threshold=self.distance_threshold,
                     tags=self.tags,
-                    keyword_weight=self.keyword_weight
+                    keyword_weight=self.keyword_weight,
+                    original_query=query  # Pass original for exact match boosting
                 )
             
             if not results:

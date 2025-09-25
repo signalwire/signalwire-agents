@@ -99,6 +99,7 @@ class PgVectorBackend:
                     section TEXT,
                     tags JSONB DEFAULT '[]'::jsonb,
                     metadata JSONB DEFAULT '{{}}'::jsonb,
+                    metadata_text TEXT,  -- Searchable text representation of all metadata
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
@@ -120,6 +121,16 @@ class PgVectorBackend:
                 ON {table_name} USING gin (tags)
             """)
             
+            cursor.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{table_name}_metadata 
+                ON {table_name} USING gin (metadata)
+            """)
+            
+            cursor.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{table_name}_metadata_text 
+                ON {table_name} USING gin (metadata_text gin_trgm_ops)
+            """)
+            
             # Create config table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS collection_config (
@@ -136,6 +147,36 @@ class PgVectorBackend:
             self.conn.commit()
             logger.info(f"Created schema for collection '{collection_name}'")
     
+    def _extract_metadata_from_json_content(self, content: str) -> Dict[str, Any]:
+        """
+        Extract metadata from JSON content if present
+        
+        Returns:
+            metadata_dict
+        """
+        metadata_dict = {}
+        
+        # Try to extract metadata from JSON structure in content
+        if '"metadata":' in content:
+            try:
+                import re
+                # Find all metadata objects
+                pattern = r'"metadata"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})'
+                matches = re.finditer(pattern, content)
+                
+                for match in matches:
+                    try:
+                        json_metadata = json.loads(match.group(1))
+                        # Merge all found metadata
+                        if isinstance(json_metadata, dict):
+                            metadata_dict.update(json_metadata)
+                    except:
+                        pass
+            except Exception as e:
+                logger.debug(f"Error extracting JSON metadata: {e}")
+        
+        return metadata_dict
+
     def store_chunks(self, chunks: List[Dict[str, Any]], collection_name: str, 
                     config: Dict[str, Any]):
         """
@@ -166,6 +207,9 @@ class PgVectorBackend:
             section = chunk.get('section') or metadata.get('section', '')
             tags = chunk.get('tags', []) or metadata.get('tags', [])
             
+            # Extract metadata from JSON content and merge with chunk metadata
+            json_metadata = self._extract_metadata_from_json_content(chunk['content'])
+            
             # Build metadata from all fields except the ones we store separately
             chunk_metadata = {}
             for key, value in chunk.items():
@@ -176,6 +220,30 @@ class PgVectorBackend:
                 if key not in ['filename', 'section', 'tags']:
                     chunk_metadata[key] = value
             
+            # Merge metadata: chunk metadata takes precedence over JSON metadata
+            merged_metadata = {**json_metadata, **chunk_metadata}
+            
+            # Create searchable metadata text
+            metadata_text_parts = []
+            
+            # Add all metadata keys and values
+            for key, value in merged_metadata.items():
+                metadata_text_parts.append(str(key).lower())
+                if isinstance(value, list):
+                    metadata_text_parts.extend(str(v).lower() for v in value)
+                else:
+                    metadata_text_parts.append(str(value).lower())
+            
+            # Add tags
+            if tags:
+                metadata_text_parts.extend(str(tag).lower() for tag in tags)
+            
+            # Add section if present
+            if section:
+                metadata_text_parts.append(section.lower())
+            
+            metadata_text = ' '.join(metadata_text_parts)
+            
             data.append((
                 chunk['content'],
                 chunk.get('processed_content', chunk['content']),
@@ -183,7 +251,8 @@ class PgVectorBackend:
                 filename,
                 section,
                 json.dumps(tags),
-                json.dumps(chunk_metadata)
+                json.dumps(merged_metadata),
+                metadata_text
             ))
         
         # Batch insert chunks
@@ -192,11 +261,11 @@ class PgVectorBackend:
                 cursor,
                 f"""
                 INSERT INTO {table_name} 
-                (content, processed_content, embedding, filename, section, tags, metadata)
+                (content, processed_content, embedding, filename, section, tags, metadata, metadata_text)
                 VALUES %s
                 """,
                 data,
-                template="(%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)"
+                template="(%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)"
             )
             
             # Update or insert config
@@ -358,7 +427,7 @@ class PgVectorSearchBackend:
               tags: Optional[List[str]] = None,
               keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """
-        Perform hybrid search (vector + keyword)
+        Perform hybrid search (vector + keyword + metadata)
         
         Args:
             query_vector: Embedding vector for the query
@@ -373,20 +442,31 @@ class PgVectorSearchBackend:
         """
         self._ensure_connection()
         
+        # Extract query terms for metadata search
+        query_terms = enhanced_text.lower().split()
+        
         # Vector search
         vector_results = self._vector_search(query_vector, count * 2, tags)
         
         # Keyword search
         keyword_results = self._keyword_search(enhanced_text, count * 2, tags)
         
-        # Merge and rank results
-        merged_results = self._merge_results(vector_results, keyword_results, keyword_weight)
+        # Metadata search
+        metadata_results = self._metadata_search(query_terms, count * 2, tags)
+        
+        # Merge all results
+        merged_results = self._merge_all_results(vector_results, keyword_results, metadata_results, keyword_weight)
         
         # Filter by distance threshold
         filtered_results = [
             r for r in merged_results 
             if r['score'] >= distance_threshold
         ]
+        
+        # Ensure 'score' field exists for CLI compatibility
+        for r in filtered_results:
+            if 'score' not in r:
+                r['score'] = r.get('final_score', 0.0)
         
         return filtered_results[:count]
     
@@ -480,6 +560,82 @@ class PgVectorSearchBackend:
             
             return results
     
+    def _metadata_search(self, query_terms: List[str], count: int,
+                        tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Perform metadata search using JSONB operators and metadata_text
+        """
+        with self.conn.cursor() as cursor:
+            # Build WHERE conditions
+            where_conditions = []
+            params = []
+            
+            # Use metadata_text for trigram search
+            if query_terms:
+                # Create AND conditions for all terms
+                for term in query_terms:
+                    where_conditions.append(f"metadata_text ILIKE %s")
+                    params.append(f'%{term}%')
+            
+            # Add tag filter if specified
+            if tags:
+                where_conditions.append("tags ?| %s")
+                params.append(tags)
+            
+            # Build query
+            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+            
+            query = f"""
+                SELECT id, content, filename, section, tags, metadata,
+                       metadata_text
+                FROM {self.table_name}
+                WHERE {where_clause}
+                LIMIT %s
+            """
+            
+            params.append(count)
+            
+            cursor.execute(query, params)
+            
+            results = []
+            for row in cursor.fetchall():
+                chunk_id, content, filename, section, tags_json, metadata_json, metadata_text = row
+                
+                # Calculate score based on term matches
+                score = 0.0
+                if metadata_text:
+                    metadata_lower = metadata_text.lower()
+                    for term in query_terms:
+                        if term.lower() in metadata_lower:
+                            score += 0.3  # Base score for each match
+                
+                # Bonus for exact matches in JSONB keys/values
+                if metadata_json:
+                    json_str = json.dumps(metadata_json).lower()
+                    for term in query_terms:
+                        if term.lower() in json_str:
+                            score += 0.2
+                
+                # Normalize score
+                score = min(1.0, score)
+                
+                results.append({
+                    'id': chunk_id,
+                    'content': content,
+                    'score': float(score),
+                    'metadata': {
+                        'filename': filename,
+                        'section': section,
+                        'tags': tags_json if isinstance(tags_json, list) else [],
+                        **metadata_json
+                    },
+                    'search_type': 'metadata'
+                })
+            
+            # Sort by score
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results[:count]
+    
     def _merge_results(self, vector_results: List[Dict[str, Any]], 
                       keyword_results: List[Dict[str, Any]],
                       keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -511,6 +667,65 @@ class PgVectorSearchBackend:
             else:
                 # Combine scores if result appears in both
                 results_map[chunk_id]['score'] += result['score'] * keyword_weight
+        
+        # Sort by combined score
+        merged = list(results_map.values())
+        merged.sort(key=lambda x: x['score'], reverse=True)
+        
+        return merged
+    
+    def _merge_all_results(self, vector_results: List[Dict[str, Any]], 
+                          keyword_results: List[Dict[str, Any]],
+                          metadata_results: List[Dict[str, Any]],
+                          keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Merge and rank results from vector, keyword, and metadata search"""
+        # Use provided weights or defaults
+        if keyword_weight is None:
+            keyword_weight = 0.3
+        vector_weight = 0.5
+        metadata_weight = 0.2
+        
+        # Create a map to track unique results
+        results_map = {}
+        all_sources = {}
+        
+        # Add vector results
+        for result in vector_results:
+            chunk_id = result['id']
+            if chunk_id not in results_map:
+                results_map[chunk_id] = result.copy()
+                results_map[chunk_id]['score'] = result['score'] * vector_weight
+                all_sources[chunk_id] = {'vector': result['score']}
+            else:
+                results_map[chunk_id]['score'] += result['score'] * vector_weight
+                all_sources[chunk_id]['vector'] = result['score']
+        
+        # Add keyword results
+        for result in keyword_results:
+            chunk_id = result['id']
+            if chunk_id not in results_map:
+                results_map[chunk_id] = result.copy()
+                results_map[chunk_id]['score'] = result['score'] * keyword_weight
+                all_sources.setdefault(chunk_id, {})['keyword'] = result['score']
+            else:
+                results_map[chunk_id]['score'] += result['score'] * keyword_weight
+                all_sources[chunk_id]['keyword'] = result['score']
+        
+        # Add metadata results
+        for result in metadata_results:
+            chunk_id = result['id']
+            if chunk_id not in results_map:
+                results_map[chunk_id] = result.copy()
+                results_map[chunk_id]['score'] = result['score'] * metadata_weight
+                all_sources.setdefault(chunk_id, {})['metadata'] = result['score']
+            else:
+                results_map[chunk_id]['score'] += result['score'] * metadata_weight
+                all_sources[chunk_id]['metadata'] = result['score']
+        
+        # Add sources to results for transparency
+        for chunk_id, result in results_map.items():
+            result['sources'] = all_sources.get(chunk_id, {})
+            result['final_score'] = result['score']
         
         # Sort by combined score
         merged = list(results_map.values())

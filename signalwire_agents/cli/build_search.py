@@ -622,10 +622,12 @@ def search_command():
     """Search within an existing search index"""
     parser = argparse.ArgumentParser(description='Search within a .swsearch index file or pgvector collection')
     parser.add_argument('index_source', help='Path to .swsearch file or collection name for pgvector')
-    parser.add_argument('query', help='Search query')
+    parser.add_argument('query', nargs='?', help='Search query (optional if using --shell)')
     parser.add_argument('--backend', choices=['sqlite', 'pgvector'], default='sqlite',
                        help='Storage backend (default: sqlite)')
     parser.add_argument('--connection-string', help='PostgreSQL connection string for pgvector backend')
+    parser.add_argument('--shell', action='store_true', 
+                       help='Interactive shell mode - load once and search multiple times')
     parser.add_argument('--count', type=int, default=5, help='Number of results to return (default: 5)')
     parser.add_argument('--distance-threshold', type=float, default=0.0, help='Minimum similarity score (default: 0.0)')
     parser.add_argument('--tags', help='Comma-separated tags to filter by')
@@ -639,6 +641,11 @@ def search_command():
     parser.add_argument('--model', help='Override embedding model for query (mini/base/large or full model name)')
     
     args = parser.parse_args()
+    
+    # Validate arguments
+    if not args.shell and not args.query:
+        print("Error: Query is required unless using --shell mode")
+        sys.exit(1)
     
     # Resolve model aliases
     if args.model and args.model in MODEL_ALIASES:
@@ -677,10 +684,14 @@ def search_command():
                 print(f"Connecting to pgvector collection: {args.index_source}")
         
         if args.backend == 'sqlite':
-            engine = SearchEngine(backend='sqlite', index_path=args.index_source)
+            # Pass the model from the index or override if specified
+            model = args.model if args.model else None
+            engine = SearchEngine(backend='sqlite', index_path=args.index_source, model=model)
         else:
+            # Pass the model override if specified
+            model = args.model if args.model else None
             engine = SearchEngine(backend='pgvector', connection_string=args.connection_string,
-                                collection_name=args.index_source)
+                                collection_name=args.index_source, model=model)
         
         # Get index stats
         stats = engine.get_stats()
@@ -688,8 +699,133 @@ def search_command():
         # Get the model from index config if not overridden
         model_to_use = args.model
         if not model_to_use and 'config' in stats:
-            model_to_use = stats['config'].get('embedding_model')
+            # SQLite uses 'embedding_model', pgvector uses 'model_name'
+            model_to_use = stats['config'].get('embedding_model') or stats['config'].get('model_name')
             
+        # Shell mode implementation
+        if args.shell:
+            import time
+            print(f"Search Shell - Index: {args.index_source}")
+            print(f"Backend: {args.backend}")
+            print(f"Index contains {stats['total_chunks']} chunks from {stats['total_files']} files")
+            if model_to_use:
+                print(f"Model: {model_to_use}")
+            print("Type 'exit' or 'quit' to leave, 'help' for options")
+            print("-" * 60)
+            
+            while True:
+                try:
+                    query = input("\nsearch> ").strip()
+                    
+                    if not query:
+                        continue
+                        
+                    if query.lower() in ['exit', 'quit', 'q']:
+                        print("Goodbye!")
+                        break
+                        
+                    if query.lower() == 'help':
+                        print("\nShell commands:")
+                        print("  help           - Show this help")
+                        print("  exit/quit/q    - Exit shell")
+                        print("  count=N        - Set result count (current: {})".format(args.count))
+                        print("  tags=tag1,tag2 - Set tag filter (current: {})".format(args.tags or 'none'))
+                        print("  verbose        - Toggle verbose output")
+                        print("\nOr type any search query...")
+                        continue
+                    
+                    # Handle shell commands
+                    if query.startswith('count='):
+                        try:
+                            args.count = int(query.split('=')[1])
+                            print(f"Result count set to: {args.count}")
+                        except:
+                            print("Invalid count value")
+                        continue
+                        
+                    if query.startswith('tags='):
+                        tag_str = query.split('=', 1)[1]
+                        args.tags = tag_str if tag_str else None
+                        tags = [tag.strip() for tag in args.tags.split(',')] if args.tags else None
+                        print(f"Tags filter set to: {tags or 'none'}")
+                        continue
+                        
+                    if query == 'verbose':
+                        args.verbose = not args.verbose
+                        print(f"Verbose output: {'on' if args.verbose else 'off'}")
+                        continue
+                    
+                    # Perform search with timing
+                    start_time = time.time()
+                    
+                    # Preprocess query
+                    enhanced = preprocess_query(
+                        query,
+                        vector=True,
+                        query_nlp_backend=args.query_nlp_backend,
+                        model_name=model_to_use,
+                        preserve_original=True,
+                        max_synonyms=2
+                    )
+                    
+                    # Parse tags
+                    tags = [tag.strip() for tag in args.tags.split(',')] if args.tags else None
+                    
+                    # Perform search
+                    results = engine.search(
+                        query_vector=enhanced.get('vector'),
+                        enhanced_text=enhanced.get('enhanced_text', query),
+                        count=args.count,
+                        distance_threshold=args.distance_threshold,
+                        tags=tags,
+                        keyword_weight=args.keyword_weight,
+                        original_query=query
+                    )
+                    
+                    search_time = time.time() - start_time
+                    
+                    # Display results
+                    if not results:
+                        print(f"\nNo results found for '{query}' ({search_time:.3f}s)")
+                    else:
+                        print(f"\nFound {len(results)} result(s) for '{query}' ({search_time:.3f}s):")
+                        if enhanced.get('enhanced_text') != query and args.verbose:
+                            print(f"Enhanced query: '{enhanced.get('enhanced_text')}'")
+                        print("=" * 60)
+                        
+                        for i, result in enumerate(results):
+                            print(f"\n[{i+1}] Score: {result['score']:.4f}")
+                            
+                            # Show metadata
+                            metadata = result['metadata']
+                            print(f"File: {metadata.get('filename', 'Unknown')}")
+                            if metadata.get('section'):
+                                print(f"Section: {metadata['section']}")
+                            
+                            # Show content unless suppressed
+                            if not args.no_content:
+                                content = result['content']
+                                if len(content) > 300 and not args.verbose:
+                                    content = content[:300] + "..."
+                                print(f"\n{content}")
+                            
+                            if i < len(results) - 1:
+                                print("-" * 40)
+                
+                except KeyboardInterrupt:
+                    print("\nUse 'exit' to quit")
+                except EOFError:
+                    print("\nGoodbye!")
+                    break
+                except Exception as e:
+                    print(f"\nError: {e}")
+                    if args.verbose:
+                        import traceback
+                        traceback.print_exc()
+            
+            return  # Exit after shell mode
+        
+        # Normal single query mode
         if args.verbose:
             print(f"Index contains {stats['total_chunks']} chunks from {stats['total_files']} files")
             print(f"Searching for: '{args.query}'")
@@ -701,8 +837,14 @@ def search_command():
             print()
         
         # Preprocess query
-        enhanced = preprocess_query(args.query, vector=True, query_nlp_backend=args.query_nlp_backend, 
-                                  model_name=model_to_use)
+        enhanced = preprocess_query(
+            args.query, 
+            vector=True,  # Both backends need vector for similarity search
+            query_nlp_backend=args.query_nlp_backend, 
+            model_name=model_to_use,
+            preserve_original=True,  # Keep original query terms
+            max_synonyms=2  # Reduce synonym expansion
+        )
         
         # Parse tags if provided
         tags = [tag.strip() for tag in args.tags.split(',')] if args.tags else None
@@ -714,7 +856,8 @@ def search_command():
             count=args.count,
             distance_threshold=args.distance_threshold,
             tags=tags,
-            keyword_weight=args.keyword_weight
+            keyword_weight=args.keyword_weight,
+            original_query=args.query  # Pass original for exact match boosting
         )
         
         if args.json:

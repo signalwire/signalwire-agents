@@ -373,12 +373,19 @@ class SearchService:
         
         search_engine = self.search_engines[request.index_name]
         
+        # Get model name from the search engine config
+        model_name = None
+        if hasattr(search_engine, 'config') and search_engine.config:
+            # pgvector uses 'model_name', sqlite uses 'embedding_model'
+            model_name = search_engine.config.get('model_name') or search_engine.config.get('embedding_model')
+        
         # Enhance query
         try:
             enhanced = preprocess_query(
                 request.query,
                 language=request.language or 'auto',
-                vector=True
+                vector=True,
+                model_name=model_name  # Pass the correct model!
             )
         except Exception as e:
             logger.error(f"Error preprocessing query: {e}")

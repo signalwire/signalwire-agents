@@ -268,7 +268,8 @@ def remove_duplicate_words(input_string: str) -> str:
 def preprocess_query(query: str, language: str = 'en', pos_to_expand: Optional[List[str]] = None, 
                     max_synonyms: int = 5, debug: bool = False, vector: bool = False, 
                     vectorize_query_param: bool = False, nlp_backend: str = None, 
-                    query_nlp_backend: str = 'nltk', model_name: str = None) -> Dict[str, Any]:
+                    query_nlp_backend: str = 'nltk', model_name: str = None,
+                    preserve_original: bool = True) -> Dict[str, Any]:
     """
     Advanced query preprocessing with language detection, POS tagging, synonym expansion, and vectorization
     
@@ -401,14 +402,23 @@ def preprocess_query(query: str, language: str = 'en', pos_to_expand: Optional[L
     expanded_query_set = set()
     expanded_query = []
     
+    # If preserve_original is True, always include the original query first
+    if preserve_original:
+        # Add original query terms first (maintains exact phrases)
+        original_tokens = query.lower().split()
+        for token in original_tokens:
+            if token not in expanded_query_set:
+                expanded_query.append(token)
+                expanded_query_set.add(token)
+    
     for original, lemma in lemmas:
         if original not in expanded_query_set:
             expanded_query.append(original)
             expanded_query_set.add(original)
-        if lemma not in expanded_query_set:
+        if lemma not in expanded_query_set and not preserve_original:  # Only add lemmas if not preserving original
             expanded_query.append(lemma)
             expanded_query_set.add(lemma)
-        if pos_tags.get(original) in pos_to_expand:
+        if pos_tags.get(original) in pos_to_expand and max_synonyms > 0:
             synonyms = get_synonyms(lemma, pos_tags[original], max_synonyms)
             for synonym in synonyms:
                 if synonym not in expanded_query_set:

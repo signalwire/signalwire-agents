@@ -85,9 +85,6 @@ class IndexBuilder:
         if self.backend not in ['sqlite', 'pgvector']:
             raise ValueError(f"Invalid backend '{self.backend}'. Must be 'sqlite' or 'pgvector'")
         
-        if self.backend == 'pgvector' and not self.connection_string:
-            raise ValueError("connection_string is required for pgvector backend")
-        
         # Validate NLP backend
         if self.index_nlp_backend not in ['nltk', 'spacy']:
             logger.warning(f"Invalid index_nlp_backend '{self.index_nlp_backend}', using 'nltk'")
@@ -104,6 +101,50 @@ class IndexBuilder:
             semantic_threshold=self.semantic_threshold,
             topic_threshold=self.topic_threshold
         )
+    
+    def _extract_metadata_from_json_content(self, content: str) -> tuple[Dict[str, Any], str]:
+        """
+        Extract metadata from JSON content if present
+        
+        Returns:
+            (metadata_dict, metadata_text)
+        """
+        metadata_dict = {}
+        
+        # Try to extract metadata from JSON structure in content
+        if '"metadata":' in content:
+            try:
+                # Look for metadata object in content
+                import re
+                # Find all metadata objects
+                pattern = r'"metadata"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})'
+                matches = re.finditer(pattern, content)
+                
+                for match in matches:
+                    try:
+                        json_metadata = json.loads(match.group(1))
+                        # Merge all found metadata
+                        if isinstance(json_metadata, dict):
+                            metadata_dict.update(json_metadata)
+                    except:
+                        pass
+            except Exception as e:
+                logger.debug(f"Error extracting JSON metadata: {e}")
+        
+        # Create searchable text from all metadata keys and values
+        metadata_text_parts = []
+        for key, value in metadata_dict.items():
+            # Add key
+            metadata_text_parts.append(str(key))
+            # Add value(s)
+            if isinstance(value, list):
+                metadata_text_parts.extend(str(v) for v in value)
+            else:
+                metadata_text_parts.append(str(value))
+        
+        metadata_text = ' '.join(metadata_text_parts).lower()
+        
+        return metadata_dict, metadata_text
     
     def _load_model(self):
         """Load embedding model (lazy loading)"""
@@ -506,6 +547,7 @@ class IndexBuilder:
                     end_line INTEGER,
                     tags TEXT,
                     metadata TEXT,
+                    metadata_text TEXT,  -- Searchable text representation of all metadata
                     chunk_hash TEXT UNIQUE,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
@@ -515,6 +557,7 @@ class IndexBuilder:
                 CREATE VIRTUAL TABLE chunks_fts USING fts5(
                     processed_content,
                     keywords,
+                    metadata_text,
                     content='chunks',
                     content_rowid='id'
                 )
@@ -576,13 +619,47 @@ class IndexBuilder:
                 # Prepare data
                 keywords_json = json.dumps(chunk.get('keywords', []))
                 tags_json = json.dumps(chunk.get('tags', []))
-                metadata_json = json.dumps(chunk.get('metadata', {}))
+                
+                # Extract metadata from JSON content and merge with chunk metadata
+                json_metadata, json_metadata_text = self._extract_metadata_from_json_content(chunk['content'])
+                chunk_metadata = chunk.get('metadata', {})
+                
+                # Merge metadata: chunk metadata takes precedence
+                merged_metadata = {**json_metadata, **chunk_metadata}
+                metadata_json = json.dumps(merged_metadata)
+                
+                # Create comprehensive metadata_text including tags
+                metadata_text_parts = []
+                
+                # Add metadata text from JSON content
+                if json_metadata_text:
+                    metadata_text_parts.append(json_metadata_text)
+                
+                # Add tags
+                tags = chunk.get('tags', [])
+                if tags:
+                    metadata_text_parts.extend(str(tag).lower() for tag in tags)
+                
+                # Add section if present
+                if chunk.get('section'):
+                    metadata_text_parts.append(chunk['section'].lower())
+                
+                # Add any additional metadata values
+                for key, value in chunk_metadata.items():
+                    if key not in json_metadata:  # Avoid duplicates
+                        metadata_text_parts.append(str(key).lower())
+                        if isinstance(value, list):
+                            metadata_text_parts.extend(str(v).lower() for v in value)
+                        else:
+                            metadata_text_parts.append(str(value).lower())
+                
+                metadata_text = ' '.join(metadata_text_parts)
                 
                 cursor.execute('''
                     INSERT OR IGNORE INTO chunks (
                         content, processed_content, keywords, language, embedding,
-                        filename, section, start_line, end_line, tags, metadata, chunk_hash
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        filename, section, start_line, end_line, tags, metadata, metadata_text, chunk_hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     chunk['content'],
                     chunk.get('processed_content', chunk['content']),
@@ -595,6 +672,7 @@ class IndexBuilder:
                     chunk.get('end_line'),
                     tags_json,
                     metadata_json,
+                    metadata_text,
                     chunk_hash
                 ))
             

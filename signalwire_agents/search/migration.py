@@ -130,24 +130,47 @@ class SearchIndexMigrator:
                 if self.verbose:
                     print(f"Migrating {total_chunks} chunks...")
                 
+                # Check if metadata_text column exists (do this once)
+                cursor.execute("PRAGMA table_info(chunks)")
+                columns = [col[1] for col in cursor.fetchall()]
+                has_metadata_text = 'metadata_text' in columns
+                
                 # Migrate chunks in batches
                 offset = 0
                 while offset < total_chunks:
                     # Fetch batch of chunks
-                    cursor.execute("""
-                        SELECT id, content, processed_content, keywords, language, 
-                               embedding, filename, section, start_line, end_line, 
-                               tags, metadata, chunk_hash
-                        FROM chunks
-                        ORDER BY id
-                        LIMIT ? OFFSET ?
-                    """, (batch_size, offset))
+                    
+                    if has_metadata_text:
+                        cursor.execute("""
+                            SELECT id, content, processed_content, keywords, language, 
+                                   embedding, filename, section, start_line, end_line, 
+                                   tags, metadata, metadata_text, chunk_hash
+                            FROM chunks
+                            ORDER BY id
+                            LIMIT ? OFFSET ?
+                        """, (batch_size, offset))
+                    else:
+                        cursor.execute("""
+                            SELECT id, content, processed_content, keywords, language, 
+                                   embedding, filename, section, start_line, end_line, 
+                                   tags, metadata, chunk_hash
+                            FROM chunks
+                            ORDER BY id
+                            LIMIT ? OFFSET ?
+                        """, (batch_size, offset))
                     
                     chunks_batch = []
                     for row in cursor.fetchall():
-                        (chunk_id, content, processed_content, keywords_json, language,
-                         embedding_blob, filename, section, start_line, end_line,
-                         tags_json, metadata_json, chunk_hash) = row
+                        # Handle both old and new schema (with or without metadata_text)
+                        if len(row) == 14:  # New schema with metadata_text
+                            (chunk_id, content, processed_content, keywords_json, language,
+                             embedding_blob, filename, section, start_line, end_line,
+                             tags_json, metadata_json, metadata_text, chunk_hash) = row
+                        else:  # Old schema without metadata_text
+                            (chunk_id, content, processed_content, keywords_json, language,
+                             embedding_blob, filename, section, start_line, end_line,
+                             tags_json, metadata_json, chunk_hash) = row
+                            metadata_text = None
                         
                         # Convert embedding blob to numpy array if available
                         if embedding_blob and np:
@@ -172,6 +195,7 @@ class SearchIndexMigrator:
                             'end_line': end_line,
                             'tags': tags,
                             'metadata': metadata,
+                            'metadata_text': metadata_text,  # Will be regenerated if None
                             'chunk_hash': chunk_hash
                         }
                         
