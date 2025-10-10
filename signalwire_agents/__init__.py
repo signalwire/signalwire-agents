@@ -18,7 +18,7 @@ A package for building AI agents using SignalWire's AI and SWML capabilities.
 from .core.logging_config import configure_logging
 configure_logging()
 
-__version__ = "0.1.48"
+__version__ = "0.1.49"
 
 # Import core classes for easier access
 from .core.agent_base import AgentBase

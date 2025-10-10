@@ -1925,9 +1925,17 @@
             {
               "type": "string",
               "const": "gpt-4.1-nano"
+            },
+            {
+              "type": "string",
+              "const": "nova-micro"
+            },
+            {
+              "type": "string",
+              "const": "nova-lite"
             }
           ],
-          "description": "The model to use for the AI. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, and `gpt-4.1-nano`."
+          "description": "The model to use for the AI. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
         },
         "ai_volume": {
           "anyOf": [
@@ -4005,6 +4013,18 @@
           "maximum": 2,
           "description": "Aversion to repeating lines. Float value between -2.0 and 2.0. Positive values decrease the model's likelihood to repeat the same line verbatim."
         },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+            },
+            {
+              "$ref": "#/$defs/SWMLVar"
+            }
+          ],
+          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+        },
         "text": {
           "type": "string",
           "description": "The instructions to send to the agent."
@@ -4083,6 +4103,18 @@
           "minimum": -2,
           "maximum": 2,
           "description": "Aversion to repeating lines. Float value between -2.0 and 2.0. Positive values decrease the model's likelihood to repeat the same line verbatim."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+            },
+            {
+              "$ref": "#/$defs/SWMLVar"
+            }
+          ],
+          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
         },
         "pom": {
           "type": "array",
@@ -4166,6 +4198,18 @@
           "maximum": 2,
           "description": "Aversion to repeating lines. Float value between -2.0 and 2.0. Positive values decrease the model's likelihood to repeat the same line verbatim."
         },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+            },
+            {
+              "$ref": "#/$defs/SWMLVar"
+            }
+          ],
+          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+        },
         "text": {
           "type": "string",
           "description": "The instructions to send to the agent."
@@ -4248,6 +4292,18 @@
           "minimum": -2,
           "maximum": 2,
           "description": "Aversion to repeating lines. Float value between -2.0 and 2.0. Positive values decrease the model's likelihood to repeat the same line verbatim."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+            },
+            {
+              "$ref": "#/$defs/SWMLVar"
+            }
+          ],
+          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
         },
         "pom": {
           "type": "array",
