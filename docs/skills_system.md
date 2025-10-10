@@ -336,7 +336,7 @@ class MyCustomSkill(SkillBase):
         
     def register_tools(self) -> None:
         """Register SWAIG tools with the agent"""
-        self.agent.define_tool(
+        self.define_tool(
             name="my_function",
             description=f"Does something cool (max {self.max_items} items)",
             parameters={

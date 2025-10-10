@@ -159,7 +159,7 @@ class DataSphereSkill(SkillBase):
         
     def register_tools(self) -> None:
         """Register knowledge search tool with the agent"""
-        self.agent.define_tool(
+        self.define_tool(
             name=self.tool_name,
             description="Search the knowledge base for information on any topic and return relevant results",
             parameters={
@@ -168,8 +168,7 @@ class DataSphereSkill(SkillBase):
                     "description": "The search query - what information you're looking for in the knowledge base"
                 }
             },
-            handler=self._search_knowledge_handler,
-            **self.swaig_fields
+            handler=self._search_knowledge_handler
         )
         
     def _search_knowledge_handler(self, args, raw_data):

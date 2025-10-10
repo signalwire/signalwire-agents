@@ -820,13 +820,13 @@ agent.remove_skill("math")
 
 ### Advanced Skill Configuration with swaig_fields
 
-Skills support a special `swaig_fields` parameter that allows you to customize how SWAIG functions are registered. This parameter gets merged into the function decorator object, enabling the skill loader to add additional configuration to the tools.
+Skills support a special `swaig_fields` parameter that allows you to customize how SWAIG functions are registered. When you pass `swaig_fields` to a skill, they are automatically merged into all tool definitions created by that skill through the `SkillBase.define_tool()` wrapper method.
 
 ```python
 # Add a skill with swaig_fields to customize SWAIG function properties
 agent.add_skill("math", {
     "precision": 2,  # Regular skill parameter
-    "swaig_fields": {  # Special fields merged into SWAIG function
+    "swaig_fields": {  # Special fields merged into SWAIG function automatically
         "secure": False,  # Override default security requirement
         "fillers": {
             "en-US": ["Let me calculate that...", "Computing the result..."],
@@ -853,7 +853,7 @@ The `swaig_fields` can include any parameter accepted by `AgentBase.define_tool(
 - `fillers`: Dictionary mapping language codes to arrays of filler phrases
 - Any other fields supported by the SWAIG function system
 
-This feature enables advanced customization of how skills integrate with the agent's SWAIG system.
+**Implementation Note**: The `SkillBase` class provides a `define_tool()` wrapper method that automatically injects `swaig_fields` into all tool definitions. Skills should use `self.define_tool()` instead of `self.agent.define_tool()` to get automatic swaig_fields support without manual handling.
 
 ### Error Handling
 
@@ -897,7 +897,7 @@ class WeatherSkill(SkillBase):
     
     def register_tools(self) -> None:
         """Register tools with the agent"""
-        self.define_tool_with_swaig_fields(
+        self.define_tool(
             name="get_weather",
             description="Get current weather for a location",
             parameters={

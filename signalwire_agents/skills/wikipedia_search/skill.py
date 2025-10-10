@@ -84,7 +84,7 @@ class WikipediaSearchSkill(SkillBase):
         """
         Register the SWAIG tool for Wikipedia search.
         """
-        self.agent.define_tool(
+        self.define_tool(
             name="search_wiki",
             description="Search Wikipedia for information about a topic and get article summaries",
             parameters={
@@ -93,8 +93,7 @@ class WikipediaSearchSkill(SkillBase):
                     "description": "The search term or topic to look up on Wikipedia"
                 }
             },
-            handler=self._search_wiki_handler,
-            **self.swaig_fields
+            handler=self._search_wiki_handler
         )
     
     def _search_wiki_handler(self, args, raw_data):

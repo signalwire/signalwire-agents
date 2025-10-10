@@ -1087,7 +1087,7 @@ class DatabaseLookupSkill(SkillBase):
         
     def register_tools(self) -> None:
         """Register database lookup tool"""
-        self.agent.define_tool(
+        self.define_tool(
             name="lookup_database",
             description="Look up information in the company database",
             parameters={
@@ -1096,7 +1096,7 @@ class DatabaseLookupSkill(SkillBase):
                     "description": "Database table to query"
                 },
                 "criteria": {
-                    "type": "object", 
+                    "type": "object",
                     "description": "Search criteria"
                 },
                 "limit": {

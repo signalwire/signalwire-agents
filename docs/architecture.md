@@ -422,8 +422,9 @@ The SDK is designed to be highly extensible:
            return True
            
        def register_tools(self) -> None:
-           # Register tools with the agent
-           self.agent.define_tool(...)
+           # Register tools with the agent using the wrapper method
+           # This automatically includes swaig_fields
+           self.define_tool(...)
    ```
 
 ### Dynamic Configuration

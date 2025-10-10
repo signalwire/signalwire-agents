@@ -53,6 +53,26 @@ class SkillBase(ABC):
         """Register SWAIG tools with the agent"""
         pass
         
+    def define_tool(self, **kwargs) -> None:
+        """
+        Wrapper method that automatically includes swaig_fields when defining tools.
+        
+        This method delegates to self.agent.define_tool() but automatically merges
+        any swaig_fields configured for this skill. Skills should use this method
+        instead of calling self.agent.define_tool() directly.
+        
+        Args:
+            **kwargs: All arguments supported by agent.define_tool()
+                     (name, description, parameters, handler, etc.)
+        """
+        # Merge swaig_fields with any explicitly passed fields
+        # Explicit fields take precedence over swaig_fields
+        merged_kwargs = dict(self.swaig_fields)
+        merged_kwargs.update(kwargs)
+        
+        # Call the agent's define_tool with merged arguments
+        return self.agent.define_tool(**merged_kwargs)
+        
 
         
     def get_hints(self) -> List[str]:

@@ -223,7 +223,7 @@ class SpiderSkill(SkillBase):
             tool_prefix = f"{tool_prefix}_"
         
         # Register scrape_url tool
-        self.agent.define_tool(
+        self.define_tool(
             name=f"{tool_prefix}scrape_url",
             description="Extract text content from a single web page",
             parameters={
@@ -233,12 +233,11 @@ class SpiderSkill(SkillBase):
                 }
             },
             required=["url"],
-            handler=self._scrape_url_handler,
-            **self.swaig_fields
+            handler=self._scrape_url_handler
         )
         
         # Register crawl_site tool
-        self.agent.define_tool(
+        self.define_tool(
             name=f"{tool_prefix}crawl_site",
             description="Crawl multiple pages starting from a URL",
             parameters={
@@ -248,12 +247,11 @@ class SpiderSkill(SkillBase):
                 }
             },
             required=["start_url"],
-            handler=self._crawl_site_handler,
-            **self.swaig_fields
+            handler=self._crawl_site_handler
         )
         
         # Register extract_structured_data tool
-        self.agent.define_tool(
+        self.define_tool(
             name=f"{tool_prefix}extract_structured_data",
             description="Extract specific data from a web page using selectors",
             parameters={
@@ -263,8 +261,7 @@ class SpiderSkill(SkillBase):
                 }
             },
             required=["url"],
-            handler=self._extract_structured_handler,
-            **self.swaig_fields
+            handler=self._extract_structured_handler
         )
     
     def _fetch_url(self, url: str) -> Optional[requests.Response]:

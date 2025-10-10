@@ -215,7 +215,7 @@ class MCPGatewaySkill(SkillBase):
                 self.logger.error(f"Failed to get tools for service '{service_name}': {e}")
         
         # Register the hangup hook for session cleanup
-        self.agent.define_tool(
+        self.define_tool(
             name="_mcp_gateway_hangup",
             description="Internal cleanup function for MCP sessions",
             parameters={},
@@ -260,7 +260,7 @@ class MCPGatewaySkill(SkillBase):
             return self._call_mcp_tool(service_name, tool_name, args, raw_data)
         
         # Register the SWAIG function
-        self.agent.define_tool(
+        self.define_tool(
             name=swaig_name,
             description=f"[{service_name}] {tool_def.get('description', tool_name)}",
             parameters=swaig_params,

@@ -136,6 +136,13 @@ class NativeVectorSearchSkill(SkillBase):
                 "default": "",
                 "required": False
             },
+            "max_content_length": {
+                "type": "integer",
+                "description": "Maximum total response size in characters (distributed across all results)",
+                "default": 32768,
+                "required": False,
+                "minimum": 1000
+            },
             "response_format_callback": {
                 "type": "callable",
                 "description": "Optional callback function to format/transform the response. Called with (response, agent, query, results, args). Must return a string.",
@@ -251,6 +258,7 @@ class NativeVectorSearchSkill(SkillBase):
         )
         self.response_prefix = self.params.get('response_prefix', '')
         self.response_postfix = self.params.get('response_postfix', '')
+        self.max_content_length = self.params.get('max_content_length', 32768)
         self.response_format_callback = self.params.get('response_format_callback')
         self.keyword_weight = self.params.get('keyword_weight')
         self.model_name = self.params.get('model_name', 'mini')
@@ -274,8 +282,8 @@ class NativeVectorSearchSkill(SkillBase):
                 if parsed.path:
                     self.remote_base_url += parsed.path
         
-        # SWAIG fields for function fillers
-        self.swaig_fields = self.params.get('swaig_fields', {})
+        # SWAIG fields are already extracted by SkillBase.__init__()
+        # No need to re-fetch from params - use self.swaig_fields inherited from parent
         
         # **EARLY REMOTE CHECK - Option 1**
         # If remote URL is configured, skip all heavy local imports and just validate remote connectivity
@@ -460,7 +468,7 @@ class NativeVectorSearchSkill(SkillBase):
             'Search the local knowledge base for information'
         )
         
-        self.agent.define_tool(
+        self.define_tool(
             name=self.tool_name,
             description=description,
             parameters={
@@ -474,8 +482,7 @@ class NativeVectorSearchSkill(SkillBase):
                     "default": self.count
                 }
             },
-            handler=self._search_handler,
-            **self.swaig_fields
+            handler=self._search_handler
         )
         
         # Add our tool to the Knowledge Search section
@@ -601,21 +608,36 @@ class NativeVectorSearchSkill(SkillBase):
                 
                 return SwaigFunctionResult(no_results_msg)
             
-            # Format results
+            # Format results with dynamic per-result truncation
             response_parts = []
-            
+
             # Add response prefix if configured
             if self.response_prefix:
                 response_parts.append(self.response_prefix)
-            
+
             response_parts.append(f"Found {len(results)} relevant results for '{query}':\n")
-            
+
+            # Calculate per-result content budget
+            # Estimate overhead per result: metadata (~200 chars) + formatting (~100 chars)
+            estimated_overhead_per_result = 300
+            # Account for prefix/postfix/header in total overhead
+            prefix_postfix_overhead = len(self.response_prefix) + len(self.response_postfix) + 100
+            total_overhead = (len(results) * estimated_overhead_per_result) + prefix_postfix_overhead
+            available_for_content = self.max_content_length - total_overhead
+
+            # Ensure minimum of 500 chars per result
+            per_result_limit = max(500, available_for_content // len(results)) if len(results) > 0 else 1000
+
             for i, result in enumerate(results, 1):
                 filename = result['metadata']['filename']
                 section = result['metadata'].get('section', '')
                 score = result['score']
                 content = result['content']
-                
+
+                # Truncate content to per-result limit
+                if len(content) > per_result_limit:
+                    content = content[:per_result_limit] + "..."
+
                 # Get tags from either top level or metadata
                 tags = result.get('tags', [])
                 if not tags and 'metadata' in result['metadata'] and 'tags' in result['metadata']['metadata']:
@@ -624,16 +646,16 @@ class NativeVectorSearchSkill(SkillBase):
                 elif not tags and 'tags' in result['metadata']:
                     # Check in metadata directly
                     tags = result['metadata']['tags']
-                
+
                 result_text = f"**Result {i}** (from {filename}"
                 if section:
                     result_text += f", section: {section}"
                 if tags:
                     result_text += f", tags: {', '.join(tags)}"
                 result_text += f", relevance: {score:.2f})\n{content}\n"
-                
+
                 response_parts.append(result_text)
-            
+
             # Add response postfix if configured
             if self.response_postfix:
                 response_parts.append(self.response_postfix)

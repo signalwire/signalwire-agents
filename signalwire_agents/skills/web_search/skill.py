@@ -21,7 +21,7 @@ from signalwire_agents.core.function_result import SwaigFunctionResult
 class GoogleSearchScraper:
     """Google Search and Web Scraping functionality"""
     
-    def __init__(self, api_key: str, search_engine_id: str, max_content_length: int = 2000):
+    def __init__(self, api_key: str, search_engine_id: str, max_content_length: int = 32768):
         self.api_key = api_key
         self.search_engine_id = search_engine_id
         self.max_content_length = max_content_length
@@ -62,63 +62,84 @@ class GoogleSearchScraper:
         except Exception as e:
             return []
 
-    def extract_text_from_url(self, url: str, timeout: int = 10) -> str:
-        """Scrape a URL and extract readable text content"""
+    def extract_text_from_url(self, url: str, content_limit: int = None, timeout: int = 10) -> str:
+        """Scrape a URL and extract readable text content
+
+        Args:
+            url: URL to scrape
+            content_limit: Maximum characters to return (uses self.max_content_length if not provided)
+            timeout: Request timeout in seconds
+        """
         try:
             response = self.session.get(url, timeout=timeout)
             response.raise_for_status()
-            
+
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Remove unwanted elements
             for script in soup(["script", "style", "nav", "footer", "header", "aside"]):
                 script.decompose()
-            
+
             text = soup.get_text()
-            
+
             # Clean up the text
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = ' '.join(chunk for chunk in chunks if chunk)
-            
+
             # Limit text length
-            if len(text) > self.max_content_length:
-                text = text[:self.max_content_length] + "... [Content truncated]"
-            
+            limit = content_limit if content_limit is not None else self.max_content_length
+            if len(text) > limit:
+                text = text[:limit]
+
             return text
-            
+
         except Exception as e:
             return ""
 
     def search_and_scrape(self, query: str, num_results: int = 3, delay: float = 0.5) -> str:
-        """Main function: search Google and scrape the resulting pages"""
+        """Main function: search Google and scrape the resulting pages
+
+        Dynamically calculates per-result content limit based on total max_content_length
+        and number of results to ensure total response stays within bounds.
+        """
         search_results = self.search_google(query, num_results)
-        
+
         if not search_results:
             return f"No search results found for query: {query}"
-        
+
+        # Calculate per-result content budget
+        # Reserve ~300 chars per result for overhead (titles, URLs, snippets, formatting)
+        estimated_overhead_per_result = 300
+        total_overhead = num_results * estimated_overhead_per_result
+        available_for_content = self.max_content_length - total_overhead
+
+        # Ensure we have at least 1000 chars per result
+        per_result_limit = max(1000, available_for_content // num_results)
+
         all_text = []
-        
+
         for i, result in enumerate(search_results, 1):
             text_content = f"=== RESULT {i} ===\n"
             text_content += f"Title: {result['title']}\n"
             text_content += f"URL: {result['url']}\n"
             text_content += f"Snippet: {result['snippet']}\n"
             text_content += f"Content:\n"
-            
-            page_text = self.extract_text_from_url(result['url'])
-            
+
+            # Pass the calculated per-result limit
+            page_text = self.extract_text_from_url(result['url'], content_limit=per_result_limit)
+
             if page_text:
                 text_content += page_text
             else:
                 text_content += "Failed to extract content from this page."
-            
+
             text_content += f"\n{'='*50}\n\n"
             all_text.append(text_content)
-            
+
             if i < len(search_results):
                 time.sleep(delay)
-        
+
         return '\n'.join(all_text)
 
 
@@ -163,7 +184,7 @@ class WebSearchSkill(SkillBase):
         # Set default parameters
         self.default_num_results = self.params.get('num_results', 1)
         self.default_delay = self.params.get('delay', 0)
-        self.max_content_length = self.params.get('max_content_length', 2000)
+        self.max_content_length = self.params.get('max_content_length', 32768)
         self.no_results_message = self.params.get('no_results_message', 
             "I couldn't find any results for '{query}'. "
             "This might be due to a very specific query or temporary issues. "
@@ -184,7 +205,7 @@ class WebSearchSkill(SkillBase):
         
     def register_tools(self) -> None:
         """Register web search tool with the agent"""
-        self.agent.define_tool(
+        self.define_tool(
             name=self.tool_name,
             description="Search the web for information on any topic and return detailed results with content from multiple sources",
             parameters={
@@ -193,8 +214,7 @@ class WebSearchSkill(SkillBase):
                     "description": "The search query - what you want to find information about"
                 }
             },
-            handler=self._web_search_handler,
-            **self.swaig_fields
+            handler=self._web_search_handler
         )
         
     def _web_search_handler(self, args, raw_data):
@@ -308,10 +328,10 @@ class WebSearchSkill(SkillBase):
             },
             "max_content_length": {
                 "type": "integer",
-                "description": "Maximum content length per scraped page (characters)",
-                "default": 2000,
+                "description": "Maximum total response size in characters (distributed across all results)",
+                "default": 32768,
                 "required": False,
-                "min": 100
+                "min": 1000
             },
             "no_results_message": {
                 "type": "string",

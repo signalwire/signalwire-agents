@@ -81,7 +81,7 @@ class WeatherSkill(SkillBase):
     
     def register_tools(self) -> None:
         """Register weather tools with the agent"""
-        self.agent.define_tool(
+        self.define_tool(
             name="get_weather",
             description="Get current weather for a location",
             parameters={
@@ -376,7 +376,7 @@ Customize tool names for better agent prompts:
 def register_tools(self) -> None:
     tool_name = self.params.get('tool_name', 'get_weather')
     
-    self.agent.define_tool(
+    self.define_tool(
         name=tool_name,
         description=f"Get weather using {self.params.get('service', 'default')}",
         parameters={...},
