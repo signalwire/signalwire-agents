@@ -1933,9 +1933,13 @@
             {
               "type": "string",
               "const": "nova-lite"
+            },
+            {
+              "type": "string",
+              "const": "qwen3-235b-A22b-instruct"
             }
           ],
-          "description": "The model to use for the AI. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+          "description": "The model to use for the AI. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct`."
         },
         "ai_volume": {
           "anyOf": [
@@ -4017,13 +4021,13 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite", "qwen3-235b-A22b-instruct"]
             },
             {
               "$ref": "#/$defs/SWMLVar"
             }
           ],
-          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct`."
         },
         "text": {
           "type": "string",
@@ -4108,13 +4112,13 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite", "qwen3-235b-A22b-instruct"]
             },
             {
               "$ref": "#/$defs/SWMLVar"
             }
           ],
-          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+          "description": "The model to use for the post-prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct`."
         },
         "pom": {
           "type": "array",
@@ -4202,13 +4206,13 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite", "qwen3-235b-A22b-instruct"]
             },
             {
               "$ref": "#/$defs/SWMLVar"
             }
           ],
-          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct`."
         },
         "text": {
           "type": "string",
@@ -4297,13 +4301,13 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite"]
+              "enum": ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "nova-micro", "nova-lite", "qwen3-235b-A22b-instruct"]
             },
             {
               "$ref": "#/$defs/SWMLVar"
             }
           ],
-          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, and `nova-lite`."
+          "description": "The model to use for the prompt. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct`."
         },
         "pom": {
           "type": "array",

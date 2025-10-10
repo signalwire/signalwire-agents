@@ -380,7 +380,7 @@ class AIConfigMixin:
         The server will validate and apply parameters based on the target model's capabilities.
         
         Common parameters include:
-            model: The AI model to use (gpt-4o-mini, gpt-4.1-mini, gpt-4.1-nano, nova-micro, nova-lite)
+            model: The AI model to use (gpt-4o-mini, gpt-4.1-mini, gpt-4.1-nano, nova-micro, nova-lite, qwen3-235b-A22b-instruct)
             temperature: Randomness setting. Lower values make output more deterministic.
             top_p: Alternative to temperature. Controls nucleus sampling.
             barge_confidence: ASR confidence to interrupt. Higher values make it harder to interrupt.
@@ -415,7 +415,7 @@ class AIConfigMixin:
         The server will validate and apply parameters based on the target model's capabilities.
         
         Common parameters include:
-            model: The AI model to use (gpt-4o-mini, gpt-4.1-mini, gpt-4.1-nano, nova-micro, nova-lite)
+            model: The AI model to use (gpt-4o-mini, gpt-4.1-mini, gpt-4.1-nano, nova-micro, nova-lite, qwen3-235b-A22b-instruct)
             temperature: Randomness setting. Lower values make output more deterministic.
             top_p: Alternative to temperature. Controls nucleus sampling.
             presence_penalty: Topic diversity. Positive values encourage new topics.
