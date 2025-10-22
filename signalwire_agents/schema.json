@@ -1940,7 +1940,7 @@
             },
             {
               "type": "string",
-              "const": "qwen3-4b-instruct-2507@brian"
+              "const": "llama-3.1-8b-instruct-turbo@together.ai"
             }
           ],
           "description": "The model to use for the AI. Allowed values are `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `nova-micro`, `nova-lite`, and `qwen3-235b-A22b-instruct` and `qwen3-4b-instruct-2507@brian`."
