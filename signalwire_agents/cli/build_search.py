@@ -69,6 +69,16 @@ Examples:
   sw-search ./docs \\
     --chunking-strategy qa
 
+  # Markdown-aware chunking (preserves headers, detects code blocks, adds tags)
+  sw-search ./docs \\
+    --chunking-strategy markdown \\
+    --file-types md
+  # This strategy:
+  #  - Chunks at header boundaries (h1, h2, h3...)
+  #  - Detects code blocks and extracts language (python, bash, etc)
+  #  - Adds "code" tags to chunks with code for better search
+  #  - Preserves section hierarchy in metadata
+
   # Model selection examples (performance vs quality tradeoff)
   sw-search ./docs --model mini     # Fastest (~5x faster), 384 dims, good for most use cases
   sw-search ./docs --model base     # Balanced speed/quality, 768 dims (previous default)
@@ -128,16 +138,23 @@ Examples:
     --collection-name docs_collection
   sw-search migrate --info ./docs.swsearch
 
-  # PostgreSQL pgvector backend
+  # PostgreSQL pgvector backend (direct build to PostgreSQL)
   sw-search ./docs \\
     --backend pgvector \\
-    --connection-string "postgresql://user:pass@localhost/knowledge" \\
+    --connection-string "postgresql://user:pass@localhost:5432/knowledge" \\
     --output docs_collection
+
+  # pgvector with markdown strategy (best for documentation with code examples)
+  sw-search ./docs \\
+    --backend pgvector \\
+    --connection-string "postgresql://user:pass@localhost:5432/knowledge" \\
+    --output docs_collection \\
+    --chunking-strategy markdown
 
   # Overwrite existing pgvector collection
   sw-search ./docs \\
     --backend pgvector \\
-    --connection-string "postgresql://user:pass@localhost/knowledge" \\
+    --connection-string "postgresql://user:pass@localhost:5432/knowledge" \\
     --output docs_collection \\
     --overwrite
 
@@ -191,9 +208,9 @@ Examples:
     
     parser.add_argument(
         '--chunking-strategy',
-        choices=['sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa', 'json'],
+        choices=['sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa', 'json', 'markdown'],
         default='sentence',
-        help='Chunking strategy to use (default: sentence)'
+        help='Chunking strategy to use (default: sentence). Use "markdown" for documentation with code blocks.'
     )
     
     parser.add_argument(

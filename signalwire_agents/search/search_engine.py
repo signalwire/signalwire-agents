@@ -114,51 +114,48 @@ class SearchEngine:
             logger.error(f"Error converting query vector: {e}")
             return self._keyword_search_only(enhanced_text, count, tags, original_query)
         
-        # Stage 1: Collect candidates using fast methods
+        # HYBRID APPROACH: Search vector AND metadata in parallel
+        # Stage 1: Run both search types simultaneously
+        search_multiplier = 3
+
+        # Vector search (semantic similarity - primary ranking signal)
+        vector_results = self._vector_search(query_array, count * search_multiplier)
+
+        # Metadata/keyword searches (confirmation signals and backfill)
+        filename_results = self._filename_search(original_query or enhanced_text, count * search_multiplier)
+        metadata_results = self._metadata_search(original_query or enhanced_text, count * search_multiplier)
+        keyword_results = self._keyword_search(enhanced_text, count * search_multiplier, original_query)
+
+        logger.debug(f"Parallel search: vector={len(vector_results)}, filename={len(filename_results)}, "
+                    f"metadata={len(metadata_results)}, keyword={len(keyword_results)}")
+
+        # Stage 2: Merge all results into candidate pool
         candidates = {}
-        
-        # Fast searches - collect all potential matches
-        filename_results = self._filename_search(original_query or enhanced_text, count * 3)
-        metadata_results = self._metadata_search(original_query or enhanced_text, count * 2) 
-        keyword_results = self._keyword_search(enhanced_text, count * 2, original_query)
-        
-        logger.debug(f"Search for '{original_query}': filename={len(filename_results)}, metadata={len(metadata_results)}, keyword={len(keyword_results)}")
-        
-        # Merge candidates from different sources
-        for result_set, source_weight in [(filename_results, 2.0), 
-                                         (metadata_results, 1.5),
-                                         (keyword_results, 1.0)]:
+
+        # Add vector results first (primary signal)
+        for result in vector_results:
+            chunk_id = result['id']
+            candidates[chunk_id] = result
+            candidates[chunk_id]['vector_score'] = result['score']
+            candidates[chunk_id]['vector_distance'] = 1 - result['score']
+            candidates[chunk_id]['sources'] = {'vector': True}
+            candidates[chunk_id]['source_scores'] = {'vector': result['score']}
+
+        # Add metadata/keyword results (secondary signals that boost or backfill)
+        for result_set, source_type, source_weight in [(filename_results, 'filename', 2.0),
+                                                        (metadata_results, 'metadata', 1.5),
+                                                        (keyword_results, 'keyword', 1.0)]:
             for result in result_set:
                 chunk_id = result['id']
                 if chunk_id not in candidates:
+                    # New candidate from metadata/keyword (no vector match)
                     candidates[chunk_id] = result
-                    candidates[chunk_id]['sources'] = {}
-                    candidates[chunk_id]['source_scores'] = {}
-                
-                # Track which searches found this chunk
-                candidates[chunk_id]['sources'][result['search_type']] = True
-                candidates[chunk_id]['source_scores'][result['search_type']] = result['score'] * source_weight
-        
-        # Stage 2: Check if we have enough candidates
-        if len(candidates) < count * 2:
-            # Not enough candidates from fast searches - add full vector search
-            logger.debug(f"Only {len(candidates)} candidates from fast search, adding full vector search")
-            vector_results = self._vector_search(query_array, count * 3)
-            
-            for result in vector_results:
-                chunk_id = result['id']
-                if chunk_id not in candidates:
-                    candidates[chunk_id] = result
-                    candidates[chunk_id]['sources'] = {'vector': True}
-                    candidates[chunk_id]['source_scores'] = {}
-                
-                # Add vector score
-                candidates[chunk_id]['vector_score'] = result['score']
-                candidates[chunk_id]['vector_distance'] = 1 - result['score']
-        else:
-            # We have enough candidates - just re-rank them with vectors
-            logger.debug(f"Re-ranking {len(candidates)} candidates with vector similarity")
-            self._add_vector_scores_to_candidates(candidates, query_array, distance_threshold)
+                    candidates[chunk_id]['sources'] = {source_type: True}
+                    candidates[chunk_id]['source_scores'] = {source_type: result['score'] * source_weight}
+                else:
+                    # Exists in vector results - add metadata/keyword as confirmation signal
+                    candidates[chunk_id]['sources'][source_type] = True
+                    candidates[chunk_id]['source_scores'][source_type] = result['score'] * source_weight
         
         # Stage 3: Score and rank all candidates
         final_results = []
@@ -190,12 +187,12 @@ class SearchEngine:
         
         # Apply diversity penalties to prevent single-file dominance
         final_results = self._apply_diversity_penalties(final_results, count)
-            
+
         # Ensure 'score' field exists for CLI compatibility
         for r in final_results:
             if 'score' not in r:
                 r['score'] = r.get('final_score', 0.0)
-            
+
         return final_results[:count]
     
     def _keyword_search_only(self, enhanced_text: str, count: int, 
@@ -1038,70 +1035,55 @@ class SearchEngine:
             logger.error(f"Error in vector re-ranking: {e}")
     
     def _calculate_combined_score(self, candidate: Dict, distance_threshold: float) -> float:
-        """Calculate final score combining all signals with comprehensive match bonus"""
-        # Base scores from different sources
-        source_scores = candidate.get('source_scores', {})
-        
-        # Check for comprehensive matching (multiple signals)
+        """Calculate final score with hybrid vector + metadata weighting
+
+        Hybrid approach:
+        - Vector score is the primary ranking signal (semantic similarity)
+        - Metadata/keyword matches provide confirmation boost
+        - Multiple signal types indicate high relevance (confirmation bonus)
+        - Special boost for 'code' tag matches when query contains code-related terms
+        """
         sources = candidate.get('sources', {})
-        num_sources = len(sources)
-        
-        # Get match coverage information
-        match_coverage = candidate.get('match_coverage', 0)
-        fields_matched = candidate.get('fields_matched', 0)
-        
-        # Calculate base score with exponential boost for multiple sources
-        if num_sources > 1:
-            # Multiple signal matches are exponentially better
-            multi_signal_boost = 1.0 + (0.3 * (num_sources - 1))
-            base_score = sum(source_scores.values()) * multi_signal_boost
-        else:
-            base_score = sum(source_scores.values())
-        
-        # Apply comprehensive match bonus
-        if match_coverage > 0.5:  # More than 50% of query terms matched
-            coverage_bonus = 1.0 + (match_coverage - 0.5) * 0.5
-            base_score *= coverage_bonus
-        
-        # Apply field diversity bonus (matching in multiple metadata fields)
-        if fields_matched > 2:
-            field_bonus = 1.0 + (fields_matched - 2) * 0.1
-            base_score *= field_bonus
-        
-        # Apply vector similarity multiplier if available
+        source_scores = candidate.get('source_scores', {})
+
+        # Vector score is PRIMARY
         if 'vector_score' in candidate:
             vector_score = candidate['vector_score']
-            vector_distance = candidate.get('vector_distance', 1 - vector_score)
-            
-            # Distance-aware scoring
-            if distance_threshold > 0:
-                if vector_distance <= distance_threshold:
-                    # Within threshold - full vector score
-                    vector_multiplier = vector_score
-                elif vector_distance <= distance_threshold * 1.5:
-                    # Near threshold - gradual decay
-                    overflow = (vector_distance - distance_threshold) / (distance_threshold * 0.5)
-                    vector_multiplier = vector_score * (1 - overflow * 0.3)
-                else:
-                    # Beyond threshold - minimal contribution
-                    vector_multiplier = vector_score * 0.3
-            else:
-                vector_multiplier = vector_score
-            
-            # For chunks found by vector-only search, use vector score directly
-            if 'vector' in sources and len(sources) == 1:
-                base_score = vector_score
-            else:
-                # For chunks found by multiple methods, apply vector as quality check
-                base_score *= vector_multiplier
-        
-        # Special handling for strong metadata matches
-        if 'metadata' in sources:
-            metadata_matches = candidate.get('metadata_matches', {})
-            # Strong category or product match should boost significantly
-            if metadata_matches.get('category', 0) > 0.8 or metadata_matches.get('product', 0) > 0.8:
-                base_score *= 1.2
-        
+            base_score = vector_score
+
+            # Metadata/keyword matches provide confirmation boost
+            if len(sources) > 1:
+                # Has both vector AND metadata/keyword matches - strong confirmation signal
+                keyword_signals = sum(source_scores.get(k, 0) for k in ['keyword', 'filename', 'metadata'])
+                if keyword_signals > 0:
+                    # Normalize and apply boost (up to 30% for strong confirmation)
+                    keyword_boost = min(0.3, keyword_signals * 0.15)
+                    base_score = vector_score * (1.0 + keyword_boost)
+
+                    # Additional boost if multiple signal types confirm (2+ sources)
+                    num_metadata_sources = sum(1 for s in ['keyword', 'filename', 'metadata'] if s in sources)
+                    if num_metadata_sources >= 2:
+                        # Multiple confirmation signals - very high confidence
+                        base_score *= 1.1
+
+            # Check for code-related tags to boost code examples
+            tags = candidate.get('metadata', {}).get('tags', [])
+            if 'code' in tags:
+                # This chunk contains code - boost if query is code-related
+                # (metadata search would have found it if query mentioned code/example/python/etc)
+                if 'metadata' in sources or 'keyword' in sources:
+                    # Query matched code-related metadata - apply code boost
+                    base_score *= 1.2
+        else:
+            # No vector score - this is a keyword-only result (backfill)
+            # Use keyword scores but penalize for lack of semantic match
+            base_score = sum(source_scores.values()) * 0.6  # 40% penalty for no vector
+
+            # Still boost code chunks if metadata matched
+            tags = candidate.get('metadata', {}).get('tags', [])
+            if 'code' in tags and 'metadata' in sources:
+                base_score *= 1.15
+
         return base_score
     
     def _apply_diversity_penalties(self, results: List[Dict], target_count: int) -> List[Dict]:
@@ -1166,7 +1148,65 @@ class SearchEngine:
                 penalized_results[:target_count] = selected
         
         return penalized_results
-    
+
+    def _apply_match_type_diversity(self, results: List[Dict], target_count: int) -> List[Dict]:
+        """Ensure diversity of match types in final results
+
+        Ensures we have a mix of:
+        - Vector-only matches (semantic similarity, good for code examples)
+        - Keyword-only matches (exact term matches)
+        - Hybrid matches (both vector + keyword/metadata)
+        """
+        if not results or len(results) <= target_count:
+            return results
+
+        # Categorize results by match type
+        vector_only = []
+        keyword_only = []
+        hybrid = []
+
+        for result in results:
+            sources = result.get('sources', {})
+            has_vector = 'vector' in sources
+            has_keyword = any(k in sources for k in ['keyword', 'filename', 'metadata'])
+
+            if has_vector and not has_keyword:
+                vector_only.append(result)
+            elif has_keyword and not has_vector:
+                keyword_only.append(result)
+            else:
+                hybrid.append(result)
+
+        # Build diverse result set
+        # Target distribution: 40% hybrid, 40% vector-only, 20% keyword-only
+        # This ensures we include semantic matches (code examples) even if keywords don't match
+        diversified = []
+
+        # Take top hybrid matches first (best overall)
+        hybrid_target = max(1, int(target_count * 0.4))
+        diversified.extend(hybrid[:hybrid_target])
+
+        # Ensure we have vector-only matches (critical for code examples)
+        vector_target = max(1, int(target_count * 0.4))
+        diversified.extend(vector_only[:vector_target])
+
+        # Add keyword-only matches
+        keyword_target = max(1, int(target_count * 0.2))
+        diversified.extend(keyword_only[:keyword_target])
+
+        # Fill remaining slots with best remaining results regardless of type
+        remaining_slots = target_count - len(diversified)
+        if remaining_slots > 0:
+            # Get all unused results
+            used_ids = set(r['id'] for r in diversified)
+            unused = [r for r in results if r['id'] not in used_ids]
+            diversified.extend(unused[:remaining_slots])
+
+        # Sort by final score to maintain quality ordering
+        diversified.sort(key=lambda x: x['final_score'], reverse=True)
+
+        return diversified
+
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the search index"""
         # Use pgvector backend if available

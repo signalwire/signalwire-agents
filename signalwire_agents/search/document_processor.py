@@ -88,9 +88,18 @@ class DocumentProcessor:
     ):
         """
         Initialize document processor
-        
+
         Args:
-            chunking_strategy: Strategy for chunking documents ('sentence', 'sliding', 'paragraph', 'page', 'semantic', 'topic', 'qa')
+            chunking_strategy: Strategy for chunking documents:
+                - 'sentence': Sentence-based chunking with overlap
+                - 'sliding': Sliding window with word-based chunks
+                - 'paragraph': Natural paragraph boundaries
+                - 'page': Page-based chunking (for PDFs)
+                - 'semantic': Semantic similarity-based chunking
+                - 'topic': Topic modeling-based chunking
+                - 'qa': Question-answer optimized chunking
+                - 'json': JSON structure-aware chunking
+                - 'markdown': Markdown structure-aware chunking with code block detection
             max_sentences_per_chunk: For sentence strategy (default: 5)
             chunk_size: For sliding strategy - words per chunk (default: 50)
             chunk_overlap: For sliding strategy - overlap in words (default: 10)
@@ -142,6 +151,9 @@ class DocumentProcessor:
             return self._chunk_by_qa_optimization(content, filename, file_type)
         elif self.chunking_strategy == 'json':
             return self._chunk_from_json(content, filename, file_type)
+        elif self.chunking_strategy == 'markdown':
+            # Use markdown-aware chunking for better structure preservation
+            return self._chunk_markdown_enhanced(content, filename)
         else:
             # Fallback to sentence-based chunking
             return self._chunk_by_sentences(content, filename, file_type)
@@ -339,75 +351,114 @@ class DocumentProcessor:
         return chunks
     
     def _chunk_markdown_enhanced(self, content: str, filename: str) -> List[Dict[str, Any]]:
-        """Enhanced markdown chunking with better header handling"""
+        """Enhanced markdown chunking with code block detection and rich metadata
+
+        Features:
+        - Tracks header hierarchy for section paths
+        - Detects code blocks and extracts language
+        - Adds 'code' tags to chunks containing code
+        - Preserves markdown structure for better search
+        """
         chunks = []
         lines = content.split('\n')
-        
+
         current_section = None
         current_hierarchy = []  # Track header hierarchy
         current_chunk = []
         current_size = 0
         line_start = 1
-        
+        in_code_block = False
+        code_languages = []  # Track languages in current chunk
+        has_code = False
+
         for line_num, line in enumerate(lines, 1):
+            # Check for code block fences
+            code_fence_match = re.match(r'^```(\w+)?', line)
+            if code_fence_match:
+                in_code_block = not in_code_block
+                if in_code_block:
+                    # Starting code block
+                    has_code = True
+                    lang = code_fence_match.group(1)
+                    if lang and lang not in code_languages:
+                        code_languages.append(lang)
+
             # Check for headers with hierarchy tracking
-            header_match = re.match(r'^(#{1,6})\s+(.+)', line)
+            header_match = re.match(r'^(#{1,6})\s+(.+)', line) if not in_code_block else None
             if header_match:
                 header_level = len(header_match.group(1))
                 header_text = header_match.group(2).strip()
-                
+
                 # Save current chunk if it exists
                 if current_chunk:
+                    chunk_metadata = self._build_markdown_metadata(
+                        current_hierarchy, code_languages, has_code
+                    )
                     chunks.append(self._create_chunk(
                         content='\n'.join(current_chunk),
                         filename=filename,
                         section=self._build_section_path(current_hierarchy),
                         start_line=line_start,
-                        end_line=line_num - 1
+                        end_line=line_num - 1,
+                        metadata=chunk_metadata
                     ))
-                
+
                 # Update hierarchy
                 current_hierarchy = current_hierarchy[:header_level-1] + [header_text]
                 current_section = header_text
                 current_chunk = [line]
                 current_size = len(line)
                 line_start = line_num
-            
+                code_languages = []
+                has_code = False
+
             else:
                 current_chunk.append(line)
                 current_size += len(line) + 1
-                
+
                 # Check if chunk is getting too large - use smart splitting
-                if current_size >= self.chunk_size:
+                # But don't split inside code blocks
+                if current_size >= self.chunk_size and not in_code_block:
                     # Try to split at paragraph boundary first
                     split_point = self._find_best_split_point(current_chunk)
-                    
+
                     chunk_to_save = current_chunk[:split_point]
+                    chunk_metadata = self._build_markdown_metadata(
+                        current_hierarchy, code_languages, has_code
+                    )
                     chunks.append(self._create_chunk(
                         content='\n'.join(chunk_to_save),
                         filename=filename,
                         section=self._build_section_path(current_hierarchy),
                         start_line=line_start,
-                        end_line=line_start + split_point - 1
+                        end_line=line_start + split_point - 1,
+                        metadata=chunk_metadata
                     ))
-                    
+
                     # Start new chunk with overlap
                     overlap_lines = self._get_overlap_lines(chunk_to_save)
                     remaining_lines = current_chunk[split_point:]
                     current_chunk = overlap_lines + remaining_lines
                     current_size = sum(len(line) + 1 for line in current_chunk)
                     line_start = line_start + split_point - len(overlap_lines)
-        
+                    # Reset code tracking for new chunk
+                    code_languages = []
+                    has_code = False
+
         # Add final chunk
         if current_chunk:
+            chunk_metadata = self._build_markdown_metadata(
+                current_hierarchy, code_languages, has_code
+            )
             chunks.append(self._create_chunk(
                 content='\n'.join(current_chunk),
                 filename=filename,
                 section=self._build_section_path(current_hierarchy),
                 start_line=line_start,
-                end_line=len(lines)
+                end_line=len(lines),
+                metadata=chunk_metadata
             ))
-        
+
         return chunks
     
     def _chunk_python_enhanced(self, content: str, filename: str) -> List[Dict[str, Any]]:
@@ -575,6 +626,49 @@ class DocumentProcessor:
     def _build_section_path(self, hierarchy: List[str]) -> str:
         """Build hierarchical section path from header hierarchy"""
         return ' > '.join(hierarchy) if hierarchy else None
+
+    def _build_markdown_metadata(self, hierarchy: List[str], code_languages: List[str], has_code: bool) -> Dict[str, Any]:
+        """Build rich metadata for markdown chunks
+
+        Args:
+            hierarchy: Current header hierarchy (e.g., ['Installation', 'Requirements', 'Python'])
+            code_languages: List of code block languages found in chunk (e.g., ['python', 'bash'])
+            has_code: Whether chunk contains any code blocks
+
+        Returns:
+            Dictionary with markdown-specific metadata including tags
+        """
+        metadata = {
+            'chunk_type': 'markdown',
+        }
+
+        # Add header level metadata
+        if hierarchy:
+            for i, header in enumerate(hierarchy, 1):
+                metadata[f'h{i}'] = header
+
+        # Add code-related metadata
+        if has_code:
+            metadata['has_code'] = True
+            if code_languages:
+                metadata['code_languages'] = code_languages
+
+        # Build tags for enhanced searching
+        tags = []
+        if has_code:
+            tags.append('code')
+            # Add language-specific tags
+            for lang in code_languages:
+                tags.append(f'code:{lang}')
+
+        # Add tags for header levels (searchable by section depth)
+        if len(hierarchy) > 0:
+            tags.append(f'depth:{len(hierarchy)}')
+
+        if tags:
+            metadata['tags'] = tags
+
+        return metadata
     
     def _build_python_section(self, class_name: Optional[str], function_name: Optional[str]) -> str:
         """Build section name for Python code"""

@@ -247,7 +247,66 @@ The search system supports multiple chunking strategies to optimize for differen
 | `semantic` | Groups semantically similar content | Technical docs |
 | `topic` | Groups by topic changes | Mixed content |
 | `qa` | Optimized for question-answering | FAQs, tutorials |
+| `markdown` | **NEW** - Header-aware with code detection | Documentation with code examples |
 | `json` | Uses pre-chunked JSON input | Custom preprocessing |
+
+#### Markdown Chunking Strategy (Recommended for Documentation)
+
+The `markdown` strategy is specifically designed for documentation that contains code examples. It understands markdown structure and adds rich metadata for better search results.
+
+**Features:**
+- **Header-based chunking**: Splits at markdown headers (h1, h2, h3...) for natural boundaries
+- **Code block detection**: Identifies fenced code blocks and extracts language (```python, ```bash, etc.)
+- **Smart tagging**: Adds `"code"` tags to chunks with code, plus language-specific tags
+- **Section hierarchy**: Preserves full path (e.g., "API Reference > AgentBase > Methods")
+- **Code protection**: Never splits inside code blocks
+- **Metadata enrichment**: Header levels stored as searchable metadata
+
+**Example Metadata:**
+```json
+{
+  "chunk_type": "markdown",
+  "h1": "API Reference",
+  "h2": "AgentBase",
+  "h3": "add_skill Method",
+  "has_code": true,
+  "code_languages": ["python", "bash"],
+  "tags": ["code", "code:python", "code:bash", "depth:3"]
+}
+```
+
+**Usage Examples:**
+```bash
+# Build index with markdown strategy (SQLite)
+sw-search ./docs --chunking-strategy markdown --output docs.swsearch
+
+# With pgvector backend (recommended for production)
+sw-search ./docs \
+  --backend pgvector \
+  --connection-string "postgresql://user:pass@localhost:5432/db" \
+  --output docs_collection \
+  --chunking-strategy markdown
+
+# Markdown-only files
+sw-search ./docs \
+  --chunking-strategy markdown \
+  --file-types md \
+  --output markdown_docs.swsearch
+```
+
+**Search Benefits:**
+When users search for "example code Python":
+- Chunks with code blocks get automatic 20% boost
+- Python-specific code gets language match bonus
+- Vector similarity provides primary semantic ranking
+- Metadata tags provide confirmation signals
+- Results blend semantic + structural relevance
+
+**Best Used With:**
+- API documentation with code examples
+- Tutorial content with inline code
+- Technical guides with multiple languages
+- README files with usage examples
 
 #### JSON Chunking Strategy
 
