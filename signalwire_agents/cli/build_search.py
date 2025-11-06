@@ -793,7 +793,7 @@ def search_command():
                         query_vector=enhanced.get('vector'),
                         enhanced_text=enhanced.get('enhanced_text', query),
                         count=args.count,
-                        distance_threshold=args.distance_threshold,
+                        similarity_threshold=args.similarity_threshold,
                         tags=tags,
                         keyword_weight=args.keyword_weight,
                         original_query=query
@@ -871,7 +871,7 @@ def search_command():
             query_vector=enhanced.get('vector'),
             enhanced_text=enhanced.get('enhanced_text', args.query),
             count=args.count,
-            distance_threshold=args.distance_threshold,
+            similarity_threshold=args.similarity_threshold,
             tags=tags,
             keyword_weight=args.keyword_weight,
             original_query=args.query  # Pass original for exact match boosting
@@ -1118,7 +1118,7 @@ def remote_command():
         'query': args.query,
         'index_name': args.index_name,
         'count': args.count,
-        'distance_threshold': args.distance_threshold
+        'similarity_threshold': args.similarity_threshold
     }
     
     if args.tags:

@@ -248,7 +248,7 @@ class SigmondNativeSearch(AgentBase):
             "description": "Search the comprehensive SignalWire Agents SDK concepts guide for information about features, architecture, guides, and examples",
             "index_file": str(concepts_index_file),
             "count": 2,  # Reduced from 5 to 2 for shorter responses
-            "distance_threshold": 0.2,  # Increased threshold for more relevant results
+            "similarity_threshold": 0.2,  # Increased threshold for more relevant results
             "response_prefix": "When results contain programming code, Do not read any source code aloud, just reference what file to look in for the answer",
             "response_postfix": "Express this information in a format that is easy to understand when read aloud.",
             "no_results_message": "I couldn't find information about '{query}' in the SDK concepts guide. Try rephrasing your question or asking about a different SDK feature.",

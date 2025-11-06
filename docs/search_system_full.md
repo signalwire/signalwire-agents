@@ -161,7 +161,7 @@ class DocsAgent(AgentBase):
             "remote_url": "http://localhost:8001",
             "index_name": "knowledge",
             "count": 3,
-            "distance_threshold": 0.4
+            "similarity_threshold": 0.4
         })
 
         # Build the prompt
@@ -197,7 +197,7 @@ self.add_skill("native_vector_search", {
     "description": "Search the documentation for information",
     "index_path": "./knowledge.swsearch",  # Direct path to .swsearch file
     "count": 3,
-    "distance_threshold": 0.4
+    "similarity_threshold": 0.4
 })
 ```
 
@@ -226,7 +226,7 @@ class DocsAgent(AgentBase):
             "description": "Search the documentation to answer user questions about features, APIs, and how-to guides",
             "index_path": "./knowledge.swsearch",
             "count": 5,  # Return top 5 results
-            "distance_threshold": 0.4,  # Only results with similarity > 0.4
+            "similarity_threshold": 0.4,  # Only results with similarity > 0.4
             "no_results_message": "I couldn't find information about '{query}' in the documentation. Could you rephrase your question?",
             "swaig_fields": {
                 "fillers": {
@@ -413,7 +413,7 @@ Chunk A: "error handling guide"     → similarity: 0.87 (very similar)
 Chunk B: "installation instructions" → similarity: 0.23 (not similar)
 ```
 
-The `distance_threshold` parameter (e.g., 0.4) filters out low-similarity results. Only chunks with similarity above the threshold are returned.
+The `similarity_threshold` parameter (e.g., 0.4) filters out low-similarity results. Only chunks with similarity above the threshold are returned.
 
 ## When Keyword Search Still Matters
 
@@ -442,17 +442,19 @@ Once embeddings are generated, search is extremely fast. Comparing vectors is ju
 
 That's why `.swsearch` files work so well: the expensive part (generating embeddings) happens once during indexing. Queries are cheap.
 
-## Understanding Distance Threshold
+## Understanding Similarity Threshold
 
-The `distance_threshold` parameter controls how strict matching is:
+The `similarity_threshold` parameter controls how strict matching is (higher = stricter):
 
 ```python
-"distance_threshold": 0.3  # Very strict - only near-perfect matches
-"distance_threshold": 0.5  # Balanced - good matches
-"distance_threshold": 0.7  # Permissive - includes loosely related content
+"similarity_threshold": 0.2  # Permissive - includes loosely related content
+"similarity_threshold": 0.3  # Balanced - good matches
+"similarity_threshold": 0.5  # Strict - only high-confidence matches
 ```
 
-For technical documentation, 0.4-0.5 works well. For creative content or broad topics, 0.6-0.7 might be better.
+For technical documentation, 0.2-0.3 works well. For precise matching, 0.4-0.5 might be better.
+
+**Note:** Actual thresholds depend on your embedding model. Models like all-MiniLM-L6-v2 typically produce lower scores (0.2-0.4 range), while larger models may produce higher similarities.
 
 Too strict? You get no results.
 Too permissive? You get irrelevant results.
@@ -486,7 +488,7 @@ The quality difference is often negligible for well-written documentation. The s
 3. **Vector search finds semantic similarity** that keyword search misses
 4. **Hybrid search combines both approaches** for best results
 5. **Embeddings are generated once**, queries are fast
-6. **distance_threshold controls strictness** of matching
+6. **similarity_threshold controls strictness** of matching
 
 Now that you understand how vector search works, let's explore how our hybrid search algorithm combines vector similarity with keyword matching to deliver even better results.
 # 4. Hybrid Search: Best of Both Worlds
@@ -678,7 +680,7 @@ You can influence hybrid behavior through configuration:
 ### Distance Threshold
 
 ```python
-"distance_threshold": 0.4  # Only vector results > 0.4 enter the pool
+"similarity_threshold": 0.4  # Only vector results > 0.4 enter the pool
 ```
 
 Stricter thresholds mean fewer candidates for keyword boosting. Looser thresholds let more results benefit from keyword/metadata boosts.
@@ -4271,14 +4273,17 @@ The `native_vector_search` skill has many configuration options:
 }
 ```
 
-**distance_threshold** (float, default: 0.5)
+**similarity_threshold** (float, default: 0.0)
 - Minimum similarity score (0.0 to 1.0)
-- Lower = stricter matching
-- Higher = more permissive
+- Higher = stricter matching (only high-confidence matches)
+- Lower = more permissive (includes loosely related content)
+- **Note**: Optimal values depend on the embedding model used:
+  - all-MiniLM-L6-v2: typically 0.2-0.4 range
+  - all-mpnet-base-v2: typically 0.3-0.5 range
 
 ```python
 {
-    "distance_threshold": 0.4  # Only results with similarity > 0.4
+    "similarity_threshold": 0.4  # Only results with similarity > 0.4
 }
 ```
 
@@ -4359,7 +4364,7 @@ class ProductAgent(AgentBase):
 
             # Search behavior
             "count": 5,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
 
             # User experience
             "no_results_message": "I couldn't find information about '{query}' in our documentation. Could you rephrase or ask about a different topic?",
@@ -4535,7 +4540,7 @@ class SigmondAgent(AgentBase):
             "collection_name": "signalwire_unified",
             "model_name": "mini",
             "count": 5,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
             "response_format_callback": self._format_search_results,
             "no_results_message": "I couldn't find information about '{query}' in the SignalWire knowledge base.",
             "swaig_fields": {
@@ -4559,7 +4564,7 @@ class SigmondAgent(AgentBase):
             "collection_name": "pricing",
             "model_name": "mini",
             "count": 3,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
             "response_format_callback": self._format_search_results,
             "swaig_fields": {
                 "fillers": {
@@ -4673,7 +4678,7 @@ sw-search search ./knowledge.swsearch "test query"
    - Verify LLM understands when to search
 
 2. **No results returned:**
-   - Check distance_threshold (might be too strict)
+   - Check similarity_threshold (might be too strict)
    - Verify query matches content semantically
    - Test same query with `sw-search` CLI
 
@@ -5322,7 +5327,7 @@ This is useful for:
 6. **Multiple search tools by tag** - specialized functions
 7. **Consistent metadata schema** - makes filtering predictable
 
-Next, we'll explore search quality tuning: adjusting parameters like distance_threshold and result count to optimize for your specific content and use case.
+Next, we'll explore search quality tuning: adjusting parameters like similarity_threshold and result count to optimize for your specific content and use case.
 # 14. Search Quality: Tuning Your Results
 
 Building an index is just the first step. To get the best search results, you need to tune parameters based on your content and use case. Let's explore how to optimize search quality.
@@ -5331,7 +5336,7 @@ Building an index is just the first step. To get the best search results, you ne
 
 Three parameters have the biggest impact on search quality:
 
-1. **distance_threshold** - How strict matching is
+1. **similarity_threshold** - How strict matching is
 2. **count** - How many results to return
 3. **max_content_length** - Total response size budget
 
@@ -5339,7 +5344,7 @@ Let's understand each one.
 
 ## Distance Threshold: Strictness Control
 
-The `distance_threshold` parameter (0.0 to 1.0) controls how similar results must be to the query.
+The `similarity_threshold` parameter (0.0 to 1.0) controls how similar results must be to the query.
 
 ### How It Works
 
@@ -5354,7 +5359,7 @@ The threshold filters out low-similarity results:
 
 ```python
 {
-    "distance_threshold": 0.4  # Only return results with similarity > 0.4
+    "similarity_threshold": 0.4  # Only return results with similarity > 0.4
 }
 ```
 
@@ -5399,15 +5404,15 @@ Success: Only relevant results
 **Technical documentation (code, APIs):**
 ```python
 {
-    "distance_threshold": 0.4  # Balanced
+    "similarity_threshold": 0.3  # Balanced
 }
 ```
-Technical docs are specific. Higher threshold prevents off-topic matches.
+Technical docs have specific terminology. Moderate threshold captures related concepts.
 
 **General knowledge base (FAQs, guides):**
 ```python
 {
-    "distance_threshold": 0.5  # Moderate
+    "similarity_threshold": 0.25  # Permissive
 }
 ```
 More conversational content benefits from broader matching.
@@ -5415,18 +5420,20 @@ More conversational content benefits from broader matching.
 **Creative content (blogs, articles):**
 ```python
 {
-    "distance_threshold": 0.6  # Permissive
+    "similarity_threshold": 0.2  # Very permissive
 }
 ```
-Creative content has more varied language, needs wider net.
+Creative content has varied language, needs wider net.
 
 **Precise lookups (error codes, model names):**
 ```python
 {
-    "distance_threshold": 0.3  # Strict
+    "similarity_threshold": 0.4  # Strict
 }
 ```
 When exact matches matter, be strict.
+
+**Note:** These values assume models like all-MiniLM-L6-v2. Larger models (e.g., all-mpnet-base-v2) may produce higher similarities, requiring adjustment.
 
 ### Testing Threshold Values
 
@@ -5850,7 +5857,7 @@ Monitor metrics:
 
 ## Key Takeaways
 
-1. **distance_threshold controls strictness** - 0.4-0.5 is good default
+1. **similarity_threshold controls strictness** - 0.4-0.5 is good default
 2. **count balances context and noise** - 3-5 results for most queries
 3. **max_content_length prevents truncation** - 32KB default, adjust as needed
 4. **Test with real queries** - build test suite, iterate
@@ -6019,7 +6026,7 @@ class SigmondAgent(AgentBase):
             "collection_name": "signalwire_unified",
             "model_name": "mini",
             "count": 5,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
             "response_format_callback": self._format_search_results,
             "no_results_message": "I couldn't find information about '{query}' in the SignalWire knowledge base.",
             "swaig_fields": {
@@ -6043,7 +6050,7 @@ class SigmondAgent(AgentBase):
             "collection_name": "pricing",
             "model_name": "mini",
             "count": 3,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
             "response_format_callback": self._format_search_results,
             "no_results_message": "I couldn't find specific pricing information for '{query}'. Please check signalwire.com/pricing or contact sales@signalwire.com.",
             "swaig_fields": {
@@ -6066,7 +6073,7 @@ class SigmondAgent(AgentBase):
             "collection_name": "freeswitch",
             "model_name": "mini",
             "count": 3,
-            "distance_threshold": 0.4,
+            "similarity_threshold": 0.4,
             "response_format_callback": self._format_search_results,
             "no_results_message": "I couldn't find information about '{query}' in the FreeSWITCH documentation.",
             "swaig_fields": {
@@ -7074,7 +7081,7 @@ self.add_skill("native_vector_search", {
 **3. Use appropriate threshold:**
 ```python
 {
-    "distance_threshold": 0.4  # Filters early, reduces processing
+    "similarity_threshold": 0.4  # Filters early, reduces processing
 }
 ```
 
@@ -7400,7 +7407,7 @@ def monitored_search(query):
 ### For Query Performance:
 - [ ] Use mini model when quality is sufficient
 - [ ] Reduce result count (3-5 instead of 10+)
-- [ ] Set appropriate distance_threshold (0.4-0.5)
+- [ ] Set appropriate similarity_threshold (0.4-0.5)
 - [ ] Use pgvector for large indexes
 - [ ] Add indexes to pgvector collections
 - [ ] Implement connection pooling
@@ -7502,27 +7509,26 @@ sw-search search ./knowledge.swsearch "how to authenticate" --verbose
 
 Look at similarity scores in verbose output.
 
-**Step 3: Check distance threshold**
+**Step 3: Check similarity threshold**
 ```python
 # Is threshold too strict?
 {
-    "distance_threshold": 0.7  # Very strict
+    "similarity_threshold": 0.5  # Too strict for most models
 }
 ```
 
 ### Common Causes
 
-**1. Distance threshold too strict**
+**1. Similarity threshold too strict**
 ```python
 # Problem: threshold too high
 {
-    "distance_threshold": 0.7  # Only near-perfect matches
+    "similarity_threshold": 0.5  # Filters out good matches
 }
 
 # Solution: lower threshold
 {
-    "distance_threshold": 0.4  # More permissive
-}
+    "similarity_threshold": 0.3  # More permissive, balanced
 ```
 
 **2. Content doesn't exist**
@@ -7635,12 +7641,12 @@ sw-search export ./knowledge.swsearch ./exported.json
 **1. Threshold too permissive**
 ```python
 {
-    "distance_threshold": 0.2  # Too low, accepts weak matches
+    "similarity_threshold": 0.2  # Too low, accepts weak matches
 }
 
 # Solution: raise threshold
 {
-    "distance_threshold": 0.4
+    "similarity_threshold": 0.4
 }
 ```
 
@@ -7673,7 +7679,7 @@ sw-search ./docs --tags python,authentication,examples --output docs.swsearch
 **Increase threshold:**
 ```python
 {
-    "distance_threshold": 0.5  # Stricter matching
+    "similarity_threshold": 0.5  # Stricter matching
 }
 ```
 
@@ -7684,7 +7690,7 @@ self.add_skill("native_vector_search", {
     "description": "Search for Python code examples",
     "index_path": "./docs.swsearch",
     "tags": ["python", "code"],  # Only Python code chunks
-    "distance_threshold": 0.4
+    "similarity_threshold": 0.4
 })
 ```
 
@@ -8462,7 +8468,7 @@ sw-search ./docs --model mini --output knowledge.swsearch
 {
     "model_name": "mini",
     "count": 3,  # Fewer results = faster
-    "distance_threshold": 0.4  # Balanced
+    "similarity_threshold": 0.4  # Balanced
 }
 ```
 
@@ -8583,7 +8589,7 @@ sw-search ./faq \
 
 # Agent with strict threshold (exact matches)
 {
-    "distance_threshold": 0.4,
+    "similarity_threshold": 0.4,
     "count": 3,
     "max_content_length": 16384  # Short, focused answers
 }
@@ -8601,7 +8607,7 @@ sw-search ./docs \
 
 # Agent with moderate threshold
 {
-    "distance_threshold": 0.4,
+    "similarity_threshold": 0.4,
     "count": 5,
     "max_content_length": 32768  # Detailed technical answers
 }
@@ -8695,7 +8701,7 @@ Track these to measure search effectiveness:
 
 - What % of searches return results?
 - Target: 95%+
-- If low: lower distance_threshold or add content
+- If low: lower similarity_threshold or add content
 
 **3. Average similarity**
 
@@ -8746,13 +8752,13 @@ sw-search ./docs --chunking-strategy markdown
 **3. Threshold too strict or permissive**
 ```python
 # ❌ Too strict: no results
-{"distance_threshold": 0.7}
+{"similarity_threshold": 0.7}
 
 # ❌ Too permissive: irrelevant results
-{"distance_threshold": 0.2}
+{"similarity_threshold": 0.2}
 
 # ✅ Balanced
-{"distance_threshold": 0.4}
+{"similarity_threshold": 0.4}
 ```
 
 **4. Mismatched models**
@@ -9223,7 +9229,7 @@ sw-search remote [ENDPOINT] [QUERY] [OPTIONS]
 ```python
 {
     "count": int,                          # Number of results (default: 5)
-    "distance_threshold": float,           # Similarity threshold 0.0-1.0 (default: 0.5)
+    "similarity_threshold": float,           # Similarity threshold 0.0-1.0 (default: 0.5)
     "tags": List[str],                     # Filter by tags (optional)
     "max_content_length": int,             # Max total response chars (default: 32768)
 }
@@ -9277,7 +9283,7 @@ self.add_skill("native_vector_search", {
 
     # Search behavior
     "count": 5,
-    "distance_threshold": 0.4,
+    "similarity_threshold": 0.4,
     "tags": ["documentation", "api"],
     "max_content_length": 32768,
 

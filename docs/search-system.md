@@ -473,7 +473,7 @@ self.add_skill("native_vector_search", {
     
     # Search parameters
     "count": 5,  # Number of results
-    "distance_threshold": 0.1,  # Similarity threshold
+    "similarity_threshold": 0.1,  # Similarity threshold
     "tags": ["documentation"],  # Filter by tags
     
     # NLP backend selection
@@ -778,7 +778,7 @@ results = engine.search(
     query_vector=[...],  # Optional: pre-computed query vector
     enhanced_text="search query",  # Enhanced query text
     count=5,  # Number of results
-    distance_threshold=0.0,  # Minimum similarity score
+    similarity_threshold=0.0,  # Minimum similarity score
     tags=["documentation"]  # Filter by tags
 )
 

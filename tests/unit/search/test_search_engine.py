@@ -384,7 +384,7 @@ class TestSearchEngineHybridSearch:
     
     @patch('signalwire_agents.search.search_engine.np')
     @patch('signalwire_agents.search.search_engine.cosine_similarity')
-    def test_search_with_distance_threshold(self, mock_cosine_sim, mock_np):
+    def test_search_with_similarity_threshold(self, mock_cosine_sim, mock_np):
         """Test search with distance threshold filtering"""
         engine = SearchEngine(self.db_path)
         
@@ -405,7 +405,7 @@ class TestSearchEngineHybridSearch:
             {'id': 2, 'content': 'Low score result', 'score': 0.3, 'metadata': {}}
         ])
         
-        results = engine.search([0.1, 0.2, 0.3], 'test query', count=2, distance_threshold=0.5)
+        results = engine.search([0.1, 0.2, 0.3], 'test query', count=2, similarity_threshold=0.5)
         
         # Only high score result should pass threshold
         assert len(results) == 1

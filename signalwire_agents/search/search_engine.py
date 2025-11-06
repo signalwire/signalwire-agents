@@ -73,7 +73,7 @@ class SearchEngine:
             return {}
     
     def search(self, query_vector: List[float], enhanced_text: str, 
-              count: int = 3, distance_threshold: float = 0.0,
+              count: int = 3, similarity_threshold: float = 0.0,
               tags: Optional[List[str]] = None, 
               keyword_weight: Optional[float] = None,
               original_query: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -89,7 +89,7 @@ class SearchEngine:
             query_vector: Embedding vector for the query
             enhanced_text: Processed query text for keyword search
             count: Number of results to return
-            distance_threshold: Minimum similarity score
+            similarity_threshold: Minimum similarity score
             tags: Filter by tags
             keyword_weight: Optional manual weight for keyword vs vector
             original_query: Original query for exact matching
@@ -100,7 +100,7 @@ class SearchEngine:
         
         # Use pgvector backend if available
         if self.backend == 'pgvector':
-            return self._backend.search(query_vector, enhanced_text, count, distance_threshold, tags, keyword_weight)
+            return self._backend.search(query_vector, enhanced_text, count, similarity_threshold, tags, keyword_weight)
         
         # Check for numpy/sklearn availability
         if not np or not cosine_similarity:
@@ -161,7 +161,7 @@ class SearchEngine:
         final_results = []
         for chunk_id, candidate in candidates.items():
             # Calculate final score combining all signals
-            score = self._calculate_combined_score(candidate, distance_threshold)
+            score = self._calculate_combined_score(candidate, similarity_threshold)
             candidate['final_score'] = score
             final_results.append(candidate)
         
@@ -174,9 +174,9 @@ class SearchEngine:
                            if any(tag in r['metadata'].get('tags', []) for tag in tags)]
         
         # Apply distance threshold as final filter (soft threshold already applied in scoring)
-        if distance_threshold > 0:
+        if similarity_threshold > 0:
             final_results = [r for r in final_results 
-                           if r.get('vector_distance', 0) <= distance_threshold * 1.5 
+                           if r.get('vector_distance', 0) <= similarity_threshold * 1.5 
                            or 'vector' not in r.get('sources', {})]
         
         # Boost exact matches if we have the original query
@@ -987,7 +987,7 @@ class SearchEngine:
             return []
     
     def _add_vector_scores_to_candidates(self, candidates: Dict[str, Dict], query_vector: NDArray, 
-                                       distance_threshold: float):
+                                       similarity_threshold: float):
         """Add vector similarity scores to existing candidates"""
         if not candidates or not np:
             return
@@ -1034,7 +1034,7 @@ class SearchEngine:
         except Exception as e:
             logger.error(f"Error in vector re-ranking: {e}")
     
-    def _calculate_combined_score(self, candidate: Dict, distance_threshold: float) -> float:
+    def _calculate_combined_score(self, candidate: Dict, similarity_threshold: float) -> float:
         """Calculate final score with hybrid vector + metadata weighting
 
         Hybrid approach:

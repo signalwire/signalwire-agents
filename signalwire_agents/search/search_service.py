@@ -50,7 +50,7 @@ if BaseModel:
         query: str
         index_name: str = "default"
         count: int = 3
-        distance: float = 0.0
+        similarity_threshold: float = 0.0
         tags: Optional[List[str]] = None
         language: Optional[str] = None
 
@@ -65,13 +65,13 @@ if BaseModel:
 else:
     # Fallback classes when FastAPI is not available
     class SearchRequest:
-        def __init__(self, query: str, index_name: str = "default", count: int = 3, 
-                     distance: float = 0.0, tags: Optional[List[str]] = None, 
+        def __init__(self, query: str, index_name: str = "default", count: int = 3,
+                     similarity_threshold: float = 0.0, tags: Optional[List[str]] = None,
                      language: Optional[str] = None):
             self.query = query
             self.index_name = index_name
             self.count = count
-            self.distance = distance
+            self.similarity_threshold = similarity_threshold
             self.tags = tags
             self.language = language
 
@@ -298,16 +298,41 @@ class SearchService:
     def _load_resources(self):
         """Load embedding model and search indexes"""
         if self.backend == 'pgvector':
-            # For pgvector, we don't need to load a model locally
-            # The embeddings are already stored in the database
-            # Load search engines for each collection
+            # For pgvector, we need to load models for query embeddings
+            # Different collections might use different models
+            self.models = {}  # model_name -> SentenceTransformer instance
+            self.collection_models = {}  # collection_name -> model_name
+
+            # Load search engines for each collection and their models
             for collection_name in self.indexes.keys():
                 try:
-                    self.search_engines[collection_name] = SearchEngine(
+                    search_engine = SearchEngine(
                         backend='pgvector',
                         connection_string=self.connection_string,
                         collection_name=collection_name
                     )
+                    self.search_engines[collection_name] = search_engine
+
+                    # Get the model name from the collection config
+                    model_name = search_engine.config.get('model_name')
+                    if model_name:
+                        self.collection_models[collection_name] = model_name
+
+                        # Load the model if we haven't already
+                        if model_name not in self.models:
+                            logger.info(f"Loading model {model_name} for collection {collection_name}")
+                            try:
+                                model = SentenceTransformer(model_name)
+                                model.model_name = model_name  # Store for cache comparison
+                                self.models[model_name] = model
+                            except Exception as e:
+                                logger.error(f"Failed to load model {model_name}: {e}")
+                                raise
+                        else:
+                            logger.info(f"Using cached model {model_name} for collection {collection_name}")
+                    else:
+                        logger.warning(f"No model_name in config for collection {collection_name}")
+
                     logger.info(f"Loaded pgvector collection: {collection_name}")
                 except Exception as e:
                     logger.error(f"Error loading pgvector collection {collection_name}: {e}")
@@ -372,13 +397,21 @@ class SearchService:
             return self._query_cache[cache_key]
         
         search_engine = self.search_engines[request.index_name]
-        
+
+        # For pgvector, set the correct model globally before query processing
+        if self.backend == 'pgvector' and hasattr(self, 'collection_models'):
+            collection_model_name = self.collection_models.get(request.index_name)
+            if collection_model_name and collection_model_name in self.models:
+                # Set this model globally so query processor uses it
+                set_global_model(self.models[collection_model_name])
+                logger.debug(f"Set global model to {collection_model_name} for collection {request.index_name}")
+
         # Get model name from the search engine config
         model_name = None
         if hasattr(search_engine, 'config') and search_engine.config:
             # pgvector uses 'model_name', sqlite uses 'embedding_model'
             model_name = search_engine.config.get('model_name') or search_engine.config.get('embedding_model')
-        
+
         # Enhance query
         try:
             enhanced = preprocess_query(
@@ -401,7 +434,7 @@ class SearchService:
                 query_vector=enhanced.get('vector', []),
                 enhanced_text=enhanced['enhanced_text'],
                 count=request.count,
-                distance_threshold=request.distance,
+                similarity_threshold=request.similarity_threshold,
                 tags=request.tags
             )
         except Exception as e:

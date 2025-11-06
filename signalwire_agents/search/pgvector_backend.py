@@ -423,7 +423,7 @@ class PgVectorSearchBackend:
             return {}
     
     def search(self, query_vector: List[float], enhanced_text: str,
-              count: int = 5, distance_threshold: float = 0.0,
+              count: int = 5, similarity_threshold: float = 0.0,
               tags: Optional[List[str]] = None,
               keyword_weight: Optional[float] = None) -> List[Dict[str, Any]]:
         """
@@ -433,7 +433,7 @@ class PgVectorSearchBackend:
             query_vector: Embedding vector for the query
             enhanced_text: Processed query text for keyword search
             count: Number of results to return
-            distance_threshold: Minimum similarity score
+            similarity_threshold: Minimum similarity score
             tags: Filter by tags
             keyword_weight: Manual keyword weight (0.0-1.0). If None, uses default weighting
             
@@ -447,33 +447,39 @@ class PgVectorSearchBackend:
         
         # Vector search
         vector_results = self._vector_search(query_vector, count * 2, tags)
-        
+
         # Keyword search
         keyword_results = self._keyword_search(enhanced_text, count * 2, tags)
-        
+
         # Metadata search
         metadata_results = self._metadata_search(query_terms, count * 2, tags)
-        
+
+
         # Merge all results
         merged_results = self._merge_all_results(vector_results, keyword_results, metadata_results, keyword_weight)
-        
+
+
         # Filter by distance threshold
         filtered_results = [
-            r for r in merged_results 
-            if r['score'] >= distance_threshold
+            r for r in merged_results
+            if r['score'] >= similarity_threshold
         ]
+
         
         # Ensure 'score' field exists for CLI compatibility
         for r in filtered_results:
             if 'score' not in r:
                 r['score'] = r.get('final_score', 0.0)
-        
+
         return filtered_results[:count]
     
     def _vector_search(self, query_vector: List[float], count: int,
                       tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Perform vector similarity search"""
         with self.conn.cursor() as cursor:
+            # Set ef_search for HNSW index to ensure we get enough results
+            # ef_search must be at least as large as the LIMIT
+            cursor.execute(f"SET LOCAL hnsw.ef_search = {max(count, 40)}")
             # Build query
             query = f"""
                 SELECT id, content, filename, section, tags, metadata,
@@ -491,9 +497,9 @@ class PgVectorSearchBackend:
             
             query += " ORDER BY embedding <=> %s::vector LIMIT %s"
             params.extend([query_vector, count])
-            
+
             cursor.execute(query, params)
-            
+
             results = []
             for row in cursor.fetchall():
                 chunk_id, content, filename, section, tags_json, metadata_json, similarity = row

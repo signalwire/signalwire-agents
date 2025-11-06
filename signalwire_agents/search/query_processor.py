@@ -77,61 +77,58 @@ def load_spacy_model(language: str):
             _spacy_warning_shown = True
         return None
 
-# Global model cache
-_cached_model = None
+# Model cache - stores multiple models by name
+_model_cache = {}  # model_name -> SentenceTransformer instance
 _model_lock = None
 
 def set_global_model(model):
-    """Set the global cached model instance"""
-    global _cached_model
-    _cached_model = model
-    logger.info("Global model set for query processor")
+    """Legacy function - adds model to cache instead of setting globally"""
+    if model and hasattr(model, 'model_name'):
+        _model_cache[model.model_name] = model
+        logger.info(f"Model added to cache: {model.model_name}")
 
 def _get_cached_model(model_name: str = None):
     """Get or create cached sentence transformer model
-    
+
     Args:
         model_name: Optional model name. If not provided, uses default.
     """
-    global _cached_model, _model_lock
-    
+    global _model_cache, _model_lock
+
     # Default model
     if model_name is None:
         model_name = 'sentence-transformers/all-mpnet-base-v2'
-    
+
     # Initialize lock if needed
     if _model_lock is None:
         import threading
         _model_lock = threading.Lock()
-    
-    # Return cached model if available and same model
-    if _cached_model is not None:
-        # Check if it's the same model (simple check - assumes model has a name attribute)
-        try:
-            if hasattr(_cached_model, 'model_name') and _cached_model.model_name == model_name:
-                return _cached_model
-        except:
-            pass
-    
+
+    # Check if model is already in cache
+    if model_name in _model_cache:
+        return _model_cache[model_name]
+
     # Load model with lock to prevent race conditions
     with _model_lock:
         # Double check in case another thread loaded it
-        if _cached_model is not None:
-            try:
-                if hasattr(_cached_model, 'model_name') and _cached_model.model_name == model_name:
-                    return _cached_model
-            except:
-                pass
-            
+        if model_name in _model_cache:
+            return _model_cache[model_name]
+
         try:
             from sentence_transformers import SentenceTransformer
             logger.info(f"Loading sentence transformer model: {model_name}")
-            _cached_model = SentenceTransformer(model_name)
-            _cached_model.model_name = model_name  # Store for later comparison
-            logger.info("Model loaded and cached successfully")
-            return _cached_model
+            model = SentenceTransformer(model_name)
+            # Store the model name for identification
+            model.model_name = model_name
+            # Add to cache
+            _model_cache[model_name] = model
+            logger.info(f"Successfully loaded and cached model: {model_name}")
+            return model
         except ImportError:
             logger.error("sentence-transformers not available. Cannot load model.")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to load model {model_name}: {e}")
             return None
 
 def vectorize_query(query: str, model=None, model_name: str = None):

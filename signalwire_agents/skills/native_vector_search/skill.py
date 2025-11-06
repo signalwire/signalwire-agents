@@ -74,9 +74,9 @@ class NativeVectorSearchSkill(SkillBase):
                 "minimum": 1,
                 "maximum": 20
             },
-            "distance_threshold": {
+            "similarity_threshold": {
                 "type": "number",
-                "description": "Maximum distance threshold for results (0.0 = no limit)",
+                "description": "Minimum similarity score for results (0.0 = no limit, 1.0 = exact match)",
                 "default": 0.0,
                 "required": False,
                 "minimum": 0.0,
@@ -250,7 +250,7 @@ class NativeVectorSearchSkill(SkillBase):
         self.build_index = self.params.get('build_index', False)
         self.source_dir = self.params.get('source_dir')
         self.count = self.params.get('count', 5)
-        self.distance_threshold = self.params.get('distance_threshold', 0.0)
+        self.similarity_threshold = self.params.get('similarity_threshold', 0.0)
         self.tags = self.params.get('tags', [])
         self.no_results_message = self.params.get(
             'no_results_message', 
@@ -550,9 +550,12 @@ class NativeVectorSearchSkill(SkillBase):
         
         try:
             # Perform search (local or remote)
+            self.logger.info(f"DEBUG: use_remote={self.use_remote}, remote_base_url={self.remote_base_url}")
             if self.use_remote:
                 # For remote searches, let the server handle query preprocessing
+                self.logger.info(f"DEBUG: Calling _search_remote with query='{query}', count={count}")
                 results = self._search_remote(query, None, count)
+                self.logger.info(f"DEBUG: _search_remote returned {len(results)} results")
             else:
                 # For local searches, preprocess the query locally
                 from signalwire_agents.search.query_processor import preprocess_query
@@ -575,7 +578,7 @@ class NativeVectorSearchSkill(SkillBase):
                     query_vector=enhanced.get('vector', []),
                     enhanced_text=enhanced['enhanced_text'],
                     count=count,
-                    distance_threshold=self.distance_threshold,
+                    similarity_threshold=self.similarity_threshold,
                     tags=self.tags,
                     keyword_weight=self.keyword_weight,
                     original_query=query  # Pass original for exact match boosting
@@ -721,20 +724,23 @@ class NativeVectorSearchSkill(SkillBase):
                 "query": query,
                 "index_name": self.index_name,
                 "count": count,
-                "distance": self.distance_threshold,
-                "tags": self.tags,
-                "language": "en"
+                "similarity_threshold": self.similarity_threshold,
+                "tags": self.tags
             }
-            
+
+            url = f"{self.remote_base_url}/search"
+            self.logger.info(f"DEBUG: Sending POST to {url} with request: {search_request}")
+
             response = requests.post(
-                f"{self.remote_base_url}/search",
+                url,
                 json=search_request,
                 auth=self.remote_auth,
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
+                self.logger.info(f"DEBUG: Got response with {len(data.get('results', []))} results")
                 # Convert remote response format to local format
                 results = []
                 for result in data.get('results', []):

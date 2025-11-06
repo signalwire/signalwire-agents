@@ -204,7 +204,7 @@ class SigmondRemoteSearch(AgentBase):
             "remote_url": "http://localhost:8001",  # Connect to standalone search server
             "index_name": "docs",  # Use the docs index on the remote server
             "count": 5,
-            "distance_threshold": 0.1,
+            "similarity_threshold": 0.1,
             "response_prefix": "When results contain programming code, Do not read any source code aloud, just reference what file to look in for the answer",
             "response_postfix": "Express this information in a format that is easy to understand when read aloud.",
             "no_results_message": "I couldn't find information about '{query}' in the SDK documentation. Try rephrasing your question or asking about a different SDK feature.",

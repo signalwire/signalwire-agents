@@ -2724,7 +2724,7 @@ Local document search with vector similarity and keyword search.
 - `index_path` (str): Path to search index file (required)
 - `tool_name` (Optional[str]): Custom tool name (default: "search_documents")
 - `max_results` (Optional[int]): Maximum results to return (default: 5)
-- `similarity_threshold` (Optional[float]): Minimum similarity score (default: 0.1)
+- `similarity_threshold` (Optional[float]): Minimum similarity score 0.0-1.0 (default: 0.0). Higher values are stricter, lower values are more permissive. Typical range: 0.2-0.4 for all-MiniLM-L6-v2, 0.3-0.5 for all-mpnet-base-v2
 
 **Usage:**
 ```python
@@ -2738,7 +2738,7 @@ agent.add_skill("native_vector_search", {
     "index_path": "./docs.swsearch",
     "tool_name": "search_docs",
     "max_results": 10,
-    "similarity_threshold": 0.3
+    "similarity_threshold": 0.25
 })
 ```
 
