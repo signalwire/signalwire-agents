@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.55] - 2025-11-09
+
+- Version bump
+
 ## [0.1.54] - 2025-10-22
 
 - Version bump
