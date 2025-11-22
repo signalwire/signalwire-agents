@@ -15,11 +15,19 @@ Script to bump version numbers across the SignalWire Agents project.
 import re
 import os
 import sys
+import argparse
 from pathlib import Path
 
 def parse_version(version_str):
     """Parse a version string into a tuple of integers."""
     return tuple(map(int, version_str.split('.')))
+
+def validate_version(version_str):
+    """Validate that a version string is in the correct format (X.Y.Z)."""
+    pattern = r'^\d+\.\d+\.\d+$'
+    if not re.match(pattern, version_str):
+        raise ValueError(f"Invalid version format: {version_str}. Expected format: X.Y.Z (e.g., 1.0.0)")
+    return version_str
 
 def increment_version(version_str):
     """Increment the patch version number."""
@@ -109,16 +117,22 @@ def update_agent_server(file_path, current_version, new_version):
 
 def main():
     """Main function to bump version numbers."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Bump version numbers across the SignalWire Agents project.')
+    parser.add_argument('version', nargs='?', default=None,
+                        help='Target version (e.g., 1.0.0). If not provided, increments patch version.')
+    args = parser.parse_args()
+
     # Define paths
     root_dir = Path(__file__).parent
     pyproject_path = root_dir / "pyproject.toml"
     init_path = root_dir / "signalwire_agents" / "__init__.py"
     changelog_path = root_dir / "CHANGELOG.md"
     agent_server_path = root_dir / "signalwire_agents" / "agent_server.py"
-    
+
     # Get current version
     current_version = None
-    
+
     # Try to get version from __init__.py first
     if init_path.exists():
         with open(init_path, 'r') as f:
@@ -126,7 +140,7 @@ def main():
             match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
             if match:
                 current_version = match.group(1)
-    
+
     # If not found, try pyproject.toml
     if current_version is None and pyproject_path.exists():
         with open(pyproject_path, 'r') as f:
@@ -134,13 +148,21 @@ def main():
             match = re.search(r'version\s*=\s*"([^"]+)"', content)
             if match:
                 current_version = match.group(1)
-    
+
     if current_version is None:
         print("Error: Could not find current version in any files.")
         sys.exit(1)
-    
-    # Calculate new version
-    new_version = increment_version(current_version)
+
+    # Determine new version
+    if args.version:
+        try:
+            new_version = validate_version(args.version)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    else:
+        new_version = increment_version(current_version)
+
     print(f"Bumping version: {current_version} -> {new_version}")
     
     # Update files
