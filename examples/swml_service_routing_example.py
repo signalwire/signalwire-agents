@@ -52,7 +52,7 @@ class RoutingExample(SWMLService):
         
         # Create a basic SWML document
         self.reset_document()
-        self.add_answer_verb()
+        self.add_verb("answer", {})
         self.add_verb("play", {"url": "say:Hello from the main service!"})
         self.add_verb("hangup", {})
         
@@ -184,12 +184,12 @@ class RoutingExample(SWMLService):
 def main():
     # Create an instance of our example service
     service = RoutingExample()
-    
-    # Start the service
-    print("\nStarting agent server...")
-    print("Note: Works in any deployment mode (server/CGI/Lambda)")
-    service.run()
+    return service
 
 
 if __name__ == "__main__":
-    main() 
+    service = main()
+    # Start the service
+    print("\nStarting agent server...")
+    print("Note: Works in any deployment mode (server/CGI/Lambda)")
+    service.serve() 

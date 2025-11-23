@@ -196,38 +196,48 @@ class SigmondRemoteSearch(AgentBase):
     
     def _setup_remote_search(self):
         """Setup remote search connection to standalone search server"""
-        
+
+        # Get remote URL from environment or use default
+        remote_url = os.environ.get("SEARCH_SERVER_URL", "http://localhost:8001")
+
         # Remote search configuration
-        self.add_skill("native_vector_search", {
-            "tool_name": "search_docs",
-            "description": "Search the SignalWire Agents SDK documentation for information about features, guides, concepts, and examples",
-            "remote_url": "http://localhost:8001",  # Connect to standalone search server
-            "index_name": "docs",  # Use the docs index on the remote server
-            "count": 5,
-            "similarity_threshold": 0.1,
-            "response_prefix": "When results contain programming code, Do not read any source code aloud, just reference what file to look in for the answer",
-            "response_postfix": "Express this information in a format that is easy to understand when read aloud.",
-            "no_results_message": "I couldn't find information about '{query}' in the SDK documentation. Try rephrasing your question or asking about a different SDK feature.",
-            "swaig_fields": {
-                "fillers": {
-                    "en-US": [
-                        "Let me search the documentation for you",
-                        "Checking the remote search server",
-                        "Looking that up in the documentation"
-                    ]
+        try:
+            self.add_skill("native_vector_search", {
+                "tool_name": "search_docs",
+                "description": "Search the SignalWire Agents SDK documentation for information about features, guides, concepts, and examples",
+                "remote_url": remote_url,  # Connect to standalone search server
+                "index_name": "docs",  # Use the docs index on the remote server
+                "count": 5,
+                "similarity_threshold": 0.1,
+                "response_prefix": "When results contain programming code, Do not read any source code aloud, just reference what file to look in for the answer",
+                "response_postfix": "Express this information in a format that is easy to understand when read aloud.",
+                "no_results_message": "I couldn't find information about '{query}' in the SDK documentation. Try rephrasing your question or asking about a different SDK feature.",
+                "swaig_fields": {
+                    "fillers": {
+                        "en-US": [
+                            "Let me search the documentation for you",
+                            "Checking the remote search server",
+                            "Looking that up in the documentation"
+                        ]
+                    }
                 }
-            }
-        })
+            })
+        except Exception as e:
+            logger.warning(f"Failed to setup remote search skill: {e}")
+            logger.warning(f"Make sure the search server is running at {remote_url}")
+            logger.warning("The agent will run without search capabilities")
 
 def main():
     """Run the Sigmond Remote Search Bot"""
     logger.info("Starting Sigmond Remote Search Bot...")
     logger.info("This bot connects to a remote search server for SDK documentation")
-    logger.info("Make sure the search server is running at http://localhost:8001")
-    
-    # Create and run the agent
+
+    remote_url = os.environ.get("SEARCH_SERVER_URL", "http://localhost:8001")
+    logger.info(f"Search server URL: {remote_url}")
+
+    # Create the agent
     agent = SigmondRemoteSearch()
-    
+
     logger.info("Sigmond Remote Search Bot is ready")
     logger.info("This agent uses remote search - no local dependencies needed!")
     logger.info("Try asking questions like:")
@@ -236,9 +246,10 @@ def main():
     logger.info("- 'How do I add state management?'")
     logger.info("- 'Show me examples of SWAIG functions'")
     logger.info("- 'How do I deploy my agent?'")
-    logger.info("Starting server...")
-    
-    agent.run()
+
+    return agent
 
 if __name__ == "__main__":
-    main() 
+    agent = main()
+    logger.info("Starting server...")
+    agent.run() 

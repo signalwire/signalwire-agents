@@ -78,7 +78,7 @@ def main():
                         help='PostgreSQL connection string for pgvector backend')
     parser.add_argument('--port', type=int, default=8001,
                         help='Port to run the server on (default: 8001)')
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     
     # Validate pgvector arguments
     if args.backend == 'pgvector' and not args.connection_string:

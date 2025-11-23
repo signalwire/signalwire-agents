@@ -43,7 +43,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run the ConciergeAgent Example")
     parser.add_argument("--port", type=int, default=3000, help="Port to run the server on")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind the server to")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     
     # Find schema.json in the current directory or parent directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,17 +144,17 @@ def main():
         port=args.port
     )
     
-    # Print credentials
-    username, password, source = agent.get_basic_auth_credentials(include_source=True)
-    
-    logger.info(f"Starting Concierge Agent for {venue_name}")
-    logger.info(f"Services available: {', '.join(services)}")
-    logger.info(f"Amenities available: {', '.join(amenities.keys())}")
-    
-    print("\nStarting agent server...")
-    print("Note: Works in any deployment mode (server/CGI/Lambda)")
-    agent.run()
+    return agent
 
 
 if __name__ == "__main__":
-    main() 
+    agent = main()
+
+    # Print credentials
+    username, password, source = agent.get_basic_auth_credentials(include_source=True)
+
+    logger.info(f"Starting Concierge Agent for Oceanview Resort")
+
+    print("\nStarting agent server...")
+    print("Note: Works in any deployment mode (server/CGI/Lambda)")
+    agent.run() 

@@ -116,25 +116,27 @@ def main():
     parser = argparse.ArgumentParser(description="ReceptionistAgent Example")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind the server to")
     parser.add_argument("--port", type=int, default=3000, help="Port to bind the server to")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     
     # Create our custom receptionist agent
     agent = CustomReceptionistAgent(host=args.host, port=args.port)
-    
+    return agent
+
+
+if __name__ == "__main__":
+    agent = main()
+
     # Get basic auth credentials for display
     username, password = agent.get_basic_auth_credentials()
-    
+
     # Print information about the agent
     print("Starting the Custom Receptionist Agent")
     print("----------------------------------------")
-    print(f"URL: http://{args.host}:{args.port}{agent.route}")
+    print(f"URL: http://0.0.0.0:3000{agent.route}")
     print(f"Basic Auth: {username}:{password}")
     print("----------------------------------------")
     print("Press Ctrl+C to stop the agent")
-    
+
     print("\nStarting agent server...")
     print("Note: Works in any deployment mode (server/CGI/Lambda)")
-    agent.run()
-
-if __name__ == "__main__":
-    main() 
+    agent.run() 
