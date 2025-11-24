@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "signalwire_agents"
-version = "1.0.2"
+version = "1.0.3"
 description = "SignalWire AI Agents SDK"
 authors = [
     {name = "SignalWire Team", email = "info@signalwire.com"}
