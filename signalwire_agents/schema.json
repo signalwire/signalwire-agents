@@ -61,6 +61,9 @@
                     "$ref": "#/$defs/Denoise"
                 },
                 {
+                    "$ref": "#/$defs/EnterQueue"
+                },
+                {
                     "$ref": "#/$defs/Execute"
                 },
                 {
@@ -303,6 +306,23 @@
             },
             "title": "Denoise object"
         },
+        "EnterQueue": {
+            "type": "object",
+            "properties": {
+                "enter_queue": {
+                    "$ref": "#/$defs/EnterQueueObject",
+                    "description": "Place the call in a queue.",
+                    "title": "enter_queue"
+                }
+            },
+            "required": [
+                "enter_queue"
+            ],
+            "unevaluatedProperties": {
+                "not": {}
+            },
+            "title": "EnterQueue object"
+        },
         "Execute": {
             "type": "object",
             "properties": {
@@ -311,7 +331,7 @@
                     "properties": {
                         "dest": {
                             "type": "string",
-                            "description": "Specifies what to execute. The value can be one of: \n<section_name> - section in the current document to execute.\nhttps://<URL>\" - URL pointing to the document to execute. Sends HTTP POST."
+                            "description": "Specifies what to execute. The value can be one of:\n- `<section_name>` - section in the current document to execute\n- A URL (http or https) that returns a SWML document - Sends HTTP POST\n- An inline SWML document (as a JSON string)"
                         },
                         "params": {
                             "type": "object",
@@ -1561,7 +1581,7 @@
                     "properties": {
                         "dest": {
                             "type": "string",
-                            "description": "Specifies where to transfer the call. The value can be one of:\n    - `<section_name>` - section in the SWML document to jump to.\n    - `https://<URL>` - URL pointing to the document to transfer to. Sends HTTP POST."
+                            "description": "Specifies where to transfer the call. The value can be one of:\n- `<section_name>` - section in the SWML document to jump to\n- A URL (http or https) that returns a SWML document - Sends HTTP POST\n- An inline SWML document (as a JSON string)"
                         },
                         "params": {
                             "type": "object",
@@ -1642,7 +1662,7 @@
                         "payment_connector_url": {
                             "type": "string",
                             "format": "uri",
-                            "description": "The URL to make POST requests with all the gathered payment details.\nThis URL is used to process the final payment transaction and return the results through the response.\n\nVisit https://developer.signalwire.com//swml/methods/pay/payment_connector_url for more important information."
+                            "description": "The URL to make POST requests with all the gathered payment details.\nThis URL is used to process the final payment transaction and return the results through the response.\n\nVisit https://developer.signalwire.com/swml/methods/pay/payment_connector_url for more important information."
                         },
                         "charge_amount": {
                             "type": "string",
@@ -2223,6 +2243,17 @@
                     "format": "uri",
                     "description": "http or https URL to deliver call status events"
                 },
+                "transfer_after_bridge": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "SWML to execute after the bridge completes. This defines what should happen after the call is connected and the bridge ends.\nCan be either:\n- A URL (http or https) that returns a SWML document\n- An inline SWML document (as a JSON string)\n\n**Note:** This parameter is REQUIRED when connecting to a queue (when `to` starts with \"queue:\")"
+                },
                 "call_state_events": {
                     "type": "array",
                     "items": {
@@ -2235,7 +2266,7 @@
                 },
                 "to": {
                     "type": "string",
-                    "description": "The SIP URI or phone number to dial."
+                    "description": "Destination to dial. Can be:\n- Phone number in E.164 format (e.g., \"+15552345678\")\n- SIP URI (e.g., \"sip:alice@example.com\")\n- Call Fabric Resource address (e.g., \"/public/test_room\")\n- Queue (e.g., \"queue:support\")"
                 }
             },
             "required": [
@@ -2397,6 +2428,17 @@
                     "type": "string",
                     "format": "uri",
                     "description": "http or https URL to deliver call status events"
+                },
+                "transfer_after_bridge": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "SWML to execute after the bridge completes. This defines what should happen after the call is connected and the bridge ends.\nCan be either:\n- A URL (http or https) that returns a SWML document\n- An inline SWML document (as a JSON string)\n\n**Note:** This parameter is REQUIRED when connecting to a queue (when `to` starts with \"queue:\")"
                 },
                 "call_state_events": {
                     "type": "array",
@@ -2574,6 +2616,17 @@
                     "type": "string",
                     "format": "uri",
                     "description": "http or https URL to deliver call status events"
+                },
+                "transfer_after_bridge": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "SWML to execute after the bridge completes. This defines what should happen after the call is connected and the bridge ends.\nCan be either:\n- A URL (http or https) that returns a SWML document\n- An inline SWML document (as a JSON string)\n\n**Note:** This parameter is REQUIRED when connecting to a queue (when `to` starts with \"queue:\")"
                 },
                 "call_state_events": {
                     "type": "array",
@@ -2753,6 +2806,17 @@
                     "format": "uri",
                     "description": "http or https URL to deliver call status events"
                 },
+                "transfer_after_bridge": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "SWML to execute after the bridge completes. This defines what should happen after the call is connected and the bridge ends.\nCan be either:\n- A URL (http or https) that returns a SWML document\n- An inline SWML document (as a JSON string)\n\n**Note:** This parameter is REQUIRED when connecting to a queue (when `to` starts with \"queue:\")"
+                },
                 "call_state_events": {
                     "type": "array",
                     "items": {
@@ -2781,6 +2845,63 @@
                 "not": {}
             },
             "title": "ConnectDeviceSerialParallel object"
+        },
+        "EnterQueueObject": {
+            "type": "object",
+            "properties": {
+                "queue_name": {
+                    "type": "string",
+                    "description": "Name of the queue to enter."
+                },
+                "transfer_after_bridge": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "SWML to execute after the bridge completes. This defines what should happen after the call is connected to an agent and the bridge ends.\nCan be either:\n- A URL (http or https) that returns a SWML document\n- An inline SWML document (as a JSON string)"
+                },
+                "status_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTP or HTTPS URL to deliver queue status events. Default not set"
+                },
+                "wait_url": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "format": "uri"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "description": "URL for media to play while waiting in the queue. Default hold music will be played if not set"
+                },
+                "wait_time": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "$ref": "#/$defs/SWMLVar"
+                        }
+                    ],
+                    "minimum": 1,
+                    "description": "Maximum time in seconds to wait in the queue before timeout. Default `3600`"
+                }
+            },
+            "required": [
+                "queue_name",
+                "transfer_after_bridge"
+            ],
+            "unevaluatedProperties": {
+                "not": {}
+            },
+            "title": "EnterQueueObject object"
         },
         "ExecuteSwitch": {
             "type": "object",
@@ -8666,6 +8787,12 @@
                     "$ref": "#/$defs/SWMLAction"
                 },
                 {
+                    "$ref": "#/$defs/ChangeContextAction"
+                },
+                {
+                    "$ref": "#/$defs/ChangeStepAction"
+                },
+                {
                     "$ref": "#/$defs/ContextSwitchAction"
                 },
                 {
@@ -8859,6 +8986,40 @@
                 "not": {}
             },
             "title": "SWMLAction object"
+        },
+        "ChangeContextAction": {
+            "type": "object",
+            "properties": {
+                "change_context": {
+                    "type": "string",
+                    "description": "The name of the context to switch to. The context must be defined in the AI's prompt.contexts configuration.",
+                    "title": "change_context"
+                }
+            },
+            "required": [
+                "change_context"
+            ],
+            "unevaluatedProperties": {
+                "not": {}
+            },
+            "title": "ChangeContextAction object"
+        },
+        "ChangeStepAction": {
+            "type": "object",
+            "properties": {
+                "change_step": {
+                    "type": "string",
+                    "description": "The name of the step to switch to. The step must be defined in the current context's steps array.",
+                    "title": "change_step"
+                }
+            },
+            "required": [
+                "change_step"
+            ],
+            "unevaluatedProperties": {
+                "not": {}
+            },
+            "title": "ChangeStepAction object"
         },
         "ContextSwitchAction": {
             "type": "object",
