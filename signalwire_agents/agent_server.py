@@ -549,11 +549,11 @@ class AgentServer:
                     # This is a request to an agent's sub-path
                     relative_path = full_path[len(route.lstrip("/")):]
                     relative_path = relative_path.lstrip("/")
-                    
+
                     # Route to appropriate handler based on path
                     if not relative_path or relative_path == "/":
                         return await agent._handle_root_request(request)
-                    
+
                     clean_path = relative_path.rstrip("/")
                     if clean_path == "debug":
                         return await agent._handle_debug_request(request)
@@ -564,7 +564,7 @@ class AgentServer:
                         return await agent._handle_post_prompt_request(request)
                     elif clean_path == "check_for_input":
                         return await agent._handle_check_for_input_request(request)
-                    
+
                     # Check for custom routing callbacks
                     if hasattr(agent, '_routing_callbacks'):
                         for callback_path, callback_fn in agent._routing_callbacks.items():
@@ -572,9 +572,26 @@ class AgentServer:
                             if clean_path == cb_path_clean:
                                 request.state.callback_path = callback_path
                                 return await agent._handle_root_request(request)
-            
-            # No matching agent found
-            return {"error": "Not Found"}
+
+            # No matching agent - check for static files
+            if hasattr(self, '_static_directories'):
+                # Check each static directory route
+                for static_route, static_dir in self._static_directories.items():
+                    # For root static route, serve any unmatched path
+                    if static_route == "" or static_route == "/":
+                        response = self._serve_static_file(full_path, "")
+                        if response:
+                            return response
+                    # For prefixed static routes, check if path matches
+                    elif full_path.startswith(static_route.lstrip("/") + "/") or full_path == static_route.lstrip("/"):
+                        relative_path = full_path[len(static_route.lstrip("/")):].lstrip("/")
+                        response = self._serve_static_file(relative_path, static_route)
+                        if response:
+                            return response
+
+            # No matching agent or static file found
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
             
         # Set host and port
         host = host or self.host
@@ -634,13 +651,13 @@ class AgentServer:
                 log_level=self.log_level
             )
 
-    def register_global_routing_callback(self, callback_fn: Callable[[Request, Dict[str, Any]], Optional[str]], 
+    def register_global_routing_callback(self, callback_fn: Callable[[Request, Dict[str, Any]], Optional[str]],
                                         path: str) -> None:
         """
         Register a routing callback across all agents
-        
+
         This allows you to add unified routing logic to all agents at the same path.
-        
+
         Args:
             callback_fn: The callback function to register
             path: The path to register the callback at
@@ -648,11 +665,107 @@ class AgentServer:
         # Normalize the path
         if not path.startswith("/"):
             path = f"/{path}"
-        
+
         path = path.rstrip("/")
-        
+
         # Register with all existing agents
         for agent in self.agents.values():
             agent.register_routing_callback(callback_fn, path=path)
-        
+
         self.logger.info(f"Registered global routing callback at {path} on all agents")
+
+    def serve_static_files(self, directory: str, route: str = "/") -> None:
+        """
+        Serve static files from a directory.
+
+        This method properly integrates static file serving with agent routes,
+        ensuring that agent routes take priority over static files.
+
+        Unlike using StaticFiles.mount("/", ...) directly on self.app, this method
+        uses explicit route handlers that work correctly with agent routes.
+
+        Args:
+            directory: Path to the directory containing static files
+            route: URL path prefix for static files (default: "/" for root)
+
+        Example:
+            server = AgentServer()
+            server.register(SupportAgent(), "/support")
+            server.serve_static_files("./web")  # Serves at /
+            # /support -> SupportAgent
+            # /index.html -> ./web/index.html
+            # / -> ./web/index.html
+        """
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+        from fastapi import HTTPException
+
+        # Normalize directory path
+        static_dir = Path(directory).resolve()
+
+        if not static_dir.exists():
+            raise ValueError(f"Directory does not exist: {directory}")
+
+        if not static_dir.is_dir():
+            raise ValueError(f"Path is not a directory: {directory}")
+
+        # Normalize route
+        if not route.startswith("/"):
+            route = f"/{route}"
+        route = route.rstrip("/")
+
+        # Store static directory config for use by catch-all handler
+        if not hasattr(self, '_static_directories'):
+            self._static_directories = {}
+
+        self._static_directories[route] = static_dir
+
+        self.logger.info(f"Serving static files from '{directory}' at route '{route or '/'}'")
+
+    def _serve_static_file(self, file_path: str, route: str = "/") -> Optional[Response]:
+        """
+        Internal method to serve a static file.
+
+        Args:
+            file_path: The requested file path
+            route: The route prefix
+
+        Returns:
+            FileResponse if file exists, None otherwise
+        """
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+
+        if not hasattr(self, '_static_directories'):
+            return None
+
+        static_dir = self._static_directories.get(route)
+        if not static_dir:
+            return None
+
+        # Default to index.html for empty path
+        if not file_path:
+            file_path = "index.html"
+
+        full_path = static_dir / file_path
+
+        # Security: prevent path traversal
+        try:
+            full_path = full_path.resolve()
+            if not str(full_path).startswith(str(static_dir)):
+                return None
+        except Exception:
+            return None
+
+        # Handle directory requests
+        if full_path.is_dir():
+            index_path = full_path / "index.html"
+            if index_path.exists():
+                full_path = index_path
+            else:
+                return None
+
+        if not full_path.exists():
+            return None
+
+        return FileResponse(full_path)
