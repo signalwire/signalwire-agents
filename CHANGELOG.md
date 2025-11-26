@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.4] - 2025-11-26
+
+- Add call flow verb insertion API for customizing SWML call flow
+  - `add_pre_answer_verb()` - Add verbs before answering (ringback, screening, routing)
+  - `add_post_answer_verb()` - Add verbs after answer, before AI (welcome messages, disclaimers)
+  - `add_post_ai_verb()` - Add verbs after AI ends (cleanup, transfers, logging)
+  - `add_answer_verb()` - Configure the answer verb (max_duration, etc.)
+  - `clear_pre_answer_verbs()`, `clear_post_answer_verbs()`, `clear_post_ai_verbs()`
+- Fix `auto_answer=False` constructor parameter to actually skip the answer verb
+- Add validation for pre-answer safe verbs with helpful warnings
+
 ## [1.0.3] - 2025-11-24
 
 - Version bump

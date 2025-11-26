@@ -266,7 +266,21 @@ class AgentBase(
         
         # Initialize SWAIG query params for dynamic config
         self._swaig_query_params = {}
-    
+
+        # Initialize verb insertion points for call flow customization
+        self._pre_answer_verbs = []    # Verbs to run before answer (e.g., ringback, screening)
+        self._answer_config = {}        # Configuration for the answer verb
+        self._post_answer_verbs = []    # Verbs to run after answer, before AI (e.g., announcements)
+        self._post_ai_verbs = []        # Verbs to run after AI ends (e.g., cleanup, transfers)
+
+    # Verb categories for pre-answer validation
+    _PRE_ANSWER_SAFE_VERBS = {
+        "transfer", "execute", "return", "label", "goto", "request",
+        "switch", "cond", "if", "eval", "set", "unset", "hangup",
+        "send_sms", "sleep", "stop_record_call", "stop_denoise", "stop_tap"
+    }
+    _AUTO_ANSWER_VERBS = {"play", "connect"}
+
     @staticmethod
     def _load_service_config(config_file: Optional[str], service_name: str) -> dict:
         """Load service configuration from config file if available"""
@@ -380,14 +394,166 @@ class AgentBase(
     def on_summary(self, summary: Optional[Dict[str, Any]], raw_data: Optional[Dict[str, Any]] = None) -> None:
         """
         Called when a post-prompt summary is received
-        
+
         Args:
             summary: The summary object or None if no summary was found
             raw_data: The complete raw POST data from the request
         """
         # Default implementation does nothing
         pass
-    
+
+    # ==================== Call Flow Verb Insertion Methods ====================
+
+    def add_pre_answer_verb(self, verb_name: str, config: Dict[str, Any]) -> 'AgentBase':
+        """
+        Add a verb to run before the call is answered.
+
+        Pre-answer verbs execute while the call is still ringing. Only certain
+        verbs are safe to use before answering:
+
+        Safe verbs: transfer, execute, return, label, goto, request, switch,
+                   cond, if, eval, set, unset, hangup, send_sms, sleep,
+                   stop_record_call, stop_denoise, stop_tap
+
+        Verbs with auto_answer option (play, connect): Must include
+        "auto_answer": False in config to prevent automatic answering.
+
+        Args:
+            verb_name: The SWML verb name (e.g., "play", "sleep", "request")
+            config: Verb configuration dictionary
+
+        Returns:
+            Self for method chaining
+
+        Raises:
+            ValueError: If verb is not safe for pre-answer use
+
+        Example:
+            # Play ringback tone before answering
+            agent.add_pre_answer_verb("play", {
+                "urls": ["ring:us"],
+                "auto_answer": False
+            })
+        """
+        # Validate verb is safe for pre-answer use
+        if verb_name in self._AUTO_ANSWER_VERBS:
+            if not config.get("auto_answer") is False:
+                self.log.warning(
+                    "pre_answer_verb_will_answer",
+                    verb=verb_name,
+                    hint=f"Add 'auto_answer': False to prevent {verb_name} from answering the call"
+                )
+        elif verb_name not in self._PRE_ANSWER_SAFE_VERBS:
+            raise ValueError(
+                f"Verb '{verb_name}' is not safe for pre-answer use. "
+                f"Safe verbs: {', '.join(sorted(self._PRE_ANSWER_SAFE_VERBS))}"
+            )
+
+        self._pre_answer_verbs.append((verb_name, config))
+        return self
+
+    def add_answer_verb(self, config: Optional[Dict[str, Any]] = None) -> 'AgentBase':
+        """
+        Configure the answer verb.
+
+        The answer verb connects the call. Use this method to customize
+        answer behavior, such as setting max_duration.
+
+        Args:
+            config: Optional answer verb configuration (e.g., {"max_duration": 3600})
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            # Set maximum call duration to 1 hour
+            agent.add_answer_verb({"max_duration": 3600})
+        """
+        self._answer_config = config or {}
+        return self
+
+    def add_post_answer_verb(self, verb_name: str, config: Dict[str, Any]) -> 'AgentBase':
+        """
+        Add a verb to run after the call is answered but before the AI starts.
+
+        Post-answer verbs run after the call is connected. Common uses include
+        welcome messages, legal disclaimers, and hold music.
+
+        Args:
+            verb_name: The SWML verb name (e.g., "play", "sleep")
+            config: Verb configuration dictionary
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            # Play welcome message
+            agent.add_post_answer_verb("play", {
+                "url": "say:Welcome to Acme Corporation."
+            })
+            # Brief pause
+            agent.add_post_answer_verb("sleep", {"time": 500})
+        """
+        self._post_answer_verbs.append((verb_name, config))
+        return self
+
+    def add_post_ai_verb(self, verb_name: str, config: Dict[str, Any]) -> 'AgentBase':
+        """
+        Add a verb to run after the AI conversation ends.
+
+        Post-AI verbs run when the AI completes its conversation. Common uses
+        include clean disconnects, transfers, and logging.
+
+        Args:
+            verb_name: The SWML verb name (e.g., "hangup", "transfer", "request")
+            config: Verb configuration dictionary
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            # Log call completion and hang up
+            agent.add_post_ai_verb("request", {
+                "url": "https://api.example.com/call-complete",
+                "method": "POST"
+            })
+            agent.add_post_ai_verb("hangup", {})
+        """
+        self._post_ai_verbs.append((verb_name, config))
+        return self
+
+    def clear_pre_answer_verbs(self) -> 'AgentBase':
+        """
+        Remove all pre-answer verbs.
+
+        Returns:
+            Self for method chaining
+        """
+        self._pre_answer_verbs = []
+        return self
+
+    def clear_post_answer_verbs(self) -> 'AgentBase':
+        """
+        Remove all post-answer verbs.
+
+        Returns:
+            Self for method chaining
+        """
+        self._post_answer_verbs = []
+        return self
+
+    def clear_post_ai_verbs(self) -> 'AgentBase':
+        """
+        Remove all post-AI verbs.
+
+        Returns:
+            Self for method chaining
+        """
+        self._post_ai_verbs = []
+        return self
+
+    # ==================== End Call Flow Verb Insertion Methods ====================
+
     def enable_sip_routing(self, auto_map: bool = True, path: str = "/sip") -> 'AgentBase':
         """
         Enable SIP-based routing for this agent
@@ -746,15 +912,29 @@ class AgentBase(
             if hasattr(agent_to_use, '_post_prompt_url_override') and agent_to_use._post_prompt_url_override:
                 post_prompt_url = agent_to_use._post_prompt_url_override
                 
-        # Add answer verb with auto-answer enabled
-        agent_to_use.add_verb("answer", {})
-        
-        # Add recording if enabled
+        # ========== PHASE 1: PRE-ANSWER VERBS ==========
+        # These run while the call is still ringing
+        for verb_name, verb_config in agent_to_use._pre_answer_verbs:
+            agent_to_use.add_verb(verb_name, verb_config)
+
+        # ========== PHASE 2: ANSWER VERB ==========
+        # Only add answer verb if auto_answer is enabled
+        if agent_to_use._auto_answer:
+            agent_to_use.add_verb("answer", agent_to_use._answer_config)
+
+        # ========== PHASE 3: POST-ANSWER VERBS ==========
+        # These run after answer but before AI
+
+        # Add recording if enabled (this is a post-answer verb)
         if agent_to_use._record_call:
             agent_to_use.add_verb("record_call", {
                 "format": agent_to_use._record_format,
                 "stereo": agent_to_use._record_stereo
             })
+
+        # Add user-defined post-answer verbs
+        for verb_name, verb_config in agent_to_use._post_answer_verbs:
+            agent_to_use.add_verb(verb_name, verb_config)
         
         # Use the AI verb handler to build and validate the AI verb config
         ai_config = {}
@@ -881,10 +1061,16 @@ class AgentBase(
         
         if agent_to_use._global_data and "global_data" not in ai_config:
             ai_config["global_data"] = agent_to_use._global_data
-        
+
+        # ========== PHASE 4: AI VERB ==========
         # Add the AI verb to the document
         agent_to_use.add_verb("ai", ai_config)
-        
+
+        # ========== PHASE 5: POST-AI VERBS ==========
+        # These run after the AI conversation ends
+        for verb_name, verb_config in agent_to_use._post_ai_verbs:
+            agent_to_use.add_verb(verb_name, verb_config)
+
         # Apply any modifications from the callback to agent state
         if modifications and isinstance(modifications, dict):
             # Handle global_data modifications by updating the AI config directly
@@ -900,16 +1086,31 @@ class AgentBase(
             
             # Clear and rebuild the document with the modified AI config
             agent_to_use.reset_document()
-            agent_to_use.add_verb("answer", {})
-            
-            # Add recording if enabled
+
+            # Rebuild with 5-phase approach
+            # PHASE 1: Pre-answer verbs
+            for verb_name, verb_config in agent_to_use._pre_answer_verbs:
+                agent_to_use.add_verb(verb_name, verb_config)
+
+            # PHASE 2: Answer verb (if auto_answer enabled)
+            if agent_to_use._auto_answer:
+                agent_to_use.add_verb("answer", agent_to_use._answer_config)
+
+            # PHASE 3: Post-answer verbs
             if agent_to_use._record_call:
                 agent_to_use.add_verb("record_call", {
                     "format": agent_to_use._record_format,
                     "stereo": agent_to_use._record_stereo
                 })
-            
+            for verb_name, verb_config in agent_to_use._post_answer_verbs:
+                agent_to_use.add_verb(verb_name, verb_config)
+
+            # PHASE 4: AI verb
             agent_to_use.add_verb("ai", ai_config)
+
+            # PHASE 5: Post-AI verbs
+            for verb_name, verb_config in agent_to_use._post_ai_verbs:
+                agent_to_use.add_verb(verb_name, verb_config)
         
         # Return the rendered document as a string
         return agent_to_use.render_document()
@@ -1015,7 +1216,13 @@ class AgentBase(
         ephemeral_agent._pronounce = copy.deepcopy(self._pronounce)
         ephemeral_agent._global_data = copy.deepcopy(self._global_data)
         ephemeral_agent._function_includes = copy.deepcopy(self._function_includes)
-        
+
+        # Deep copy verb insertion points for call flow customization
+        ephemeral_agent._pre_answer_verbs = copy.deepcopy(self._pre_answer_verbs)
+        ephemeral_agent._answer_config = copy.deepcopy(self._answer_config)
+        ephemeral_agent._post_answer_verbs = copy.deepcopy(self._post_answer_verbs)
+        ephemeral_agent._post_ai_verbs = copy.deepcopy(self._post_ai_verbs)
+
         # Deep copy LLM parameters
         ephemeral_agent._prompt_llm_params = copy.deepcopy(self._prompt_llm_params)
         ephemeral_agent._post_prompt_llm_params = copy.deepcopy(self._post_prompt_llm_params)
