@@ -39,7 +39,8 @@ AgentBase(
     schema_path: Optional[str] = None,
     suppress_logs: bool = False,
     enable_post_prompt_override: bool = False,
-    check_for_input_override: bool = False
+    check_for_input_override: bool = False,
+    config_file: Optional[str] = None
 )
 ```
 
@@ -62,6 +63,7 @@ AgentBase(
 - `suppress_logs` (bool): Suppress logging output (default: False)
 - `enable_post_prompt_override` (bool): Allow post-prompt URL override (default: False)
 - `check_for_input_override` (bool): Allow check-for-input URL override (default: False)
+- `config_file` (Optional[str]): Path to JSON configuration file with environment variable substitution support. See [Configuration Guide](configuration.md) for details.
 
 ### Core Methods
 
@@ -888,6 +890,130 @@ Set URL for post-prompt processing.
 agent.set_post_prompt_url("https://myserver.com/post-prompt")
 ```
 
+##### `add_swaig_query_params(params: dict) -> AgentBase`
+Add query parameters to be included in all SWAIG webhook URLs.
+
+This is useful for preserving dynamic configuration state across SWAIG callbacks. For example, if your dynamic config adds skills based on query parameters, you can pass those same parameters through to the SWAIG webhook so the same configuration is applied.
+
+**Parameters:**
+- `params` (dict): Dictionary of query parameter key-value pairs
+
+**Usage:**
+```python
+# In dynamic config callback, preserve configuration parameters
+def configure_agent(query_params, headers, body, agent):
+    customer_id = query_params.get("customer_id")
+    if customer_id:
+        # Pass through to SWAIG callbacks
+        agent.add_swaig_query_params({"customer_id": customer_id})
+        agent.add_skill("customer_lookup", {"customer_id": customer_id})
+
+agent.set_dynamic_config_callback(configure_agent)
+```
+
+##### `clear_swaig_query_params() -> AgentBase`
+Clear all SWAIG query parameters.
+
+**Usage:**
+```python
+agent.clear_swaig_query_params()
+```
+
+### Call Flow Verb Insertion
+
+These methods allow you to customize the SWML call flow by inserting verbs at different stages of the call lifecycle.
+
+##### `add_pre_answer_verb(verb_name: str, config: dict) -> AgentBase`
+Add a verb to run before the call is answered (while still ringing).
+
+**Safe pre-answer verbs:** `transfer`, `execute`, `return`, `label`, `goto`, `request`, `switch`, `cond`, `if`, `eval`, `set`, `unset`, `hangup`, `send_sms`, `sleep`, `stop_record_call`, `stop_denoise`, `stop_tap`
+
+**Parameters:**
+- `verb_name` (str): The SWML verb name
+- `config` (dict): Verb configuration dictionary
+
+**Usage:**
+```python
+# Send SMS before answering
+agent.add_pre_answer_verb("send_sms", {
+    "to": "+15551234567",
+    "from": "+15559876543",
+    "body": "Incoming call from AI agent"
+})
+
+# Set variables before answer
+agent.add_pre_answer_verb("set", {"call_start": "${system.timestamp}"})
+```
+
+##### `add_answer_verb(config: dict = None) -> AgentBase`
+Configure the answer verb that connects the call.
+
+**Parameters:**
+- `config` (dict, optional): Answer verb configuration (e.g., `{"max_duration": 3600}`)
+
+**Usage:**
+```python
+# Set maximum call duration to 1 hour
+agent.add_answer_verb({"max_duration": 3600})
+```
+
+##### `add_post_answer_verb(verb_name: str, config: dict) -> AgentBase`
+Add a verb to run after the call is answered but before the AI starts.
+
+**Parameters:**
+- `verb_name` (str): The SWML verb name (e.g., "play", "sleep")
+- `config` (dict): Verb configuration dictionary
+
+**Usage:**
+```python
+# Play welcome message before AI starts
+agent.add_post_answer_verb("play", {
+    "url": "say:Welcome to our AI assistant. This call may be recorded."
+})
+
+# Add a brief pause
+agent.add_post_answer_verb("sleep", {"duration": 1})
+```
+
+##### `add_post_ai_verb(verb_name: str, config: dict) -> AgentBase`
+Add a verb to run after the AI conversation ends.
+
+**Parameters:**
+- `verb_name` (str): The SWML verb name (e.g., "hangup", "transfer", "request")
+- `config` (dict): Verb configuration dictionary
+
+**Usage:**
+```python
+# Clean hangup after AI ends
+agent.add_post_ai_verb("hangup", {})
+
+# Transfer to human after AI conversation
+agent.add_post_ai_verb("transfer", {"to": "+15551234567"})
+
+# Log call completion
+agent.add_post_ai_verb("request", {
+    "url": "https://myserver.com/call-complete",
+    "method": "POST"
+})
+```
+
+##### `clear_pre_answer_verbs() -> AgentBase`
+Remove all pre-answer verbs.
+
+##### `clear_post_answer_verbs() -> AgentBase`
+Remove all post-answer verbs.
+
+##### `clear_post_ai_verbs() -> AgentBase`
+Remove all post-AI verbs.
+
+**Method Chaining Example:**
+```python
+agent.add_pre_answer_verb("set", {"source": "ai_agent"}) \
+     .add_answer_verb({"max_duration": 1800}) \
+     .add_post_answer_verb("play", {"url": "say:Hello!"}) \
+     .add_post_ai_verb("hangup", {})
+```
+
 ### Dynamic Configuration
 
 ##### `set_dynamic_config_callback`
@@ -1011,22 +1137,50 @@ main_app.include_router(agent_router, prefix="/agent")
 
 ```python
 def on_summary(
-    summary: Optional[Dict[str, Any]], 
+    summary: Optional[Dict[str, Any]],
     raw_data: Optional[Dict[str, Any]] = None
 ) -> None
 ```
-Override to handle conversation summaries.
+Override to handle conversation summaries. This callback is triggered when the AI generates a summary based on your `post_prompt` configuration.
 
 **Parameters:**
-- `summary` (Optional[Dict[str, Any]]): Summary data
-- `raw_data` (Optional[Dict[str, Any]]): Raw request data
+- `summary` (Optional[Dict[str, Any]]): Parsed summary data (from `post_prompt_data.parsed[0]`)
+- `raw_data` (Optional[Dict[str, Any]]): Complete raw POST data including `post_prompt_data` with both `raw` and `parsed` fields
 
 **Usage:**
 ```python
 class MyAgent(AgentBase):
+    def __init__(self):
+        super().__init__(name="summary-agent", route="/agent")
+
+        # Configure post-prompt to request JSON summary
+        self.set_post_prompt("""
+        Return a JSON summary of the conversation:
+        {
+            "topic": "MAIN_TOPIC",
+            "satisfied": true/false,
+            "follow_up_needed": true/false,
+            "key_points": ["point1", "point2"]
+        }
+        """)
+
     def on_summary(self, summary, raw_data):
-        print(f"Conversation summary: {summary}")
-        # Save to database, send notification, etc.
+        """Handle conversation summaries after call ends"""
+        if summary:
+            # Access parsed JSON fields directly
+            topic = summary.get("topic", "Unknown")
+            satisfied = summary.get("satisfied", False)
+
+            print(f"Call about: {topic}, Customer satisfied: {satisfied}")
+
+            # Save to database, send to CRM, trigger follow-up, etc.
+            if summary.get("follow_up_needed"):
+                self.schedule_follow_up(summary)
+
+        # Access raw summary text if needed
+        if raw_data and 'post_prompt_data' in raw_data:
+            raw_text = raw_data['post_prompt_data'].get('raw', '')
+            print(f"Raw summary: {raw_text}")
 ```
 
 ##### `on_function_call`

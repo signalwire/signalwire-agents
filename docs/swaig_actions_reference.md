@@ -240,16 +240,16 @@ result.say("Hello, how can I help you today?")
 
 **Proposed Python Method**:
 ```python
-result.play_background_audio(filename, wait=False)
+result.play_background_file(filename, wait=False)
 ```
 
 **Usage Examples**:
 ```python
 # Play background audio, AI will try to get user attention per attention timeout
-result.play_background_audio("hold_music.wav")
+result.play_background_file("hold_music.wav")
 
 # Play background audio, AI won't try to get user attention while playing
-result.play_background_audio("announcement.mp3", wait=True)
+result.play_background_file("announcement.mp3", wait=True)
 ```
 
 **Behavior Notes**:
@@ -274,12 +274,12 @@ result.play_background_audio("announcement.mp3", wait=True)
 
 **Proposed Python Method**:
 ```python
-result.stop_background_audio()
+result.stop_background_file()
 ```
 
 **Usage Examples**:
 ```python
-result.stop_background_audio()
+result.stop_background_file()
 ```
 
 ---

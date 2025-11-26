@@ -518,19 +518,19 @@ Make the agent speak specific text immediately.
 result.say("Please hold while I look that up for you")
 ```
 
-#### `play_background_audio(filename, wait=False)`
+#### `play_background_file(filename, wait=False)`
 Play audio file in background with attention control.
 
 ```python
-result.play_background_audio("hold_music.wav")                    # AI tries to get attention
-result.play_background_audio("announcement.mp3", wait=True)       # AI suppresses attention
+result.play_background_file("hold_music.wav")                    # AI tries to get attention
+result.play_background_file("announcement.mp3", wait=True)       # AI suppresses attention
 ```
 
-#### `stop_background_audio()`
+#### `stop_background_file()`
 Stop currently playing background audio.
 
 ```python
-result.stop_background_audio()
+result.stop_background_file()
 ```
 
 ---
@@ -710,7 +710,7 @@ All methods return `self` to enable fluent method chaining:
 ```python
 result = SwaigFunctionResult("Processing your request", post_process=True) \
     .update_global_data({"status": "processing"}) \
-    .play_background_audio("processing.wav", wait=True) \
+    .play_background_file("processing.wav", wait=True) \
     .set_end_of_speech_timeout(2500)
 
 # Complex chaining example
@@ -740,7 +740,7 @@ result = SwaigFunctionResult("Let me transfer you to billing") \
 ### Final State
 The framework now includes **10 virtual helpers total**:
 1. connect() - Call transfer/connect
-2. send_sms() - SMS messaging  
+2. send_sms() - SMS messaging
 3. pay() - Payment processing
 4. record_call() - Start background recording
 5. stop_record_call() - Stop background recording
@@ -748,4 +748,21 @@ The framework now includes **10 virtual helpers total**:
 7. sip_refer() - SIP REFER transfer
 8. join_conference() - Join audio conference with extensive options
 9. tap() - Start background call tap for monitoring
-10. stop_tap() - Stop background call tap 
+10. stop_tap() - Stop background call tap
+
+---
+
+## Related Documentation
+
+- **[API Reference](signalwire_agents_api_reference.md)** - Complete AgentBase and SwaigFunctionResult API reference
+- **[SWAIG Actions Reference](swaig_actions_reference.md)** - Low-level JSON action structures
+- **[Contexts Guide](contexts_guide.md)** - Using `swml_change_context()` and `swml_change_step()`
+- **[DataMap Guide](datamap_guide.md)** - Using SwaigFunctionResult with DataMap outputs
+- **[Agent Guide](agent_guide.md)** - General agent development guide
+
+### Example Files
+
+- `examples/simple_agent.py` - Basic SWAIG function usage
+- `examples/swaig_features_agent.py` - Advanced SWAIG features with fillers
+- `examples/record_call_example.py` - Recording and tapping calls
+- `examples/room_and_sip_example.py` - Room joining and SIP transfer 

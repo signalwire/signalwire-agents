@@ -330,31 +330,35 @@ search_tool = (DataMap('search_all')
 
 ## Expression-Based Tools
 
-For simple pattern matching without API calls, use expressions:
+For simple pattern matching without API calls, use expressions. The `expression()` method takes:
+- `test_value`: The value to test (typically `'${args.parameter_name}'`)
+- `pattern`: The regex pattern to match against
+- `output`: The `SwaigFunctionResult` to return on match
+- `nomatch_output` (optional): The result to return if pattern doesn't match
 
 ```python
 file_control = (DataMap('file_control')
     .description('Control file playback')
     .parameter('command', 'string', 'Playback command')
     .parameter('filename', 'string', 'File to control', required=False)
-    .expression(r'start.*', SwaigFunctionResult().add_action('start_playback', {'file': '${args.filename}'}))
-    .expression(r'stop.*', SwaigFunctionResult().add_action('stop_playback', True))
-    .expression(r'pause.*', SwaigFunctionResult().add_action('pause_playback', True))
+    .expression('${args.command}', r'start.*', SwaigFunctionResult().add_action('start_playback', {'file': '${args.filename}'}))
+    .expression('${args.command}', r'stop.*', SwaigFunctionResult().add_action('stop_playback', True))
+    .expression('${args.command}', r'pause.*', SwaigFunctionResult().add_action('pause_playback', True))
 )
 ```
 
 ### Expression Patterns
 
 ```python
-# Exact match
-.expression('hello', SwaigFunctionResult('Hello response'))
+# Exact match - test the 'input' argument against literal string
+.expression('${args.input}', 'hello', SwaigFunctionResult('Hello response'))
 
 # Case-insensitive regex
-.expression(r'(?i)weather.*', SwaigFunctionResult('Weather info'))
+.expression('${args.query}', r'(?i)weather.*', SwaigFunctionResult('Weather info'))
 
-# Multiple patterns
-.expression(r'start|begin|play', SwaigFunctionResult().add_action('start', True))
-.expression(r'stop|end|pause', SwaigFunctionResult().add_action('stop', True))
+# Multiple patterns using alternation
+.expression('${args.command}', r'start|begin|play', SwaigFunctionResult().add_action('start', True))
+.expression('${args.command}', r'stop|end|pause', SwaigFunctionResult().add_action('stop', True))
 ```
 
 ## Error Handling
@@ -623,4 +627,19 @@ test_variables = (DataMap('test_vars')
 )
 ```
 
-This comprehensive guide should help you understand and effectively use the DataMap system for creating REST API integrations in your SignalWire agents. 
+This comprehensive guide should help you understand and effectively use the DataMap system for creating REST API integrations in your SignalWire agents.
+
+---
+
+## Related Documentation
+
+- **[API Reference](signalwire_agents_api_reference.md)** - Complete DataMap class API reference
+- **[SWAIG Function Result Methods](swaig_function_result_methods.md)** - All available result methods for DataMap outputs
+- **[Agent Guide](agent_guide.md)** - General agent development including SWAIG functions
+- **[DataMap SWML Complete Guide](datamap_swml_complete_guide.md)** - Extended DataMap and SWML integration
+
+### Example Files
+
+- `examples/data_map_demo.py` - Comprehensive DataMap patterns demo
+- `examples/advanced_datamap_demo.py` - Advanced DataMap with webhooks and foreach
+- `examples/datasphere_serverless_demo.py` - Serverless DataMap integration 

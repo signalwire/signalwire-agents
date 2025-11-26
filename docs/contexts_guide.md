@@ -254,12 +254,28 @@ class Context:
     # Context prompts
     def set_prompt(self, prompt: str) -> Context
         """Set simple string prompt for context"""
-        
+
     def add_section(self, title: str, body: str) -> Context
         """Add POM section to context prompt"""
-        
+
     def add_bullets(self, title: str, bullets: List[str]) -> Context
         """Add POM bullet section to context prompt"""
+
+    # Context isolation and fillers
+    def set_isolated(self, isolated: bool) -> Context
+        """Mark context as isolated (independent conversation state)"""
+
+    def set_enter_fillers(self, fillers: Dict[str, List[str]]) -> Context
+        """Set fillers spoken when entering this context"""
+
+    def set_exit_fillers(self, fillers: Dict[str, List[str]]) -> Context
+        """Set fillers spoken when exiting this context"""
+
+    def add_enter_filler(self, language_code: str, fillers: List[str]) -> Context
+        """Add enter fillers for a specific language"""
+
+    def add_exit_filler(self, language_code: str, fillers: List[str]) -> Context
+        """Add exit fillers for a specific language"""
 ```
 
 #### Methods
@@ -274,6 +290,11 @@ class Context:
 - `set_prompt(text)`: Simple string prompt for context
 - `add_section(title, body)`: Add POM section to context prompt
 - `add_bullets(title, list)`: Add POM bullet section to context prompt
+- `set_isolated(bool)`: Mark context as isolated (independent conversation state)
+- `set_enter_fillers(dict)`: Set all enter fillers by language code
+- `set_exit_fillers(dict)`: Set all exit fillers by language code
+- `add_enter_filler(lang, list)`: Add enter fillers for a specific language
+- `add_exit_filler(lang, list)`: Add exit fillers for a specific language
 
 ### Step
 
@@ -300,10 +321,23 @@ class Step:
     
     def set_valid_contexts(self, contexts: List[str]) -> Step
         """Set which contexts can be accessed from this step"""
-    
+
     # Function restrictions
     def set_functions(self, functions: Union[List[str], str]) -> Step
         """Restrict available functions ('none' or list of function names)"""
+
+    # Reset behavior when entering step
+    def set_reset_system_prompt(self) -> Step
+        """Reset system prompt when entering this step"""
+
+    def set_reset_user_prompt(self) -> Step
+        """Reset user prompt when entering this step"""
+
+    def set_reset_consolidate(self) -> Step
+        """Consolidate conversation when entering this step"""
+
+    def set_reset_full_reset(self) -> Step
+        """Full conversation reset when entering this step"""
 ```
 
 #### Content Methods
@@ -1012,215 +1046,64 @@ class HybridAgent(AgentBase):
 
 The Contexts and Steps system provides powerful workflow control for building sophisticated AI agents. By combining structured navigation, function restrictions, and clear completion criteria, you can create predictable, user-friendly agent experiences that guide users through complex processes while maintaining security and control.
 
-Start with simple single-context workflows and gradually build more complex multi-context systems as your requirements grow. The system is designed to be flexible and scalable, supporting both simple linear workflows and complex branching conversation trees. 
+Start with simple single-context workflows and gradually build more complex multi-context systems as your requirements grow. The system is designed to be flexible and scalable, supporting both simple linear workflows and complex branching conversation trees.
 
-### Context Inheritance
+### Dynamic Context Switching
 
-Contexts can inherit from other contexts to create hierarchical structures:
-
-```python
-from signalwire_agents import AgentBase
-from signalwire_agents.core.context import Context
-
-class CustomerServiceAgent(AgentBase):
-    def __init__(self):
-        super().__init__(name="customer-service", route="/support")
-        
-        # Base context for all customer interactions
-        base_context = Context(
-            name="customer_base",
-            description="Base context for all customer interactions",
-            instructions=[
-                "Always be polite and professional",
-                "Verify customer identity before accessing account information",
-                "Document all interactions in the customer record"
-            ]
-        )
-        
-        # Billing context inherits from base
-        billing_context = Context(
-            name="billing_support",
-            description="Handle billing inquiries and payment issues",
-            parent=base_context,  # Inherits from base_context
-            instructions=[
-                "Check payment history before suggesting solutions",
-                "Offer payment plan options for overdue accounts",
-                "Escalate disputes over $500 to billing manager"
-            ]
-        )
-        
-        # Technical support context also inherits from base
-        tech_context = Context(
-            name="technical_support", 
-            description="Provide technical assistance and troubleshooting",
-            parent=base_context,  # Also inherits from base_context
-            instructions=[
-                "Start with basic troubleshooting steps",
-                "Document error messages and symptoms",
-                "Create support tickets for unresolved issues"
-            ]
-        )
-        
-        self.add_context(base_context)
-        self.add_context(billing_context)
-        self.add_context(tech_context)
-
-def main():
-    agent = CustomerServiceAgent()
-    agent.run()
-
-if __name__ == "__main__":
-    main()
-```
-
-## Dynamic Context Switching
-
-Contexts can be switched dynamically during conversations based on user input or business logic:
+To switch contexts dynamically during a conversation, use `SwaigFunctionResult` with the `swml_change_context()` method:
 
 ```python
 from signalwire_agents import AgentBase
-from signalwire_agents.core.context import Context
 from signalwire_agents.core.function_result import SwaigFunctionResult
 
-class AdaptiveAgent(AgentBase):
+class MultiContextAgent(AgentBase):
     def __init__(self):
-        super().__init__(name="adaptive", route="/adaptive")
-        
-        # Define multiple contexts
-        self.setup_contexts()
-        
-        # Start with general context
-        self.set_active_context("general")
-    
-    def setup_contexts(self):
-        general = Context(
-            name="general",
-            description="General conversation and routing",
-            instructions=[
-                "Determine what the user needs help with",
-                "Route to appropriate specialized context",
-                "Be helpful and friendly"
-            ]
-        )
-        
-        sales = Context(
-            name="sales",
-            description="Sales and product information",
-            instructions=[
-                "Focus on product benefits and features",
-                "Understand customer needs and budget",
-                "Provide pricing and availability information"
-            ]
-        )
-        
-        support = Context(
-            name="support", 
-            description="Technical support and troubleshooting",
-            instructions=[
-                "Diagnose technical issues systematically",
-                "Provide step-by-step solutions",
-                "Escalate complex problems to specialists"
-            ]
-        )
-        
-        self.add_context(general)
-        self.add_context(sales)
-        self.add_context(support)
-    
+        super().__init__(name="multi-context", route="/multi")
+
+        # Define contexts using the ContextBuilder pattern
+        contexts = self.define_contexts()
+
+        # Sales context
+        sales = contexts.add_context("sales")
+        sales.add_section("Role", "You are a helpful sales representative.")
+        sales.add_step("greeting").set_text("Welcome customers and understand their needs.")
+
+        # Support context
+        support = contexts.add_context("support")
+        support.add_section("Role", "You are a technical support specialist.")
+        support.add_step("diagnose").set_text("Help diagnose and resolve technical issues.")
+
     @AgentBase.tool(
-        name="switch_to_sales",
-        description="Switch to sales context for product inquiries",
+        name="transfer_to_support",
+        description="Transfer the customer to technical support",
         parameters={}
     )
-    def switch_to_sales(self, args, raw_data):
-        self.set_active_context("sales")
-        return SwaigFunctionResult("Switching to sales mode. How can I help you with our products?")
-    
+    def transfer_to_support(self, args, raw_data):
+        # Use swml_change_context to switch contexts
+        return SwaigFunctionResult("Transferring you to technical support...").swml_change_context("support")
+
     @AgentBase.tool(
-        name="switch_to_support", 
-        description="Switch to technical support context",
+        name="transfer_to_sales",
+        description="Transfer the customer to sales",
         parameters={}
     )
-    def switch_to_support(self, args, raw_data):
-        self.set_active_context("support")
-        return SwaigFunctionResult("Switching to technical support. What issue are you experiencing?")
-
-def main():
-    agent = AdaptiveAgent()
-    agent.run()
-
-if __name__ == "__main__":
-    main()
+    def transfer_to_sales(self, args, raw_data):
+        return SwaigFunctionResult("Transferring you to sales...").swml_change_context("sales")
 ```
 
-## Context-Aware Function Behavior
+For a complete example of multi-context agents with different personas, see `examples/contexts_demo.py`.
 
-Functions can behave differently based on the active context:
+---
 
-```python
-from signalwire_agents import AgentBase
-from signalwire_agents.core.context import Context
-from signalwire_agents.core.function_result import SwaigFunctionResult
+## Related Documentation
 
-class ContextAwareAgent(AgentBase):
-    def __init__(self):
-        super().__init__(name="context-aware", route="/context")
-        
-        # Setup contexts
-        self.setup_contexts()
-        self.set_active_context("customer")
-    
-    def setup_contexts(self):
-        customer = Context(
-            name="customer",
-            description="Customer-facing interactions",
-            instructions=["Be friendly and helpful", "Use simple language"]
-        )
-        
-        internal = Context(
-            name="internal", 
-            description="Internal staff interactions",
-            instructions=["Be direct and technical", "Include detailed information"]
-        )
-        
-        self.add_context(customer)
-        self.add_context(internal)
-    
-    @AgentBase.tool(
-        name="get_account_info",
-        description="Get account information",
-        parameters={
-            "account_id": {
-                "type": "string",
-                "description": "Account identifier"
-            }
-        }
-    )
-    def get_account_info(self, args, raw_data):
-        account_id = args.get("account_id")
-        
-        # Get the current context
-        current_context = self.get_active_context()
-        
-        if current_context.name == "customer":
-            # Customer-friendly response
-            return SwaigFunctionResult(
-                f"Your account {account_id} is in good standing. "
-                "Your next billing date is March 15th."
-            )
-        elif current_context.name == "internal":
-            # Detailed internal response
-            return SwaigFunctionResult(
-                f"Account {account_id}: Status=ACTIVE, Balance=$125.50, "
-                "Last_Payment=2024-02-15, Next_Bill=2024-03-15, "
-                "Plan=Premium, Usage=85% of limit"
-            )
-        else:
-            return SwaigFunctionResult("Account information retrieved.")
+- **[API Reference](signalwire_agents_api_reference.md)** - Complete AgentBase class reference
+- **[SWAIG Function Result Methods](swaig_function_result_methods.md)** - All available result methods including `swml_change_context()` and `swml_change_step()`
+- **[Agent Guide](agent_guide.md)** - General agent development guide
+- **[DataMap Guide](datamap_guide.md)** - Serverless function integration
 
-def main():
-    agent = ContextAwareAgent()
-    agent.run()
+### Example Files
 
-if __name__ == "__main__":
-    main() 
+- `examples/contexts_demo.py` - Multi-context agent with personas (Franklin, Rachael, Dwight)
+- `examples/survey_agent_example.py` - Survey workflow with steps
+- `examples/info_gatherer_example.py` - Information gathering workflow 
