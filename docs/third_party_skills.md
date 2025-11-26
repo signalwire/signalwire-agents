@@ -504,7 +504,7 @@ setup(
     description="Custom skills for SignalWire AI Agents",
     packages=find_packages(),
     install_requires=[
-        "signalwire-agents>=1.0.0",
+        "signalwire-agents>=1.0.5",
         "requests>=2.25.0",
     ],
     entry_points={
