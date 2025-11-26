@@ -399,7 +399,7 @@ esac
 Create `requirements.txt`:
 
 ```txt
-signalwire-agents>=0.1.23
+signalwire-agents>=1.0.5
 ```
 
 Or capture your current environment:

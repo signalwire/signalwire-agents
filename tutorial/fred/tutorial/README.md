@@ -73,4 +73,4 @@ Ready to build Fred? Start with [Lesson 1: Introduction to SignalWire Agents](01
 
 ---
 
-*This tutorial was created for SignalWire AI Agents SDK v0.1.23*
+*This tutorial was created for SignalWire AI Agents SDK v1.0.5*

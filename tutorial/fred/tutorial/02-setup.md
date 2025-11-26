@@ -114,7 +114,7 @@ python test_install.py
 Expected output:
 ```
 ✅ SignalWire SDK imported successfully!
-   Version: 0.1.23
+   Version: 1.0.5
 ```
 
 ### Test Basic Agent
@@ -210,7 +210,7 @@ pip freeze > requirements.txt
 Or create a minimal one:
 
 ```txt
-signalwire-agents>=0.1.23
+signalwire-agents>=1.0.5
 ```
 
 ## Environment Variables
