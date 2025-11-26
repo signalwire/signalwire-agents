@@ -1231,9 +1231,10 @@ class AgentBase(
         if hasattr(self, '_internal_fillers'):
             ephemeral_agent._internal_fillers = copy.deepcopy(self._internal_fillers)
         
-        # Copy contexts builder state if it exists
-        if hasattr(self, '_contexts_builder'):
-            ephemeral_agent._contexts_builder = copy.deepcopy(self._contexts_builder)
+        # Don't deep copy _contexts_builder - it has a circular reference to the agent
+        # The contexts are already copied via _prompt_manager._contexts (below)
+        # Just copy the flag indicating contexts are defined
+        if hasattr(self, '_contexts_defined'):
             ephemeral_agent._contexts_defined = self._contexts_defined
         
         # Deep copy the POM object if it exists to prevent sharing prompt sections
