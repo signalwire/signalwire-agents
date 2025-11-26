@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.5] - 2025-11-26
+
+- Add setuptools version upper bound (<81) to fix compatibility issues
+
 ## [1.0.4] - 2025-11-26
 
 - Add call flow verb insertion API for customizing SWML call flow

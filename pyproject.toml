@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0,<81", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "signalwire_agents"
-version = "1.0.4"
+version = "1.0.5"
 description = "SignalWire AI Agents SDK"
 authors = [
     {name = "SignalWire Team", email = "info@signalwire.com"}
@@ -29,7 +29,7 @@ dependencies = [
     "pydantic>=2.11.4",
     "PyYAML>=6.0.2",
     "Requests>=2.32.3",
-    "setuptools>=66.1.1",
+    "setuptools>=66.1.1,<81",
     "signalwire_pom>=2.7.1",
     "structlog>=25.3.0",
     "uvicorn>=0.34.2",
