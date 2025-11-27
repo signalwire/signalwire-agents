@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.6] - 2025-11-27
+
+- Update documentation for contexts, datamap, API reference, SWAIG actions, and function results
+- Add comprehensive example testing suite (tests/test_examples.py)
+- Add static file serving example
+
 ## [1.0.5] - 2025-11-26
 
 - Add setuptools version upper bound (<81) to fix compatibility issues
