@@ -57,9 +57,13 @@ class WeatherSkill(SkillBase):
         
         @self.agent.tool(
             "get_weather",
-            description="Get current weather for a location"
+            description="Get current weather for a location",
+            parameters={
+                "location": {"type": "string", "description": "City or location name"}
+            }
         )
-        async def get_weather(location: str):
+        async def get_weather(self, args, raw_data):
+            location = args.get("location")
             import aiohttp
             
             async with aiohttp.ClientSession() as session:
@@ -81,9 +85,15 @@ class WeatherSkill(SkillBase):
         
         @self.agent.tool(
             "get_forecast",
-            description="Get weather forecast"
+            description="Get weather forecast",
+            parameters={
+                "location": {"type": "string", "description": "City or location name"},
+                "days": {"type": "integer", "description": "Number of days to forecast (default 3)"}
+            }
         )
-        async def get_forecast(location: str, days: int = 3):
+        async def get_forecast(self, args, raw_data):
+            location = args.get("location")
+            days = args.get("days", 3)
             # Implementation...
             pass
 ```
@@ -149,18 +159,38 @@ class StatefulAgent(AgentBase):
         # Initialize session manager
         self.session_manager = SessionManager()
         
-        @self.tool("remember_preference", description="Remember user preference")
-        async def remember_preference(session_id: str, key: str, value: str):
+        @self.tool(
+            "remember_preference",
+            description="Remember user preference",
+            parameters={
+                "session_id": {"type": "string", "description": "Session identifier"},
+                "key": {"type": "string", "description": "Preference key"},
+                "value": {"type": "string", "description": "Preference value"}
+            }
+        )
+        async def remember_preference(self, args, raw_data):
+            session_id = args.get("session_id")
+            key = args.get("key")
+            value = args.get("value")
             # Store in session
             session = self.session_manager.get_or_create(session_id)
             session[key] = value
-            
+
             return SwaigFunctionResult(f"I'll remember that your {key} is {value}")
         
-        @self.tool("recall_preference", description="Recall user preference")
-        async def recall_preference(session_id: str, key: str):
+        @self.tool(
+            "recall_preference",
+            description="Recall user preference",
+            parameters={
+                "session_id": {"type": "string", "description": "Session identifier"},
+                "key": {"type": "string", "description": "Preference key to recall"}
+            }
+        )
+        async def recall_preference(self, args, raw_data):
+            session_id = args.get("session_id")
+            key = args.get("key")
             session = self.session_manager.get(session_id)
-            
+
             if session and key in session:
                 value = session[key]
                 return SwaigFunctionResult(f"Your {key} is {value}")
@@ -187,48 +217,73 @@ class PersistentAgent(AgentBase):
             max_size=20
         )
     
-    @self.tool("save_interaction", description="Save interaction to database")
-    async def save_interaction(
-        customer_id: str,
-        interaction_type: str,
-        details: str
-    ):
-        async with self.db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO interactions 
-                (customer_id, type, details, timestamp)
-                VALUES ($1, $2, $3, $4)
-            """, customer_id, interaction_type, details, datetime.now())
-            
-        return SwaigFunctionResult("Interaction saved successfully")
+        @self.tool(
+            "save_interaction",
+            description="Save interaction to database",
+            parameters={
+                "customer_id": {"type": "string", "description": "Customer identifier"},
+                "interaction_type": {"type": "string", "description": "Type of interaction"},
+                "details": {"type": "string", "description": "Interaction details"}
+            }
+        )
+        async def save_interaction(self, args, raw_data):
+            customer_id = args.get("customer_id")
+            interaction_type = args.get("interaction_type")
+            details = args.get("details")
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO interactions
+                    (customer_id, type, details, timestamp)
+                    VALUES ($1, $2, $3, $4)
+                """, customer_id, interaction_type, details, datetime.now())
+
+            return SwaigFunctionResult("Interaction saved successfully")
     
-    @self.tool("get_history", description="Get customer interaction history")
-    async def get_history(customer_id: str, limit: int = 5):
-        async with self.db_pool.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT type, details, timestamp
-                FROM interactions
-                WHERE customer_id = $1
-                ORDER BY timestamp DESC
-                LIMIT $2
-            """, customer_id, limit)
-            
-        if rows:
-            history = "\n".join([
-                f"- {row['type']} on {row['timestamp']}: {row['details']}"
-                for row in rows
-            ])
-            return SwaigFunctionResult(f"Previous interactions:\n{history}")
-        else:
-            return SwaigFunctionResult("No previous interactions found")
+        @self.tool(
+            "get_history",
+            description="Get customer interaction history",
+            parameters={
+                "customer_id": {"type": "string", "description": "Customer identifier"},
+                "limit": {"type": "integer", "description": "Max number of records (default 5)"}
+            }
+        )
+        async def get_history(self, args, raw_data):
+            customer_id = args.get("customer_id")
+            limit = args.get("limit", 5)
+            async with self.db_pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT type, details, timestamp
+                    FROM interactions
+                    WHERE customer_id = $1
+                    ORDER BY timestamp DESC
+                    LIMIT $2
+                """, customer_id, limit)
+
+            if rows:
+                history = "\n".join([
+                    f"- {row['type']} on {row['timestamp']}: {row['details']}"
+                    for row in rows
+                ])
+                return SwaigFunctionResult(f"Previous interactions:\n{history}")
+            else:
+                return SwaigFunctionResult("No previous interactions found")
 ```
 
 ### Global Data Between Contexts
 
 ```python
 # Setting global data that persists across contexts
-@self.tool("set_customer_data", description="Store customer data globally")
-async def set_customer_data(key: str, value: str):
+@self.tool(
+    "set_customer_data",
+    description="Store customer data globally",
+    parameters={
+        "key": {"type": "string", "description": "Data key name"},
+        "value": {"type": "string", "description": "Data value to store"}
+    }
+)
+async def set_customer_data(self, args, raw_data):
+    key = args.get("key")
+    value = args.get("value")
     result = SwaigFunctionResult(f"Stored {key}")
     result.add_action("set_global_data", {
         f"customer_{key}": value
@@ -256,72 +311,97 @@ class WorkflowAgent(AgentBase):
         # Define workflow states
         self.workflows = {}
         
-        @self.tool("start_order", description="Start new order workflow")
-        async def start_order(session_id: str):
+        @self.tool(
+            "start_order",
+            description="Start new order workflow",
+            parameters={
+                "session_id": {"type": "string", "description": "Session identifier"}
+            }
+        )
+        async def start_order(self, args, raw_data):
+            session_id = args.get("session_id")
             # Initialize workflow
             self.workflows[session_id] = {
                 "state": "awaiting_items",
                 "items": [],
                 "total": 0
             }
-            
+
             return SwaigFunctionResult(
                 "I'll help you create an order. What items would you like?"
             )
         
-        @self.tool("add_item", description="Add item to current order")
-        async def add_item(session_id: str, item: str, quantity: int = 1):
+        @self.tool(
+            "add_item",
+            description="Add item to current order",
+            parameters={
+                "session_id": {"type": "string", "description": "Session identifier"},
+                "item": {"type": "string", "description": "Item name to add"},
+                "quantity": {"type": "integer", "description": "Quantity (default 1)"}
+            }
+        )
+        async def add_item(self, args, raw_data):
+            session_id = args.get("session_id")
+            item = args.get("item")
+            quantity = args.get("quantity", 1)
             if session_id not in self.workflows:
                 return SwaigFunctionResult(
                     "No active order. Please start a new order first.",
                     error=True
                 )
-            
+
             workflow = self.workflows[session_id]
-            
+
             # Add item
             workflow["items"].append({
                 "name": item,
                 "quantity": quantity,
                 "price": await self.get_item_price(item)
             })
-            
+
             # Update state
             if len(workflow["items"]) >= 1:
                 workflow["state"] = "ready_to_confirm"
-            
+
             items_list = ", ".join([
-                f"{i['quantity']}x {i['name']}" 
+                f"{i['quantity']}x {i['name']}"
                 for i in workflow["items"]
             ])
-            
+
             return SwaigFunctionResult(
                 f"Added {quantity}x {item}. Current order: {items_list}. "
                 f"Add more items or confirm order."
             )
         
-        @self.tool("confirm_order", description="Confirm and submit order")
-        async def confirm_order(session_id: str):
+        @self.tool(
+            "confirm_order",
+            description="Confirm and submit order",
+            parameters={
+                "session_id": {"type": "string", "description": "Session identifier"}
+            }
+        )
+        async def confirm_order(self, args, raw_data):
+            session_id = args.get("session_id")
             if session_id not in self.workflows:
                 return SwaigFunctionResult("No active order", error=True)
-            
+
             workflow = self.workflows[session_id]
-            
+
             if workflow["state"] != "ready_to_confirm":
                 return SwaigFunctionResult(
                     "Please add items before confirming",
                     error=True
                 )
-            
+
             # Calculate total
             total = sum(i["price"] * i["quantity"] for i in workflow["items"])
-            
+
             # Submit order
             order_id = await self.submit_order(workflow["items"])
-            
+
             # Clean up
             del self.workflows[session_id]
-            
+
             return SwaigFunctionResult(
                 f"Order #{order_id} confirmed! Total: ${total:.2f}"
             )
@@ -346,26 +426,33 @@ class ConditionalAgent(AgentBase):
             ]
         )
         
-        @self.tool("check_customer_status", description="Check customer status")
-        async def check_customer_status(customer_id: str):
+        @self.tool(
+            "check_customer_status",
+            description="Check customer status",
+            parameters={
+                "customer_id": {"type": "string", "description": "Customer identifier"}
+            }
+        )
+        async def check_customer_status(self, args, raw_data):
+            customer_id = args.get("customer_id")
             # Check database or API
             status = await self.get_customer_status(customer_id)
-            
+
             result = SwaigFunctionResult(f"Customer status: {status}")
-            
+
             # Set context for agent
             result.add_action("set_global_data", {
                 "customer_status": status,
                 "is_vip": status == "platinum"
             })
-            
+
             # Add specific instructions based on status
             if status == "platinum":
                 result.add_action("append_prompt", {
                     "section": "VIP Instructions",
                     "content": "This is a VIP customer - provide white glove service"
                 })
-            
+
             return result
 ```
 
@@ -390,18 +477,25 @@ class APIIntegrationAgent(AgentBase):
             "pricing": "https://api.company.com/pricing"
         }
         
-        @self.tool("check_availability", description="Check product availability")
-        async def check_availability(product_sku: str):
+        @self.tool(
+            "check_availability",
+            description="Check product availability",
+            parameters={
+                "product_sku": {"type": "string", "description": "Product SKU to check"}
+            }
+        )
+        async def check_availability(self, args, raw_data):
+            product_sku = args.get("product_sku")
             async with aiohttp.ClientSession() as session:
                 headers = {"Authorization": f"Bearer {os.environ['API_KEY']}"}
-                
+
                 async with session.get(
                     f"{self.apis['inventory']}/{product_sku}",
                     headers=headers
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        
+
                         if data["in_stock"]:
                             return SwaigFunctionResult(
                                 f"Product {product_sku} is in stock. "
@@ -477,19 +571,28 @@ class QueueAgent(AgentBase):
         # Start background task processor
         asyncio.create_task(self.process_queue())
     
-    @self.tool("queue_task", description="Queue task for processing")
-    async def queue_task(task_type: str, data: str):
-        # Add to queue
-        await self.redis.rpush(
-            "task_queue",
-            json.dumps({
-                "type": task_type,
-                "data": data,
-                "timestamp": datetime.now().isoformat()
-            })
+        @self.tool(
+            "queue_task",
+            description="Queue task for processing",
+            parameters={
+                "task_type": {"type": "string", "description": "Type of task to queue"},
+                "data": {"type": "string", "description": "Task data payload"}
+            }
         )
-        
-        return SwaigFunctionResult(f"Task queued for processing")
+        async def queue_task(self, args, raw_data):
+            task_type = args.get("task_type")
+            data = args.get("data")
+            # Add to queue
+            await self.redis.rpush(
+                "task_queue",
+                json.dumps({
+                    "type": task_type,
+                    "data": data,
+                    "timestamp": datetime.now().isoformat()
+                })
+            )
+
+            return SwaigFunctionResult(f"Task queued for processing")
     
     async def process_queue(self):
         """Background queue processor"""
@@ -643,8 +746,15 @@ class ReasoningAgent(AgentBase):
 ### Dynamic Prompt Injection
 
 ```python
-@self.tool("inject_context", description="Inject contextual instructions")
-async def inject_context(context_type: str):
+@self.tool(
+    "inject_context",
+    description="Inject contextual instructions",
+    parameters={
+        "context_type": {"type": "string", "description": "Context type: technical, simple, or sales"}
+    }
+)
+async def inject_context(self, args, raw_data):
+    context_type = args.get("context_type")
     contexts = {
         "technical": {
             "section": "Technical Mode",
@@ -659,7 +769,7 @@ async def inject_context(context_type: str):
             "content": "Focus on benefits and value proposition"
         }
     }
-    
+
     if context_type in contexts:
         result = SwaigFunctionResult(f"Switching to {context_type} mode")
         result.add_action("append_prompt", contexts[context_type])

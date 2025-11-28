@@ -1838,7 +1838,7 @@ class MyAgent(AgentBase):
 
 ##### 1. User Preference Loading
 ```python
-@AgentBase.tool(name="startup_hook")
+@AgentBase.tool(name="startup_hook", description="Called when the voice session starts", parameters={})
 def startup_hook(self, args, raw_data):
     caller_id = raw_data.get("from_number")
     
@@ -1857,7 +1857,7 @@ def startup_hook(self, args, raw_data):
 
 ##### 2. Analytics and Logging
 ```python
-@AgentBase.tool(name="hangup_hook")
+@AgentBase.tool(name="hangup_hook", description="Called when the voice session ends", parameters={})
 def hangup_hook(self, args, raw_data):
     call_id = raw_data.get("call_id")
     state = self.get_state(call_id)

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.7] - 2025-11-27
+
+- Version bump
+
 ## [1.0.6] - 2025-11-27
 
 - Update documentation for contexts, datamap, API reference, SWAIG actions, and function results

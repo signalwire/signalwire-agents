@@ -30,21 +30,21 @@ class MyAgent(AgentBase):
         super().__init__(name="My Agent", route="/")
         
         # Define a function using the decorator
-        @self.tool("calculate_price", description="Calculate total price with tax")
-        async def calculate_price(amount: float, tax_rate: float = 0.08):
-            """
-            Calculate total price including tax
-            
-            Args:
-                amount: Base price
-                tax_rate: Tax rate (default 8%)
-            
-            Returns:
-                SwaigFunctionResult with calculation
-            """
+        @self.tool(
+            "calculate_price",
+            description="Calculate total price with tax",
+            parameters={
+                "amount": {"type": "number", "description": "Base price"},
+                "tax_rate": {"type": "number", "description": "Tax rate (default 8%)"}
+            }
+        )
+        def calculate_price(self, args, raw_data):
+            """Calculate total price including tax"""
+            amount = args.get("amount", 0)
+            tax_rate = args.get("tax_rate", 0.08)
             tax = amount * tax_rate
             total = amount + tax
-            
+
             return SwaigFunctionResult(
                 f"The total price is ${total:.2f} "
                 f"(${amount:.2f} + ${tax:.2f} tax)"
@@ -59,28 +59,30 @@ class MyAgent(AgentBase):
 @self.tool(
     "create_order",
     description="Create a new order",
+    parameters={
+        "customer_name": {"type": "string", "description": "Customer's full name"},
+        "items": {"type": "string", "description": "Items to order"},
+        "priority": {"type": "string", "description": "Order priority level"}
+    },
     required=["customer_name", "items"]  # These params are required
 )
-async def create_order(
-    customer_name: str,
-    items: str,
-    priority: str = "normal"  # Optional with default
-):
+def create_order(self, args, raw_data):
+    customer_name = args.get("customer_name")
+    items = args.get("items")
+    priority = args.get("priority", "normal")
     # Implementation
 ```
 
 **Parameter Types:**
 
 ```python
-# Supported types
-async def example_function(
-    text: str,              # String
-    number: int,            # Integer
-    decimal: float,         # Float
-    flag: bool,            # Boolean
-    optional: str = None   # Optional
-):
-    pass
+# Supported parameter types in the parameters dict
+parameters={
+    "text": {"type": "string", "description": "A text value"},
+    "number": {"type": "integer", "description": "An integer value"},
+    "decimal": {"type": "number", "description": "A decimal value"},
+    "flag": {"type": "boolean", "description": "A true/false value"}
+}
 ```
 
 ### Advanced Function Results
@@ -88,27 +90,34 @@ async def example_function(
 The `SwaigFunctionResult` class provides rich responses:
 
 ```python
-@self.tool("check_inventory", description="Check product availability")
-async def check_inventory(product_id: str):
+@self.tool(
+    "check_inventory",
+    description="Check product availability",
+    parameters={
+        "product_id": {"type": "string", "description": "The product ID to check"}
+    }
+)
+def check_inventory(self, args, raw_data):
+    product_id = args.get("product_id")
     # Simulate inventory check
     in_stock = 5
-    
+
     if in_stock > 0:
         result = SwaigFunctionResult(f"Product {product_id} is in stock ({in_stock} units)")
-        
+
         # Add structured data
         result.add_data({
             "product_id": product_id,
             "quantity": in_stock,
             "warehouse": "main"
         })
-        
+
         # Add action for the agent
         result.add_action("set_global_data", {
             "last_checked_product": product_id,
             "stock_level": in_stock
         })
-        
+
         return result
     else:
         # Return error state
@@ -124,8 +133,15 @@ Both patterns are supported:
 
 ```python
 # Async function (recommended for I/O operations)
-@self.tool("fetch_data", description="Fetch data from API")
-async def fetch_data(query: str):
+@self.tool(
+    "fetch_data",
+    description="Fetch data from API",
+    parameters={
+        "query": {"type": "string", "description": "Search query"}
+    }
+)
+async def fetch_data(self, args, raw_data):
+    query = args.get("query")
     import aiohttp
     async with aiohttp.ClientSession() as session:
         async with session.get(f"https://api.example.com/{query}") as resp:
@@ -133,8 +149,17 @@ async def fetch_data(query: str):
             return SwaigFunctionResult(f"Found {len(data)} results")
 
 # Sync function (for quick calculations)
-@self.tool("calculate", description="Perform calculation")
-def calculate(x: int, y: int):
+@self.tool(
+    "calculate",
+    description="Perform calculation",
+    parameters={
+        "x": {"type": "integer", "description": "First number"},
+        "y": {"type": "integer", "description": "Second number"}
+    }
+)
+def calculate(self, args, raw_data):
+    x = args.get("x", 0)
+    y = args.get("y", 0)
     return SwaigFunctionResult(f"Result: {x + y}")
 ```
 
@@ -147,8 +172,15 @@ Proper error handling ensures your agent gracefully handles failures.
 ### Function Error Handling
 
 ```python
-@self.tool("process_order", description="Process customer order")
-async def process_order(order_id: str):
+@self.tool(
+    "process_order",
+    description="Process customer order",
+    parameters={
+        "order_id": {"type": "string", "description": "The order ID to process"}
+    }
+)
+def process_order(self, args, raw_data):
+    order_id = args.get("order_id")
     try:
         # Validate input
         if not order_id or len(order_id) < 5:
@@ -156,14 +188,14 @@ async def process_order(order_id: str):
                 "Invalid order ID format",
                 error=True
             )
-        
+
         # Simulate processing
         if order_id.startswith("TEST"):
             raise ValueError("Test orders cannot be processed")
-        
+
         # Success case
         return SwaigFunctionResult(f"Order {order_id} processed successfully")
-        
+
     except ValueError as e:
         return SwaigFunctionResult(
             f"Order processing failed: {str(e)}",
@@ -201,26 +233,37 @@ class RobustAgent(AgentBase):
 ### Validation Patterns
 
 ```python
-@self.tool("update_customer", description="Update customer information")
-async def update_customer(customer_id: str, email: str = None, phone: str = None):
+@self.tool(
+    "update_customer",
+    description="Update customer information",
+    parameters={
+        "customer_id": {"type": "string", "description": "The customer's ID"},
+        "email": {"type": "string", "description": "Customer's email address"},
+        "phone": {"type": "string", "description": "Customer's phone number"}
+    }
+)
+def update_customer(self, args, raw_data):
+    customer_id = args.get("customer_id")
+    email = args.get("email")
+    phone = args.get("phone")
     # Input validation
     errors = []
-    
+
     if not customer_id:
         errors.append("Customer ID is required")
-    
+
     if email and "@" not in email:
         errors.append("Invalid email format")
-    
+
     if phone and len(phone) < 10:
         errors.append("Phone number must be at least 10 digits")
-    
+
     if errors:
         return SwaigFunctionResult(
             f"Validation failed: {', '.join(errors)}",
             error=True
         )
-    
+
     # Process valid input
     return SwaigFunctionResult("Customer updated successfully")
 ```
@@ -242,17 +285,24 @@ class DebugAgent(AgentBase):
     def __init__(self):
         super().__init__(name="Debug Agent", route="/")
         logger.info("Initializing Debug Agent")
-        
-        @self.tool("debug_function", description="Test function with logging")
-        async def debug_function(param: str):
+
+        @self.tool(
+            "debug_function",
+            description="Test function with logging",
+            parameters={
+                "param": {"type": "string", "description": "Parameter to process"}
+            }
+        )
+        def debug_function(self, args, raw_data):
+            param = args.get("param", "")
             logger.debug(f"Function called with param: {param}")
-            
+
             try:
                 # Some operation
                 result = param.upper()
                 logger.info(f"Operation successful: {result}")
                 return SwaigFunctionResult(result)
-                
+
             except Exception as e:
                 logger.error(f"Operation failed: {e}", exc_info=True)
                 return SwaigFunctionResult("Operation failed", error=True)
@@ -299,8 +349,12 @@ swaig-test agent.py --exec function_name --param value
 **3. Interactive Debugging:**
 
 ```python
-@self.tool("debug_state", description="Debug agent state")
-async def debug_state():
+@self.tool(
+    "debug_state",
+    description="Debug agent state",
+    parameters={}
+)
+def debug_state(self, args, raw_data):
     import json
     state = {
         "agent_name": self.get_name(),
@@ -488,23 +542,30 @@ class OptimizedAgent(AgentBase):
     def __init__(self):
         super().__init__(name="Optimized Agent", route="/")
         self._cache = {}
-        
-        @self.tool("get_product_info", description="Get product information")
-        async def get_product_info(product_id: str):
+
+        @self.tool(
+            "get_product_info",
+            description="Get product information",
+            parameters={
+                "product_id": {"type": "string", "description": "The product ID to look up"}
+            }
+        )
+        async def get_product_info(self, args, raw_data):
+            product_id = args.get("product_id")
             # Check cache first
             if product_id in self._cache:
                 logger.debug(f"Cache hit for {product_id}")
                 return SwaigFunctionResult(self._cache[product_id])
-            
+
             # Expensive operation
             info = await fetch_from_database(product_id)
-            
+
             # Cache for 5 minutes
             self._cache[product_id] = info
             asyncio.create_task(self._expire_cache(product_id, 300))
-            
+
             return SwaigFunctionResult(info)
-    
+
     async def _expire_cache(self, key: str, seconds: int):
         await asyncio.sleep(seconds)
         self._cache.pop(key, None)
@@ -514,19 +575,26 @@ class OptimizedAgent(AgentBase):
 
 ```python
 # Good: Concurrent operations
-@self.tool("get_full_info", description="Get complete information")
-async def get_full_info(customer_id: str):
+@self.tool(
+    "get_full_info",
+    description="Get complete information",
+    parameters={
+        "customer_id": {"type": "string", "description": "The customer ID"}
+    }
+)
+async def get_full_info(self, args, raw_data):
+    customer_id = args.get("customer_id")
     # Run multiple queries concurrently
     orders, profile, preferences = await asyncio.gather(
         get_orders(customer_id),
         get_profile(customer_id),
         get_preferences(customer_id)
     )
-    
+
     return SwaigFunctionResult(f"Found {len(orders)} orders")
 
-# Bad: Sequential operations
-async def get_full_info_slow(customer_id: str):
+# Bad: Sequential operations (don't do this)
+async def get_full_info_slow(customer_id):
     orders = await get_orders(customer_id)  # Waits
     profile = await get_profile(customer_id)  # Then waits
     preferences = await get_preferences(customer_id)  # Then waits
@@ -543,14 +611,21 @@ self.add_skill("native_vector_search", {
 })
 
 # Clean up large objects
-@self.tool("process_large_data", description="Process large dataset")
-async def process_large_data(dataset_id: str):
+@self.tool(
+    "process_large_data",
+    description="Process large dataset",
+    parameters={
+        "dataset_id": {"type": "string", "description": "The dataset ID to process"}
+    }
+)
+async def process_large_data(self, args, raw_data):
+    dataset_id = args.get("dataset_id")
     data = await load_large_dataset(dataset_id)
     result = process_data(data)
-    
+
     # Explicitly clean up
     del data
-    
+
     return SwaigFunctionResult(f"Processed {result['count']} items")
 ```
 
@@ -563,17 +638,24 @@ async def process_large_data(dataset_id: str):
 ```python
 import re
 
-@self.tool("safe_search", description="Search with sanitized input")
-async def safe_search(query: str):
+@self.tool(
+    "safe_search",
+    description="Search with sanitized input",
+    parameters={
+        "query": {"type": "string", "description": "Search query to sanitize and execute"}
+    }
+)
+def safe_search(self, args, raw_data):
+    query = args.get("query", "")
     # Sanitize input
     safe_query = re.sub(r'[^\w\s-]', '', query)
     safe_query = safe_query.strip()[:100]  # Limit length
-    
+
     if not safe_query:
         return SwaigFunctionResult("Invalid search query", error=True)
-    
+
     # Safe to use
-    results = await search_database(safe_query)
+    results = search_database(safe_query)
     return SwaigFunctionResult(f"Found {len(results)} results")
 ```
 
@@ -586,21 +668,28 @@ from typing import Optional
 class SecureAgent(AgentBase):
     def __init__(self):
         super().__init__(name="Secure Agent", route="/")
-        
+
         # Load secrets from environment
         self._api_key = os.environ.get("API_KEY")
         if not self._api_key:
             logger.warning("API_KEY not set")
-        
-        @self.tool("secure_api_call", description="Make secure API call")
-        async def secure_api_call(endpoint: str):
+
+        @self.tool(
+            "secure_api_call",
+            description="Make secure API call",
+            parameters={
+                "endpoint": {"type": "string", "description": "API endpoint to call"}
+            }
+        )
+        def secure_api_call(self, args, raw_data):
+            endpoint = args.get("endpoint")
             if not self._api_key:
                 return SwaigFunctionResult("API not configured", error=True)
-            
+
             # Never log secrets
             logger.info(f"Calling API endpoint: {endpoint}")
             # logger.info(f"Using key: {self._api_key}")  # NEVER DO THIS
-            
+
             headers = {"Authorization": f"Bearer {self._api_key}"}
             # Make API call...
 ```
@@ -615,19 +704,26 @@ class RateLimitedAgent(AgentBase):
     def __init__(self):
         super().__init__(name="Rate Limited Agent", route="/")
         self._call_counts = defaultdict(list)
-        
-        @self.tool("limited_function", description="Rate limited function")
-        async def limited_function(user_id: str):
+
+        @self.tool(
+            "limited_function",
+            description="Rate limited function",
+            parameters={
+                "user_id": {"type": "string", "description": "User ID for rate limiting"}
+            }
+        )
+        def limited_function(self, args, raw_data):
+            user_id = args.get("user_id")
             # Check rate limit (10 calls per minute)
             now = datetime.now()
             minute_ago = now - timedelta(minutes=1)
-            
+
             # Clean old entries
             self._call_counts[user_id] = [
-                t for t in self._call_counts[user_id] 
+                t for t in self._call_counts[user_id]
                 if t > minute_ago
             ]
-            
+
             # Check limit
             if len(self._call_counts[user_id]) >= 10:
                 return SwaigFunctionResult(
