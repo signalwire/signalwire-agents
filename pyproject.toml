@@ -129,6 +129,7 @@ Homepage = "https://github.com/signalwire/signalwire-agents"
 [project.scripts]
 swaig-test = "signalwire_agents.cli.swaig_test_wrapper:main"
 sw-search = "signalwire_agents.cli.build_search:console_entry_point"
+sw-agent-init = "signalwire_agents.cli.init_project:main"
 
 [tool.setuptools]
 packages = {find = {where = ["."], include = ["signalwire_agents*"]}}
@@ -140,4 +141,11 @@ signalwire_agents = [
     "**/*.json",
     "skills/*/README.md",
     "skills/README.md"
+]
+
+[tool.setuptools.data-files]
+"share/man/man1" = [
+    "man/swaig-test.1",
+    "man/sw-search.1",
+    "man/sw-agent-init.1"
 ] 

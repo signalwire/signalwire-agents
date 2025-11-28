@@ -1,0 +1,308 @@
+.\" Man page for swaig-test
+.\" Copyright (c) 2025 SignalWire
+.\" Licensed under the MIT License
+.TH SWAIG-TEST 1 "November 2025" "SignalWire Agents SDK 1.0.6" "SignalWire Commands"
+.SH NAME
+swaig-test \- test SWAIG functions and generate SWML documents for SignalWire AI agents
+.SH SYNOPSIS
+.B swaig-test
+.I agent_path
+.RI [ options ]
+.br
+.B swaig-test
+.I agent_path
+.B \-\-exec
+.I function_name
+.RI [ function_arguments ]
+.br
+.B swaig-test
+.I agent_path
+.B \-\-dump\-swml
+.RI [ options ]
+.SH DESCRIPTION
+.B swaig-test
+is a command-line tool for testing SignalWire AI Agent Interface (SWAIG) functions
+and generating SWML (SignalWire Markup Language) documents. It allows developers to
+test their agents locally without deploying to a server, simulate various call
+scenarios, and verify function behavior.
+.PP
+The tool loads a Python file containing one or more SignalWire agents, discovers
+the available SWAIG functions, and allows interactive testing with simulated
+call data. It supports both webhook-based functions and DataMap functions.
+.SH ARGUMENTS
+.TP
+.I agent_path
+Path to the Python file containing the SignalWire agent definition.
+This file should contain a class inheriting from AgentBase or an
+instantiated agent object.
+.SH OPTIONS
+.SS "Common Options"
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit.
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output. Shows detailed information about function
+execution, post data, and results.
+.TP
+.B \-\-raw
+Output raw JSON only, suitable for piping to tools like
+.BR jq (1).
+Suppresses all decorative output and logging.
+.TP
+.BI \-\-agent\-class " CLASS"
+Specify which agent class to use when the file contains multiple
+agent definitions. Required if the file has more than one agent.
+.TP
+.BI \-\-route " ROUTE"
+Specify service by route (e.g., /healthcare, /finance). Alternative
+to \-\-agent\-class for selecting agents.
+.SS "Actions (choose one)"
+.TP
+.B \-\-list\-agents
+List all agents found in the specified file, showing their class
+names, types (class or instance), routes, and descriptions.
+.TP
+.B \-\-list\-tools
+List all SWAIG tools (functions) available in the agent, including
+their names, descriptions, and parameter schemas.
+.TP
+.B \-\-dump\-swml
+Generate and output the complete SWML document that would be
+returned by the agent. Useful for debugging agent configuration.
+.TP
+.BI \-\-exec " FUNCTION"
+Execute the specified function with arguments provided after the
+function name. All options must appear BEFORE \-\-exec.
+.SS "Function Execution Options"
+.TP
+.BI \-\-custom\-data " JSON"
+JSON string with custom post_data overrides for function execution.
+.TP
+.B \-\-minimal
+Use minimal post_data for function execution. Only includes
+essential fields required for the function call.
+.TP
+.B \-\-fake\-full\-data
+Use comprehensive fake post_data including simulated call
+metadata, SIP headers, and user variables.
+.SS "SWML Generation Options"
+.TP
+.BI \-\-call\-type " TYPE"
+Set the call type for SWML generation. Valid values are
+.B sip
+or
+.BR webrtc .
+Default is webrtc.
+.TP
+.BI \-\-call\-direction " DIR"
+Set the call direction. Valid values are
+.B inbound
+or
+.BR outbound .
+Default is inbound.
+.TP
+.BI \-\-call\-state " STATE"
+Set the call state. Default is "created".
+.TP
+.BI \-\-from\-number " NUMBER"
+Override the "from" phone number in the simulated call data.
+.TP
+.BI \-\-to\-extension " EXT"
+Override the "to" extension in the simulated call data.
+.SS "Data Customization"
+.TP
+.BI \-\-user\-vars " JSON"
+JSON string for userVariables to include in the request.
+.TP
+.BI \-\-query\-params " JSON"
+JSON string for query parameters to include in the request.
+.TP
+.BI \-\-override " KEY=VALUE"
+Override a specific value in the post data using dot notation.
+Can be specified multiple times.
+Example: \-\-override call.state=answered
+.TP
+.BI \-\-header " KEY=VALUE"
+Add an HTTP header to the simulated request.
+Can be specified multiple times.
+Example: \-\-header Authorization="Bearer token"
+.SS "Serverless Simulation"
+.TP
+.BI \-\-simulate\-serverless " PLATFORM"
+Simulate a serverless platform environment. Valid platforms are:
+.RS
+.IP \(bu 2
+.B lambda
+\- AWS Lambda
+.IP \(bu 2
+.B cgi
+\- CGI environment
+.IP \(bu 2
+.B cloud_function
+\- Google Cloud Functions
+.IP \(bu 2
+.B azure_function
+\- Azure Functions
+.RE
+.TP
+.BI \-\-env " KEY=VALUE"
+Set an environment variable for the simulation.
+Can be specified multiple times.
+.TP
+.BI \-\-env\-file " FILE"
+Load environment variables from a file.
+.TP
+.B \-\-help\-platforms
+Show detailed help for platform-specific serverless options.
+.TP
+.B \-\-help\-examples
+Show comprehensive usage examples.
+.SS "Platform-Specific Options"
+These options are used with \-\-simulate\-serverless. Use \-\-help\-platforms
+for complete documentation.
+.TP
+.BI \-\-aws\-function\-name " NAME"
+AWS Lambda function name.
+.TP
+.BI \-\-aws\-region " REGION"
+AWS region.
+.TP
+.BI \-\-cgi\-host " HOST"
+CGI server hostname (required for CGI simulation).
+.TP
+.B \-\-cgi\-https
+Use HTTPS for CGI URLs.
+.TP
+.BI \-\-gcp\-project " ID"
+Google Cloud project ID.
+.TP
+.BI \-\-azure\-env " ENV"
+Azure Functions environment.
+.SH EXAMPLES
+.SS Basic Usage
+List all tools in an agent:
+.PP
+.RS
+.nf
+swaig-test agent.py
+swaig-test agent.py --list-tools
+.fi
+.RE
+.SS Executing Functions
+Execute a function with arguments:
+.PP
+.RS
+.nf
+swaig-test agent.py --exec search --query "AI" --limit 5
+swaig-test agent.py --verbose --exec get_info --topic "weather"
+.fi
+.RE
+.PP
+.B Important:
+All options (like \-\-verbose, \-\-call\-id) must come BEFORE \-\-exec.
+Everything after \-\-exec function_name is treated as function arguments.
+.PP
+Correct:
+.RS
+.nf
+swaig-test agent.py --call-id my-session --exec add_todo --text "Buy milk"
+.fi
+.RE
+.PP
+Incorrect (won't work):
+.RS
+.nf
+swaig-test agent.py --exec add_todo --text "Buy milk" --call-id my-session
+.fi
+.RE
+.SS SWML Generation
+Generate SWML document:
+.PP
+.RS
+.nf
+swaig-test agent.py --dump-swml
+swaig-test agent.py --dump-swml --raw | jq '.'
+swaig-test agent.py --dump-swml --call-type sip --from-number +15551234567
+.fi
+.RE
+.PP
+Extract specific fields:
+.PP
+.RS
+.nf
+swaig-test agent.py --dump-swml --raw | jq '.sections.main[1].ai.SWAIG.functions'
+.fi
+.RE
+.SS Multi-Agent Files
+When a file contains multiple agents:
+.PP
+.RS
+.nf
+swaig-test multi_agent.py --list-agents
+swaig-test multi_agent.py --agent-class MattiAgent --list-tools
+swaig-test multi_agent.py --route /healthcare --exec schedule_appointment
+.fi
+.RE
+.SS Serverless Simulation
+Test with AWS Lambda simulation:
+.PP
+.RS
+.nf
+swaig-test agent.py --simulate-serverless lambda --dump-swml
+swaig-test agent.py --simulate-serverless lambda \\
+  --env API_KEY=secret \\
+  --exec my_function
+.fi
+.RE
+.PP
+Test with CGI simulation:
+.PP
+.RS
+.nf
+swaig-test agent.py --simulate-serverless cgi \\
+  --cgi-host example.com \\
+  --cgi-https \\
+  --dump-swml
+.fi
+.RE
+.SS Dynamic Configuration
+Test agents with dynamic configuration:
+.PP
+.RS
+.nf
+swaig-test agent.py --dump-swml \\
+  --query-params '{"tier":"premium"}' \\
+  --header "Authorization=Bearer token" \\
+  --user-vars '{"language":"es"}'
+.fi
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+An error occurred. Check stderr for details.
+.SH ENVIRONMENT
+.TP
+.B SIGNALWIRE_LOG_MODE
+Controls logging verbosity. Set to "off" to suppress logs.
+Automatically set to "off" when using \-\-raw or \-\-dump\-swml.
+.SH FILES
+.TP
+.I agent.py
+A Python file containing one or more SignalWire agent definitions.
+The file should import from signalwire_agents and define classes
+inheriting from AgentBase.
+.SH SEE ALSO
+.BR sw-agent-init (1),
+.BR sw-search (1),
+.BR jq (1)
+.PP
+SignalWire AI Agents SDK documentation:
+.I https://github.com/signalwire/signalwire-agents
+.SH AUTHORS
+SignalWire Team <info@signalwire.com>
+.SH COPYRIGHT
+Copyright (c) 2025 SignalWire. Licensed under the MIT License.

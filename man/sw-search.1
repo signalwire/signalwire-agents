@@ -1,0 +1,483 @@
+.\" Man page for sw-search
+.\" Copyright (c) 2025 SignalWire
+.\" Licensed under the MIT License
+.TH SW-SEARCH 1 "November 2025" "SignalWire Agents SDK 1.0.6" "SignalWire Commands"
+.SH NAME
+sw-search \- build and query semantic search indexes for SignalWire AI agents
+.SH SYNOPSIS
+.B sw-search
+.I sources
+.RI [ sources... ]
+.RI [ options ]
+.br
+.B sw-search
+.B search
+.I index_file
+.I query
+.RI [ options ]
+.br
+.B sw-search
+.B validate
+.I index_file
+.br
+.B sw-search
+.B remote
+.I host
+.I query
+.RI [ options ]
+.br
+.B sw-search
+.B migrate
+.I index_file
+.RI [ options ]
+.SH DESCRIPTION
+.B sw-search
+is a command-line tool for building semantic search indexes from documents
+and querying them. It creates
+.I .swsearch
+files that can be used by SignalWire AI agents to provide knowledge-based
+responses through the native_vector_search skill.
+.PP
+The tool supports multiple document formats (Markdown, text, PDF, Word, etc.),
+various chunking strategies, and multiple storage backends including SQLite
+and PostgreSQL with pgvector.
+.SH COMMANDS
+.TP
+.BI "sw-search " "sources..."
+Build a search index from the specified source files or directories.
+This is the default command when no subcommand is specified.
+.TP
+.BI "sw-search search " "index_file query"
+Search within an existing index file for the given query.
+.TP
+.BI "sw-search validate " "index_file"
+Validate the structure and integrity of an existing index file.
+.TP
+.BI "sw-search remote " "host query"
+Search via a remote search API server.
+.TP
+.BI "sw-search migrate " "index_file"
+Migrate an index between storage backends.
+.SH BUILD OPTIONS
+.SS "Output Options"
+.TP
+.BI \-\-output " FILE"
+Output file name for the search index (default: sources.swsearch).
+For pgvector backend, this is the collection name.
+.TP
+.BI \-\-output\-dir " DIR"
+Output directory for results. When used with \-\-output\-format json,
+creates one file per source file.
+.TP
+.BI \-\-output\-format " FORMAT"
+Output format:
+.B index
+(create search index) or
+.B json
+(export chunks as JSON for review).
+Default is index.
+.SS "Backend Options"
+.TP
+.BI \-\-backend " BACKEND"
+Storage backend to use:
+.B sqlite
+(default) or
+.BR pgvector .
+.TP
+.BI \-\-connection\-string " STRING"
+PostgreSQL connection string for pgvector backend.
+Format: postgresql://user:pass@host:port/database
+.TP
+.B \-\-overwrite
+Overwrite existing collection (pgvector backend only).
+.SS "Chunking Strategies"
+.TP
+.BI \-\-chunking\-strategy " STRATEGY"
+Strategy for splitting documents into chunks. Available strategies:
+.RS
+.IP \(bu 2
+.B sentence
+\- Split by sentences, grouping up to N sentences per chunk (default)
+.IP \(bu 2
+.B sliding
+\- Sliding window with configurable size and overlap
+.IP \(bu 2
+.B paragraph
+\- Split on paragraph boundaries
+.IP \(bu 2
+.B page
+\- Split on page boundaries (good for PDFs)
+.IP \(bu 2
+.B semantic
+\- Group semantically similar sentences
+.IP \(bu 2
+.B topic
+\- Group by topic changes
+.IP \(bu 2
+.B qa
+\- Optimized for question-answering use cases
+.IP \(bu 2
+.B json
+\- Read pre-chunked content from JSON files
+.IP \(bu 2
+.B markdown
+\- Markdown-aware chunking that preserves headers and detects code blocks
+.RE
+.TP
+.BI \-\-max\-sentences\-per\-chunk " N"
+Maximum sentences per chunk for sentence strategy (default: 5).
+.TP
+.BI \-\-chunk\-size " N"
+Chunk size in words for sliding window strategy (default: 50).
+.TP
+.BI \-\-overlap\-size " N"
+Overlap size in words for sliding window strategy (default: 10).
+.TP
+.BI \-\-split\-newlines " N"
+Split on N or more consecutive newlines (for sentence strategy).
+.TP
+.BI \-\-semantic\-threshold " FLOAT"
+Similarity threshold for semantic chunking (default: 0.5).
+.TP
+.BI \-\-topic\-threshold " FLOAT"
+Similarity threshold for topic chunking (default: 0.3).
+.SS "Source Options"
+.TP
+.BI \-\-file\-types " TYPES"
+Comma-separated file extensions to include when processing directories
+(default: md,txt,rst).
+.TP
+.BI \-\-exclude " PATTERNS"
+Comma-separated glob patterns to exclude.
+Example: "**/test/**,**/__pycache__/**"
+.TP
+.BI \-\-languages " CODES"
+Comma-separated language codes (default: en).
+.SS "Model Options"
+.TP
+.BI \-\-model " MODEL"
+Sentence transformer model name or alias. Aliases:
+.RS
+.IP \(bu 2
+.B mini
+\- sentence-transformers/all-MiniLM-L6-v2 (fastest, 384 dims)
+.IP \(bu 2
+.B base
+\- sentence-transformers/all-mpnet-base-v2 (balanced, 768 dims)
+.IP \(bu 2
+.B large
+\- Same as base (best quality)
+.RE
+.PP
+Or specify full model name from Hugging Face.
+.TP
+.BI \-\-index\-nlp\-backend " BACKEND"
+NLP backend for document processing:
+.B nltk
+(fast, default) or
+.B spacy
+(better quality, slower).
+.SS "Metadata Options"
+.TP
+.BI \-\-tags " TAGS"
+Comma-separated tags to add to all chunks.
+.TP
+.B \-\-verbose
+Enable verbose output showing processing details.
+.TP
+.B \-\-validate
+Validate the created index after building.
+.SH SEARCH OPTIONS
+.TP
+.BI \-\-count " N"
+Number of results to return (default: 5).
+.TP
+.BI \-\-tags " TAGS"
+Filter results by tags.
+.TP
+.B \-\-json
+Output results as JSON.
+.TP
+.B \-\-verbose
+Show detailed result information including scores.
+.SH REMOTE OPTIONS
+.TP
+.BI \-\-index\-name " NAME"
+Index name on the remote server.
+.TP
+.BI \-\-count " N"
+Number of results to return.
+.TP
+.B \-\-verbose
+Show detailed results.
+.SH MIGRATE OPTIONS
+.TP
+.B \-\-info
+Show information about the index without migrating.
+.TP
+.B \-\-to\-pgvector
+Migrate to PostgreSQL pgvector backend.
+.TP
+.BI \-\-connection\-string " STRING"
+PostgreSQL connection string for migration target.
+.TP
+.BI \-\-collection\-name " NAME"
+Collection name for pgvector migration.
+.SH EXAMPLES
+.SS Building Indexes
+Basic usage with a directory:
+.PP
+.RS
+.nf
+sw-search ./docs
+.fi
+.RE
+.PP
+Multiple sources with file type filter:
+.PP
+.RS
+.nf
+sw-search ./docs ./examples README.md --file-types md,txt,py
+.fi
+.RE
+.PP
+Custom output file:
+.PP
+.RS
+.nf
+sw-search ./docs --output knowledge.swsearch
+.fi
+.RE
+.SS Chunking Strategies
+Sentence-based chunking with custom parameters:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --chunking-strategy sentence \\
+  --max-sentences-per-chunk 10
+.fi
+.RE
+.PP
+Sliding window chunking:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --chunking-strategy sliding \\
+  --chunk-size 100 \\
+  --overlap-size 20
+.fi
+.RE
+.PP
+Markdown-aware chunking (best for documentation with code):
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --chunking-strategy markdown \\
+  --file-types md
+.fi
+.RE
+.PP
+Semantic chunking (groups similar content):
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --chunking-strategy semantic \\
+  --semantic-threshold 0.6
+.fi
+.RE
+.SS Model Selection
+Using different embedding models:
+.PP
+.RS
+.nf
+sw-search ./docs --model mini    # Fastest, good for most cases
+sw-search ./docs --model base    # Better quality, slower
+sw-search ./docs --model sentence-transformers/all-mpnet-base-v2
+.fi
+.RE
+.SS PostgreSQL pgvector Backend
+Build directly to PostgreSQL:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --backend pgvector \\
+  --connection-string "postgresql://user:pass@localhost:5432/db" \\
+  --output docs_collection
+.fi
+.RE
+.PP
+Overwrite existing collection:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --backend pgvector \\
+  --connection-string "postgresql://user:pass@localhost:5432/db" \\
+  --output docs_collection \\
+  --overwrite
+.fi
+.RE
+.SS Searching
+Search within an index:
+.PP
+.RS
+.nf
+sw-search search ./docs.swsearch "how to create an agent"
+sw-search search ./docs.swsearch "API reference" --count 3 --verbose
+sw-search search ./docs.swsearch "configuration" --tags documentation --json
+.fi
+.RE
+.PP
+Search in pgvector collection:
+.PP
+.RS
+.nf
+sw-search search docs_collection "how to create an agent" \\
+  --backend pgvector \\
+  --connection-string "postgresql://user:pass@localhost/db"
+.fi
+.RE
+.SS Remote Search
+Search via remote API:
+.PP
+.RS
+.nf
+sw-search remote http://localhost:8001 "how to create an agent" \\
+  --index-name docs
+.fi
+.RE
+.SS Exporting and Importing Chunks
+Export chunks to JSON for review:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --output-format json \\
+  --output all_chunks.json
+.fi
+.RE
+.PP
+Export one JSON file per source:
+.PP
+.RS
+.nf
+sw-search ./docs \\
+  --output-format json \\
+  --output-dir ./chunks/
+.fi
+.RE
+.PP
+Build index from exported JSON:
+.PP
+.RS
+.nf
+sw-search ./chunks/ \\
+  --chunking-strategy json \\
+  --file-types json \\
+  --output final.swsearch
+.fi
+.RE
+.SS Migration
+Show index information:
+.PP
+.RS
+.nf
+sw-search migrate --info ./docs.swsearch
+.fi
+.RE
+.PP
+Migrate to pgvector:
+.PP
+.RS
+.nf
+sw-search migrate ./docs.swsearch --to-pgvector \\
+  --connection-string "postgresql://user:pass@localhost/db" \\
+  --collection-name docs_collection
+.fi
+.RE
+.SH FILE FORMATS
+.SS .swsearch Files
+SQLite-based search index files containing:
+.IP \(bu 2
+Document chunks with text content
+.IP \(bu 2
+Embedding vectors for semantic search
+.IP \(bu 2
+Metadata (source file, tags, headers)
+.IP \(bu 2
+Index configuration and model information
+.SS Supported Input Formats
+.IP \(bu 2
+.B Markdown
+(.md) \- Full support including code block detection
+.IP \(bu 2
+.B Text
+(.txt) \- Plain text files
+.IP \(bu 2
+.B reStructuredText
+(.rst) \- Documentation format
+.IP \(bu 2
+.B PDF
+(.pdf) \- Requires pdfplumber (install with [search-full])
+.IP \(bu 2
+.B Word
+(.docx) \- Requires python-docx (install with [search-full])
+.IP \(bu 2
+.B Excel
+(.xlsx) \- Requires openpyxl (install with [search-full])
+.IP \(bu 2
+.B PowerPoint
+(.pptx) \- Requires python-pptx (install with [search-full])
+.IP \(bu 2
+.B RTF
+(.rtf) \- Requires striprtf (install with [search-full])
+.IP \(bu 2
+.B JSON
+(.json) \- Pre-chunked content
+.SH INSTALLATION
+The search functionality requires optional dependencies:
+.PP
+.RS
+.nf
+# Query-only (search existing indexes)
+pip install signalwire-agents[search-queryonly]
+
+# Full search (build and query)
+pip install signalwire-agents[search]
+
+# With document processing (PDF, Word, etc.)
+pip install signalwire-agents[search-full]
+
+# With pgvector support
+pip install signalwire-agents[pgvector]
+
+# Everything
+pip install signalwire-agents[search-all]
+.fi
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+An error occurred. Check stderr for details.
+.SH ENVIRONMENT
+.TP
+.B SIGNALWIRE_LOG_MODE
+Controls logging verbosity. Set to "off" to suppress logs.
+.SH SEE ALSO
+.BR swaig-test (1),
+.BR sw-agent-init (1)
+.PP
+SignalWire AI Agents SDK documentation:
+.I https://github.com/signalwire/signalwire-agents
+.SH AUTHORS
+SignalWire Team <info@signalwire.com>
+.SH COPYRIGHT
+Copyright (c) 2025 SignalWire. Licensed under the MIT License.

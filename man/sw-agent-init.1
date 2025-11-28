@@ -1,0 +1,307 @@
+.\" Man page for sw-agent-init
+.\" Copyright (c) 2025 SignalWire
+.\" Licensed under the MIT License
+.TH SW-AGENT-INIT 1 "November 2025" "SignalWire Agents SDK 1.0.6" "SignalWire Commands"
+.SH NAME
+sw-agent-init \- create a new SignalWire AI agent project
+.SH SYNOPSIS
+.B sw-agent-init
+.RI [ options ]
+.br
+.B sw-agent-init
+.I project_name
+.RI [ options ]
+.SH DESCRIPTION
+.B sw-agent-init
+is an interactive command-line tool for creating new SignalWire AI agent
+projects. It generates a complete project structure with all the necessary
+files to get started building voice AI agents.
+.PP
+When run without arguments, the tool enters interactive mode and prompts
+for project configuration. When given a project name, it runs in quick
+mode with sensible defaults.
+.PP
+The generated project includes:
+.IP \(bu 2
+Agent module with sample SWAIG function
+.IP \(bu 2
+Main application entry point
+.IP \(bu 2
+Environment configuration (.env)
+.IP \(bu 2
+Test scaffolding with pytest
+.IP \(bu 2
+Optional web UI for browser-based testing
+.IP \(bu 2
+Debug webhook handlers
+.IP \(bu 2
+README documentation
+.SH ARGUMENTS
+.TP
+.I project_name
+Name of the project to create. If not provided, the tool enters
+interactive mode and prompts for a name.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit.
+.TP
+.BI \-\-type " TYPE"
+Agent type to create. Valid values:
+.RS
+.IP \(bu 2
+.B basic
+\- Minimal agent with example tool (default)
+.IP \(bu 2
+.B full
+\- Complete setup with debug webhooks, web UI, and all features
+.RE
+.TP
+.B \-\-no\-venv
+Skip virtual environment creation. By default, a Python virtual
+environment is created in the project directory.
+.TP
+.BI \-\-dir " DIRECTORY"
+Parent directory for the project. The project will be created as
+a subdirectory. Default is the current directory.
+.SH INTERACTIVE MODE
+When run without a project name, the tool prompts for:
+.SS Project Configuration
+.IP \(bu 2
+.B Project name
+\- Name of the project directory
+.IP \(bu 2
+.B Project directory
+\- Where to create the project
+.IP \(bu 2
+.B Agent type
+\- Basic or full setup
+.SS Feature Selection
+The following features can be enabled or disabled:
+.IP \(bu 2
+.B Debug webhooks
+\- Console output for real-time call data
+.IP \(bu 2
+.B Post-prompt summary
+\- Call summary handling
+.IP \(bu 2
+.B Web UI
+\- Browser-based agent testing interface
+.IP \(bu 2
+.B Example SWAIG tool
+\- Sample get_info function
+.IP \(bu 2
+.B Test scaffolding
+\- pytest-based tests
+.IP \(bu 2
+.B Basic authentication
+\- Secure webhook endpoints
+.SS Credentials
+The tool checks for existing SignalWire credentials in environment
+variables:
+.IP \(bu 2
+.B SIGNALWIRE_SPACE_NAME
+.IP \(bu 2
+.B SIGNALWIRE_PROJECT_ID
+.IP \(bu 2
+.B SIGNALWIRE_TOKEN
+.PP
+If found, they are offered as defaults. Otherwise, you can enter them
+manually or skip and configure later.
+.SH PROJECT STRUCTURE
+A generated project has the following structure:
+.PP
+.RS
+.nf
+project_name/
+\(lm\(em\(em agents/
+\(bv   \(lm\(em\(em __init__.py
+\(bv   \(gra\(em\(em main_agent.py      # Agent implementation
+\(lm\(em\(em skills/
+\(bv   \(gra\(em\(em __init__.py        # Custom skills
+\(lm\(em\(em tests/
+\(bv   \(lm\(em\(em __init__.py
+\(bv   \(gra\(em\(em test_agent.py      # Unit tests
+\(lm\(em\(em web/
+\(bv   \(gra\(em\(em index.html         # Web UI (if enabled)
+\(lm\(em\(em .env                    # Environment config
+\(lm\(em\(em .env.example            # Example config
+\(lm\(em\(em .gitignore
+\(lm\(em\(em .venv/                  # Virtual environment
+\(lm\(em\(em app.py                  # Entry point
+\(lm\(em\(em README.md
+\(gra\(em\(em requirements.txt
+.fi
+.RE
+.SH GENERATED FILES
+.SS agents/main_agent.py
+The main agent class with:
+.IP \(bu 2
+Voice and language configuration
+.IP \(bu 2
+Prompt sections (role, guidelines)
+.IP \(bu 2
+Example SWAIG tool using the @tool decorator
+.IP \(bu 2
+Debug webhook configuration (if enabled)
+.IP \(bu 2
+Basic authentication support (if enabled)
+.SS app.py
+Application entry point that:
+.IP \(bu 2
+Loads environment variables from .env
+.IP \(bu 2
+Creates and configures the AgentServer
+.IP \(bu 2
+Registers webhook endpoints
+.IP \(bu 2
+Serves static files from web/ directory
+.IP \(bu 2
+Pretty-prints debug data to console
+.SS .env
+Environment configuration with:
+.IP \(bu 2
+SignalWire credentials
+.IP \(bu 2
+Server host and port
+.IP \(bu 2
+Basic auth credentials (auto-generated secure password)
+.IP \(bu 2
+Debug level settings
+.IP \(bu 2
+Public URL configuration
+.SS tests/test_agent.py
+Test suite that verifies:
+.IP \(bu 2
+Agent loads without errors
+.IP \(bu 2
+SWML structure is valid
+.IP \(bu 2
+SWAIG functions are defined correctly
+.IP \(bu 2
+Functions execute and return expected results
+.SH EXAMPLES
+.SS Interactive Mode
+Run without arguments for guided setup:
+.PP
+.RS
+.nf
+sw-agent-init
+.fi
+.RE
+.SS Quick Mode
+Create a basic agent project:
+.PP
+.RS
+.nf
+sw-agent-init myagent
+.fi
+.RE
+.PP
+Create a full-featured project:
+.PP
+.RS
+.nf
+sw-agent-init myagent --type full
+.fi
+.RE
+.PP
+Create without virtual environment:
+.PP
+.RS
+.nf
+sw-agent-init myagent --no-venv
+.fi
+.RE
+.PP
+Create in a specific directory:
+.PP
+.RS
+.nf
+sw-agent-init myagent --dir /opt/projects
+.fi
+.RE
+.SS After Creation
+Start the agent:
+.PP
+.RS
+.nf
+cd myagent
+source .venv/bin/activate
+python app.py
+.fi
+.RE
+.PP
+Run tests:
+.PP
+.RS
+.nf
+cd myagent
+source .venv/bin/activate
+pytest tests/ -v
+.fi
+.RE
+.PP
+Test with swaig-test:
+.PP
+.RS
+.nf
+swaig-test agents/main_agent.py --list-tools
+swaig-test agents/main_agent.py --exec get_info --topic "test"
+swaig-test agents/main_agent.py --dump-swml
+.fi
+.RE
+.SH AGENT TYPES
+.SS Basic Agent
+The basic agent type includes:
+.IP \(bu 2
+Minimal agent with single example tool
+.IP \(bu 2
+Basic prompt configuration
+.IP \(bu 2
+Test scaffolding
+.IP \(bu 2
+Simple app.py without extra features
+.SS Full Agent
+The full agent type includes everything in basic, plus:
+.IP \(bu 2
+Debug webhook endpoints (/debug, /post_prompt)
+.IP \(bu 2
+Pretty-printed console output for call events
+.IP \(bu 2
+Web UI for browser-based testing
+.IP \(bu 2
+Basic authentication for endpoints
+.IP \(bu 2
+Post-prompt summary configuration
+.IP \(bu 2
+Static file serving
+.SH ENVIRONMENT
+The following environment variables affect credential defaults:
+.TP
+.B SIGNALWIRE_SPACE_NAME
+SignalWire space name. If set, used as default in interactive mode.
+.TP
+.B SIGNALWIRE_PROJECT_ID
+SignalWire project ID. If set, used as default in interactive mode.
+.TP
+.B SIGNALWIRE_TOKEN
+SignalWire API token. If set, used as default in interactive mode.
+.SH EXIT STATUS
+.TP
+.B 0
+Project created successfully.
+.TP
+.B 1
+An error occurred. Check stderr for details.
+.SH SEE ALSO
+.BR swaig-test (1),
+.BR sw-search (1),
+.BR pytest (1)
+.PP
+SignalWire AI Agents SDK documentation:
+.I https://github.com/signalwire/signalwire-agents
+.SH AUTHORS
+SignalWire Team <info@signalwire.com>
+.SH COPYRIGHT
+Copyright (c) 2025 SignalWire. Licensed under the MIT License.
