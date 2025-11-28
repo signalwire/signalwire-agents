@@ -640,12 +640,18 @@ class DocumentationAgent(AgentBase):
             "User documentation is available at https://example.com:8002/docs/"
         )
     
-    @self.tool()
-    def get_doc_link(args, raw_data):
-        doc_name = args.get('doc_name')
-        return SwaigFunctionResult(
-            f"Documentation available at: https://example.com:8002/docs/{doc_name}.html"
+        @self.tool(
+            "get_doc_link",
+            description="Get link to a documentation page",
+            parameters={
+                "doc_name": {"type": "string", "description": "Name of the documentation page"}
+            }
         )
+        def get_doc_link(self, args, raw_data):
+            doc_name = args.get('doc_name')
+            return SwaigFunctionResult(
+                f"Documentation available at: https://example.com:8002/docs/{doc_name}.html"
+            )
 
 # Run both services
 if __name__ == "__main__":

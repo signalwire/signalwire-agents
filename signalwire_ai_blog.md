@@ -353,7 +353,11 @@ The SDK's stateless-first approach represents a fundamental architectural decisi
 Some applications require state persistence for functionality like multi-step workflows, user preferences, or session-specific data. The SDK provides elegant solutions through the SWAIG platform:
 
 ```python
-@AgentBase.tool(name="start_order_process")
+@AgentBase.tool(
+    name="start_order_process",
+    description="Start a new order workflow",
+    parameters={}
+)
 def start_order_process(self, args, raw_data):
     # Initialize order state
     order_data = {
@@ -362,38 +366,46 @@ def start_order_process(self, args, raw_data):
         "customer_info": {},
         "step": "collecting_items"
     }
-    
+
     result = SwaigFunctionResult("Let's start your order! What would you like to add?")
-    
+
     # Store state in global data for AI access
     result.add_action("set_global_data", {
         "current_order": order_data
     })
-    
+
     return result
 
-@AgentBase.tool(name="add_item_to_order")
+@AgentBase.tool(
+    name="add_item_to_order",
+    description="Add an item to the current order",
+    parameters={
+        "item_sku": {"type": "string", "description": "Product SKU"},
+        "item_name": {"type": "string", "description": "Product name"},
+        "quantity": {"type": "integer", "description": "Quantity to add"}
+    }
+)
 def add_item_to_order(self, args, raw_data):
     # Retrieve current state
     current_order = self.get_global_data("current_order", {})
-    
+
     if not current_order:
         return SwaigFunctionResult("I don't see an active order. Let me start a new one for you.")
-    
+
     # Update state with new item
     current_order["items"].append({
         "sku": args.get("item_sku"),
         "quantity": args.get("quantity", 1),
         "added_at": datetime.now().isoformat()
     })
-    
+
     result = SwaigFunctionResult(f"Added {args.get('quantity', 1)} {args.get('item_name')} to your order.")
-    
+
     # Update stored state
     result.add_action("set_global_data", {
         "current_order": current_order
     })
-    
+
     return result
 ```
 
