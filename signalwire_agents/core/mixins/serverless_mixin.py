@@ -326,61 +326,99 @@ class ServerlessMixin:
     def _handle_azure_function_request(self, req):
         """
         Handle Azure Functions specific requests
-        
+
         Args:
             req: Azure Functions HttpRequest object
-            
+
         Returns:
             Azure Functions HttpResponse object
         """
         try:
             import azure.functions as func
-            
-            # Get the path from the request
-            path = req.url.split('/')[-1] if req.url else ''
-            
-            if not path or path == 'api':
-                # Root request - return SWML
-                swml_response = self._render_swml()
+            from urllib.parse import urlparse
+
+            # Get the path from the request URL
+            # Azure Functions URLs look like: https://app.azurewebsites.net/api/function_name/path
+            path = ''
+            base_url = None
+            if req.url:
+                parsed = urlparse(req.url)
+                # Full path after /api/ e.g. "function_app" or "function_app/swaig"
+                url_parts = req.url.split('/api/')
+                if len(url_parts) > 1:
+                    full_path = url_parts[1].strip('/')
+                    # Split into function name and sub-path
+                    path_parts = full_path.split('/', 1)
+                    function_app_name = path_parts[0] if path_parts else ''
+                    path = path_parts[1] if len(path_parts) > 1 else ''
+
+                    # Base URL includes the function app name for webhook URLs
+                    # e.g., https://app.azurewebsites.net/api/function_app
+                    base_url = f"{parsed.scheme}://{parsed.netloc}/api/{function_app_name}"
+                else:
+                    base_url = f"{parsed.scheme}://{parsed.netloc}/api"
+
+            # Set the proxy URL base so SWML renders correct webhook URLs
+            if base_url and not getattr(self, '_proxy_url_base_from_env', False):
+                self._proxy_url_base = base_url
+
+            # Parse request body if present
+            args = {}
+            call_id = None
+            raw_data = None
+            function_name = None
+
+            if req.method == 'POST':
+                try:
+                    body = req.get_body()
+                    if body:
+                        raw_data = json.loads(body.decode('utf-8'))
+                        call_id = raw_data.get("call_id")
+                        function_name = raw_data.get("function")
+
+                        # Extract arguments like the FastAPI handler does
+                        if "argument" in raw_data and isinstance(raw_data["argument"], dict):
+                            if "parsed" in raw_data["argument"] and isinstance(raw_data["argument"]["parsed"], list) and raw_data["argument"]["parsed"]:
+                                args = raw_data["argument"]["parsed"][0]
+                            elif "raw" in raw_data["argument"]:
+                                try:
+                                    args = json.loads(raw_data["argument"]["raw"])
+                                except Exception:
+                                    pass
+                except Exception:
+                    # If parsing fails, continue with empty args
+                    pass
+
+            # Determine if this is a SWAIG function call
+            # Case 1: /swaig endpoint with function name in body
+            # Case 2: /{function_name} path-based routing
+            # Case 3: Root path - return SWML
+
+            if path in ('swaig', 'swaig/') and function_name:
+                # /swaig endpoint with function name in body
+                result = self._execute_swaig_function(function_name, args, call_id, raw_data)
                 return func.HttpResponse(
-                    body=swml_response,
+                    body=json.dumps(result) if isinstance(result, dict) else str(result),
                     status_code=200,
                     headers={"Content-Type": "application/json"}
                 )
-            else:
-                # SWAIG function call
-                args = {}
-                call_id = None
-                raw_data = None
-                
-                # Parse request data
-                if req.method == 'POST':
-                    try:
-                        body = req.get_body()
-                        if body:
-                            raw_data = json.loads(body.decode('utf-8'))
-                            call_id = raw_data.get("call_id")
-                            
-                            # Extract arguments like the FastAPI handler does
-                            if "argument" in raw_data and isinstance(raw_data["argument"], dict):
-                                if "parsed" in raw_data["argument"] and isinstance(raw_data["argument"]["parsed"], list) and raw_data["argument"]["parsed"]:
-                                    args = raw_data["argument"]["parsed"][0]
-                                elif "raw" in raw_data["argument"]:
-                                    try:
-                                        args = json.loads(raw_data["argument"]["raw"])
-                                    except Exception:
-                                        pass
-                    except Exception:
-                        # If parsing fails, continue with empty args
-                        pass
-                
+            elif path and path not in ('', 'api', 'swaig', 'swaig/'):
+                # Path-based function routing (e.g., /say_hello)
                 result = self._execute_swaig_function(path, args, call_id, raw_data)
                 return func.HttpResponse(
                     body=json.dumps(result) if isinstance(result, dict) else str(result),
                     status_code=200,
                     headers={"Content-Type": "application/json"}
                 )
-                
+            else:
+                # Root path or /swaig without function - return SWML
+                swml_response = self._render_swml()
+                return func.HttpResponse(
+                    body=swml_response,
+                    status_code=200,
+                    headers={"Content-Type": "application/json"}
+                )
+
         except Exception as e:
             import logging
             logging.error(f"Error in Azure Function request handler: {e}")

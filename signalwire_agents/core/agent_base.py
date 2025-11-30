@@ -317,13 +317,32 @@ class AgentBase(
     def get_full_url(self, include_auth: bool = False) -> str:
         """
         Get the full URL for this agent's endpoint
-        
+
         Args:
             include_auth: Whether to include authentication credentials in the URL
-            
+
         Returns:
             Full URL including host, port, and route (with auth if requested)
         """
+        # If _proxy_url_base is set (e.g., from request URL detection), use it
+        if hasattr(self, '_proxy_url_base') and self._proxy_url_base:
+            base_url = self._proxy_url_base.rstrip('/')
+            # Add authentication if requested
+            if include_auth:
+                username, password = self.get_basic_auth_credentials()
+                if username and password:
+                    from urllib.parse import urlparse, urlunparse
+                    parsed = urlparse(base_url)
+                    base_url = urlunparse((
+                        parsed.scheme,
+                        f"{username}:{password}@{parsed.netloc}",
+                        parsed.path,
+                        parsed.params,
+                        parsed.query,
+                        parsed.fragment
+                    ))
+            return base_url
+
         mode = get_execution_mode()
 
         if mode == 'cgi':
