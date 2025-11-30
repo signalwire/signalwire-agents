@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.10] - 2025-11-30
+
+- Fix Google Cloud Functions /swaig endpoint to support function name in request body
+- Add URL detection for Google Cloud Functions to generate correct webhook URLs in SWML
+
 ## [1.0.9] - 2025-11-30
 
 - Add Azure Functions serverless support with proper URL detection for webhook URLs
