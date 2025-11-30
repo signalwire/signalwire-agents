@@ -1,7 +1,7 @@
 .\" Man page for sw-agent-init
 .\" Copyright (c) 2025 SignalWire
 .\" Licensed under the MIT License
-.TH SW-AGENT-INIT 1 "November 2025" "SignalWire Agents SDK 1.0.6" "SignalWire Commands"
+.TH SW-AGENT-INIT 1 "November 2025" "SignalWire Agents SDK 1.0.8" "SignalWire Commands"
 .SH NAME
 sw-agent-init \- create a new SignalWire AI agent project
 .SH SYNOPSIS
@@ -14,14 +14,14 @@ sw-agent-init \- create a new SignalWire AI agent project
 .SH DESCRIPTION
 .B sw-agent-init
 is an interactive command-line tool for creating new SignalWire AI agent
-projects. It generates a complete project structure with all the necessary
-files to get started building voice AI agents.
+projects. It supports both local agent projects (FastAPI/uvicorn) and
+cloud function deployments (AWS Lambda, Google Cloud Functions, Azure Functions).
 .PP
 When run without arguments, the tool enters interactive mode and prompts
-for project configuration. When given a project name, it runs in quick
-mode with sensible defaults.
+for project configuration including platform selection. When given a project
+name, it runs in quick mode with sensible defaults (local platform by default).
 .PP
-The generated project includes:
+For local projects, the generated project includes:
 .IP \(bu 2
 Agent module with sample SWAIG function
 .IP \(bu 2
@@ -46,8 +46,36 @@ interactive mode and prompts for a name.
 .BR \-h ", " \-\-help
 Display help message and exit.
 .TP
+.BI \-p ", " \-\-platform " PLATFORM"
+Target deployment platform. Valid values:
+.RS
+.IP \(bu 2
+.B local
+\- Local agent with FastAPI/uvicorn server (default)
+.IP \(bu 2
+.B aws
+\- AWS Lambda function with API Gateway
+.IP \(bu 2
+.B gcp
+\- Google Cloud Function (Gen 2)
+.IP \(bu 2
+.B azure
+\- Azure Function
+.RE
+.TP
+.BI \-r ", " \-\-region " REGION"
+Cloud region for deployment (only for cloud platforms). Default regions:
+.RS
+.IP \(bu 2
+AWS: us-east-1
+.IP \(bu 2
+GCP: us-central1
+.IP \(bu 2
+Azure: eastus
+.RE
+.TP
 .BI \-\-type " TYPE"
-Agent type to create. Valid values:
+Agent type to create (only for local platform). Valid values:
 .RS
 .IP \(bu 2
 .B basic
@@ -58,8 +86,8 @@ Agent type to create. Valid values:
 .RE
 .TP
 .B \-\-no\-venv
-Skip virtual environment creation. By default, a Python virtual
-environment is created in the project directory.
+Skip virtual environment creation (only for local platform). By default,
+a Python virtual environment is created in the project directory.
 .TP
 .BI \-\-dir " DIRECTORY"
 Parent directory for the project. The project will be created as
@@ -68,14 +96,20 @@ a subdirectory. Default is the current directory.
 When run without a project name, the tool prompts for:
 .SS Project Configuration
 .IP \(bu 2
+.B Target platform
+\- Local, AWS Lambda, GCP, or Azure
+.IP \(bu 2
 .B Project name
 \- Name of the project directory
 .IP \(bu 2
 .B Project directory
 \- Where to create the project
 .IP \(bu 2
+.B Region
+\- Cloud region (for cloud platforms only)
+.IP \(bu 2
 .B Agent type
-\- Basic or full setup
+\- Basic or full setup (for local platform only)
 .SS Feature Selection
 The following features can be enabled or disabled:
 .IP \(bu 2
@@ -189,8 +223,8 @@ Run without arguments for guided setup:
 sw-agent-init
 .fi
 .RE
-.SS Quick Mode
-Create a basic agent project:
+.SS Quick Mode - Local
+Create a basic local agent project:
 .PP
 .RS
 .nf
@@ -198,7 +232,7 @@ sw-agent-init myagent
 .fi
 .RE
 .PP
-Create a full-featured project:
+Create a full-featured local project:
 .PP
 .RS
 .nf
@@ -221,7 +255,39 @@ Create in a specific directory:
 sw-agent-init myagent --dir /opt/projects
 .fi
 .RE
-.SS After Creation
+.SS Quick Mode - Cloud Functions
+Create an AWS Lambda project:
+.PP
+.RS
+.nf
+sw-agent-init myagent -p aws
+.fi
+.RE
+.PP
+Create an AWS Lambda project in a specific region:
+.PP
+.RS
+.nf
+sw-agent-init myagent -p aws -r us-west-2
+.fi
+.RE
+.PP
+Create a Google Cloud Function project:
+.PP
+.RS
+.nf
+sw-agent-init myagent -p gcp
+.fi
+.RE
+.PP
+Create an Azure Function project:
+.PP
+.RS
+.nf
+sw-agent-init myagent -p azure
+.fi
+.RE
+.SS After Creation - Local
 Start the agent:
 .PP
 .RS
@@ -249,6 +315,33 @@ Test with swaig-test:
 swaig-test agents/main_agent.py --list-tools
 swaig-test agents/main_agent.py --exec get_info --topic "test"
 swaig-test agents/main_agent.py --dump-swml
+.fi
+.RE
+.SS After Creation - Cloud Functions
+Deploy to AWS Lambda:
+.PP
+.RS
+.nf
+cd myagent
+./deploy.sh
+.fi
+.RE
+.PP
+Deploy to Google Cloud:
+.PP
+.RS
+.nf
+cd myagent
+./deploy.sh
+.fi
+.RE
+.PP
+Deploy to Azure:
+.PP
+.RS
+.nf
+cd myagent
+./deploy.sh
 .fi
 .RE
 .SH AGENT TYPES
