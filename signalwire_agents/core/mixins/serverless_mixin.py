@@ -80,51 +80,75 @@ class ServerlessMixin:
                 # Check authentication in Lambda mode
                 if not self._check_lambda_auth(event):
                     return self._send_lambda_auth_challenge()
-                
+
                 if event:
-                    path = event.get('pathParameters', {}).get('proxy', '') if event.get('pathParameters') else ''
-                    if not path:
-                        swml_response = self._render_swml()
+                    # Support both HTTP API (v2) and REST API (v1) payload formats
+                    # HTTP API v2 uses rawPath, REST API v1 uses pathParameters.proxy
+                    path = event.get('rawPath', '').strip('/')
+                    if not path and event.get('pathParameters'):
+                        path = event.get('pathParameters', {}).get('proxy', '')
+
+                    # Parse request body if present
+                    args = {}
+                    call_id = None
+                    raw_data = None
+                    function_name = None
+
+                    body_content = event.get('body')
+                    if body_content:
+                        try:
+                            if event.get('isBase64Encoded'):
+                                import base64
+                                body_content = base64.b64decode(body_content).decode('utf-8')
+                            if isinstance(body_content, str):
+                                raw_data = json.loads(body_content)
+                            else:
+                                raw_data = body_content
+
+                            call_id = raw_data.get("call_id")
+                            function_name = raw_data.get("function")
+
+                            # Extract arguments like the FastAPI handler does
+                            if "argument" in raw_data and isinstance(raw_data["argument"], dict):
+                                if "parsed" in raw_data["argument"] and isinstance(raw_data["argument"]["parsed"], list) and raw_data["argument"]["parsed"]:
+                                    args = raw_data["argument"]["parsed"][0]
+                                elif "raw" in raw_data["argument"]:
+                                    try:
+                                        args = json.loads(raw_data["argument"]["raw"])
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            # If parsing fails, continue with empty args
+                            pass
+
+                    # Determine if this is a SWAIG function call
+                    # Case 1: /swaig endpoint with function name in body
+                    # Case 2: /{function_name} path-based routing
+                    # Case 3: Root path - return SWML
+
+                    if path in ('swaig', 'swaig/') and function_name:
+                        # /swaig endpoint with function name in body
+                        result = self._execute_swaig_function(function_name, args, call_id, raw_data)
                         return {
                             "statusCode": 200,
                             "headers": {"Content-Type": "application/json"},
-                            "body": swml_response
+                            "body": json.dumps(result) if isinstance(result, dict) else str(result)
                         }
-                    else:
-                        # Parse Lambda event for SWAIG function call
-                        args = {}
-                        call_id = None
-                        raw_data = None
-                        
-                        # Parse request body if present
-                        body_content = event.get('body')
-                        if body_content:
-                            try:
-                                if isinstance(body_content, str):
-                                    raw_data = json.loads(body_content)
-                                else:
-                                    raw_data = body_content
-                                    
-                                call_id = raw_data.get("call_id")
-                                
-                                # Extract arguments like the FastAPI handler does
-                                if "argument" in raw_data and isinstance(raw_data["argument"], dict):
-                                    if "parsed" in raw_data["argument"] and isinstance(raw_data["argument"]["parsed"], list) and raw_data["argument"]["parsed"]:
-                                        args = raw_data["argument"]["parsed"][0]
-                                    elif "raw" in raw_data["argument"]:
-                                        try:
-                                            args = json.loads(raw_data["argument"]["raw"])
-                                        except Exception:
-                                            pass
-                            except Exception:
-                                # If parsing fails, continue with empty args
-                                pass
-                        
+                    elif path and path not in ('', 'swaig', 'swaig/'):
+                        # Path-based function routing (e.g., /say_hello)
                         result = self._execute_swaig_function(path, args, call_id, raw_data)
                         return {
                             "statusCode": 200,
                             "headers": {"Content-Type": "application/json"},
                             "body": json.dumps(result) if isinstance(result, dict) else str(result)
+                        }
+                    else:
+                        # Root path or /swaig without function - return SWML
+                        swml_response = self._render_swml()
+                        return {
+                            "statusCode": 200,
+                            "headers": {"Content-Type": "application/json"},
+                            "body": swml_response
                         }
                 else:
                     # Handle case when event is None (direct Lambda call with no event)
