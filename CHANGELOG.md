@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.9] - 2025-11-30
+
+- Add Azure Functions serverless support with proper URL detection for webhook URLs
+- Add Google Cloud Functions serverless support
+- Fix Flask header iteration bug in Google Cloud Functions auth check (use .get() instead of iteration)
+- Fix Azure Functions auth check to use .get() method for headers
+- Improve serverless mixin to properly detect base URL from request for correct SWML webhook URLs
+
 ## [1.0.8] - 2025-11-29
 
 - Fix tool definitions in docs to include parameters

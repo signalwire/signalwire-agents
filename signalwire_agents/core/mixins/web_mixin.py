@@ -302,7 +302,7 @@ class WebMixin:
                 response = self.handle_serverless_request(event, context, mode)
                 print(response)
                 return response
-            elif mode == 'lambda':
+            elif mode in ['lambda', 'google_cloud_function']:
                 return self.handle_serverless_request(event, context, mode)
             else:
                 # Server mode - use existing serve method

@@ -176,7 +176,9 @@ class ServerlessMixin:
                 
         except Exception as e:
             import logging
+            import traceback
             logging.error(f"Error in serverless request handler: {e}")
+            logging.error(f"Traceback: {traceback.format_exc()}")
             if mode == 'lambda':
                 return {
                     "statusCode": 500,

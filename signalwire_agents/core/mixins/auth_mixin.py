@@ -196,11 +196,8 @@ class AuthMixin:
             return False
             
         # Check for authorization header (case-insensitive)
-        auth_header = None
-        for key in request.headers:
-            if key.lower() == 'authorization':
-                auth_header = request.headers[key]
-                break
+        # Flask headers can be accessed directly with .get() which is case-insensitive
+        auth_header = request.headers.get('Authorization')
                 
         if not auth_header or not auth_header.startswith('Basic '):
             return False
@@ -246,14 +243,10 @@ class AuthMixin:
         """
         if not hasattr(req, 'headers'):
             return False
-            
-        # Check for authorization header (case-insensitive)
-        auth_header = None
-        for key, value in req.headers.items():
-            if key.lower() == 'authorization':
-                auth_header = value
-                break
-                
+
+        # Check for authorization header - use .get() which works with both dict and Flask headers
+        auth_header = req.headers.get('Authorization')
+
         if not auth_header or not auth_header.startswith('Basic '):
             return False
             
