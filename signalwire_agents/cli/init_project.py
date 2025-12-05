@@ -1353,6 +1353,13 @@ def get_app_template(features: Dict[str, bool]) -> str:
 
     imports_str = '\n'.join(imports)
 
+    # Create agent at module level for swaig-test compatibility
+    agent_instance = '''
+
+# Create agent instance at module level for swaig-test compatibility
+agent = MainAgent()
+'''
+
     # Debug webhook code
     debug_code = ''
     if has_debug:
@@ -1452,7 +1459,7 @@ def main():
 
     # Create server and register agent
     server = AgentServer(host=host, port=port)
-    server.register(MainAgent())
+    server.register(agent)
 ''']
 
     if has_web_ui:
@@ -1510,6 +1517,7 @@ if __name__ == "__main__":
 """Main entry point for the agent server."""
 
 {imports_str}
+{agent_instance}
 {debug_code}
 {main_body}'''
 
