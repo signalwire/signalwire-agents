@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.11] - 2025-12-06
+
+- Add `mcp-gateway` as installed CLI command (`pip install "signalwire-agents[mcp-gateway]"`)
+- Move MCP Gateway core files into `signalwire_agents/mcp_gateway/` package
+- Add flask and flask-limiter as optional `[mcp-gateway]` dependencies
+- Add cloud function support to `sw-agent-init` CLI tool
+- Fix `sw-agent-init` to generate swaig-test compatible app.py
+- Add comprehensive test script for `sw-agent-init`
+
 ## [1.0.10] - 2025-11-30
 
 - Fix Google Cloud Functions /swaig endpoint to support function name in request body
