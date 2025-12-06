@@ -106,6 +106,12 @@ pgvector = [
     "pgvector>=0.2.0",
 ]
 
+# MCP Gateway dependencies
+mcp-gateway = [
+    "flask>=2.0.0",
+    "flask-limiter>=3.5.0",
+]
+
 # All optional dependencies
 all = [
     "sentence-transformers>=2.2.0",
@@ -130,6 +136,7 @@ Homepage = "https://github.com/signalwire/signalwire-agents"
 swaig-test = "signalwire_agents.cli.swaig_test_wrapper:main"
 sw-search = "signalwire_agents.cli.build_search:console_entry_point"
 sw-agent-init = "signalwire_agents.cli.init_project:main"
+mcp-gateway = "signalwire_agents.mcp_gateway.gateway_service:main"
 
 [tool.setuptools]
 packages = {find = {where = ["."], include = ["signalwire_agents*"]}}

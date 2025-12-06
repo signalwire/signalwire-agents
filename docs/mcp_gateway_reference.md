@@ -4,6 +4,20 @@
 
 The MCP-SWAIG Gateway bridges Model Context Protocol (MCP) servers with SignalWire AI Gateway (SWAIG) functions, allowing SignalWire AI agents to seamlessly interact with MCP-based tools. This gateway acts as a translation layer and session manager between the two protocols.
 
+## Installation
+
+The MCP Gateway is included in the SignalWire Agents SDK. Install with the gateway dependencies:
+
+```bash
+pip install "signalwire-agents[mcp-gateway]"
+```
+
+Once installed, the `mcp-gateway` CLI command is available:
+
+```bash
+mcp-gateway -c config.json
+```
+
 ## Architecture
 
 ### Components
@@ -65,30 +79,32 @@ The gateway uses a custom envelope format for routing and session management:
 ## Directory Structure
 
 ```
-mcp_gateway/
-├── config.json              # Gateway configuration
-├── gateway_service.py       # Main HTTP/HTTPS server
-├── mcp_manager.py          # MCP server lifecycle management
-├── session_manager.py      # Session handling and timeouts
-├── requirements.txt        # Python dependencies
-├── Dockerfile             # Docker container definition
-├── docker-compose.yml     # Docker compose configuration
-├── mcp-docker.sh          # Docker management helper script
-├── README.md              # Gateway documentation
-├── certs/                 # SSL certificates (optional)
-│   └── .gitignore        # Ignore actual certificates
+signalwire_agents/mcp_gateway/    # Core gateway package (installed with SDK)
+├── __init__.py                   # Package exports
+├── gateway_service.py            # Main HTTP/HTTPS server
+├── mcp_manager.py                # MCP server lifecycle management
+└── session_manager.py            # Session handling and timeouts
+
+mcp_gateway/                      # Configuration and deployment files
+├── config.json                   # Gateway configuration
+├── sample_config.json            # Example configuration
+├── Dockerfile                    # Docker container definition
+├── docker-compose.yml            # Docker compose configuration
+├── mcp-docker.sh                 # Docker management helper script
+├── README.md                     # Gateway documentation
+├── certs/                        # SSL certificates (optional)
+│   └── .gitignore                # Ignore actual certificates
 ├── test/
-│   ├── todo_mcp.py       # Test MCP server
-│   ├── test_gateway.sh   # Curl test scripts
-│   └── test_agent.py     # Test SignalWire agent
+│   ├── todo_mcp.py               # Test MCP server
+│   ├── test_gateway.sh           # Curl test scripts
+│   └── test_agent.py             # Test SignalWire agent
 └── examples/
-    ├── config.example.json
-    └── generate_cert.sh   # Generate self-signed certificate
+    └── generate_cert.sh          # Generate self-signed certificate
 
 signalwire_agents/skills/mcp_gateway/
 ├── __init__.py
-├── skill.py              # MCP gateway skill
-└── README.md            # Skill documentation
+├── skill.py                      # MCP gateway skill
+└── README.md                     # Skill documentation
 ```
 
 ## Configuration

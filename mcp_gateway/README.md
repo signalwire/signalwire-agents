@@ -4,10 +4,28 @@ A gateway service that bridges Model Context Protocol (MCP) servers with SignalW
 
 > **Note**: This is the quick start guide. For comprehensive technical documentation including architecture details, protocol specifications, and advanced configuration, see [docs/mcp_gateway_reference.md](../docs/mcp_gateway_reference.md).
 
+## Installation
+
+The MCP Gateway is included in the SignalWire Agents SDK. Install with the gateway dependencies:
+
+```bash
+pip install "signalwire-agents[mcp-gateway]"
+```
+
+Or if you have the SDK installed, add the gateway dependencies:
+
+```bash
+pip install flask flask-limiter
+```
+
 ## Quick Start
 
 1. **Start the Gateway**:
    ```bash
+   # Using the installed CLI command
+   mcp-gateway -c config.json
+
+   # Or run directly (for development)
    cd mcp_gateway
    python3 gateway_service.py
    ```
@@ -19,7 +37,6 @@ A gateway service that bridges Model Context Protocol (MCP) servers with SignalW
 
 3. **Test with SignalWire Agent**:
    ```bash
-   cd ..
    swaig-test mcp_gateway/test/test_agent.py --list-tools
    swaig-test mcp_gateway/test/test_agent.py --exec mcp_todo_add_todo --text "Test item"
    ```
