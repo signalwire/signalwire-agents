@@ -114,7 +114,7 @@ python test_install.py
 Expected output:
 ```
 ✅ SignalWire SDK imported successfully!
-   Version: 1.0.5
+   Version: 1.0.12
 ```
 
 ### Test Basic Agent

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.12] - 2025-12-08
+
+- Export `SkillBase` from `signalwire_agents.skills` for convenience imports
+
 ## [1.0.11] - 2025-12-06
 
 - Add `mcp-gateway` as installed CLI command (`pip install "signalwire-agents[mcp-gateway]"`)
