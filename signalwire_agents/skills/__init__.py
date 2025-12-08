@@ -17,7 +17,10 @@ Skills are automatically discovered from subdirectories.
 # Import the registry to make it available
 from .registry import skill_registry
 
+# Import SkillBase for convenience
+from signalwire_agents.core.skill_base import SkillBase
+
 # Trigger skill discovery on import
 # skill_registry.discover_skills()
 
-__all__ = ["skill_registry"] 
+__all__ = ["skill_registry", "SkillBase"] 
