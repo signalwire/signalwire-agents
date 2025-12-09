@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.13] - 2025-12-09
+
+- Add `sw-agent-dokku` CLI for scaffolding Dokku deployments
+  - Simple mode: generates Procfile, runtime.txt, requirements.txt, CHECKS
+  - CI/CD mode: adds GitHub Actions workflows for auto-deployment
+  - Web interface option: `--web` flag for static file serving
+- Register `/health` and `/ready` endpoints in `AgentServer.__init__()` for gunicorn compatibility
+- Fix static files auth by using `AgentServer.serve_static_files()` in templates
+
 ## [1.0.12] - 2025-12-08
 
 - Export `SkillBase` from `signalwire_agents.skills` for convenience imports
