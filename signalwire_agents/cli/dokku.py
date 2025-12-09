@@ -314,6 +314,50 @@ if web_dir.exists():
 # Expose the ASGI app for gunicorn
 app = server.app
 
+# Register health endpoint (needed for gunicorn since _run_server() isn't called)
+@app.get("/health")
+def health_check():
+    return {{
+        "status": "ok",
+        "agents": len(server.agents),
+        "routes": list(server.agents.keys())
+    }}
+
+# Register catch-all for static files (needed for gunicorn since _run_server() isn't called)
+from fastapi import Request, HTTPException
+from fastapi.responses import FileResponse
+import mimetypes
+
+@app.get("/{{full_path:path}}")
+async def serve_static(request: Request, full_path: str):
+    """Serve static files from web/ directory"""
+    if not web_dir.exists():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Handle root path
+    if not full_path or full_path == "/":
+        full_path = "index.html"
+
+    file_path = web_dir / full_path
+
+    # Security: prevent directory traversal
+    try:
+        file_path = file_path.resolve()
+        if not str(file_path).startswith(str(web_dir.resolve())):
+            raise HTTPException(status_code=404, detail="Not Found")
+    except Exception:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if file_path.exists() and file_path.is_file():
+        media_type, _ = mimetypes.guess_type(str(file_path))
+        return FileResponse(file_path, media_type=media_type)
+
+    # Try index.html for directory paths
+    if (web_dir / full_path / "index.html").exists():
+        return FileResponse(web_dir / full_path / "index.html", media_type="text/html")
+
+    raise HTTPException(status_code=404, detail="Not Found")
+
 if __name__ == "__main__":
     server.run()
 '''
@@ -1150,7 +1194,8 @@ class DokkuProjectGenerator:
             self._write_file('app.py', APP_TEMPLATE_WITH_WEB.format(
                 agent_name=self.app_name,
                 agent_class=self.agent_class,
-                agent_slug=self.agent_slug
+                agent_slug=self.agent_slug,
+                route=self.agent_slug
             ))
             self._write_web_files()
         else:
