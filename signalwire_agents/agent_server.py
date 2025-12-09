@@ -77,9 +77,12 @@ class AgentServer:
         # whether using server.run() or server.app with gunicorn
         self._register_health_endpoints()
 
-        # Register catch-all handler for routes without trailing slash and static files
-        # This ensures routing works with both server.run() and gunicorn
-        self._register_catch_all_handler()
+        # Register catch-all handler on startup (not in __init__) so it runs AFTER
+        # all other routes are registered. This ensures custom routes like /get_token
+        # don't get overshadowed by the catch-all /{full_path:path} route.
+        @self.app.on_event("startup")
+        async def _setup_catch_all():
+            self._register_catch_all_handler()
     
     def register(self, agent: AgentBase, route: Optional[str] = None) -> None:
         """
@@ -740,8 +743,9 @@ class AgentServer:
         1. Routing requests without trailing slashes to agents (e.g., /santa instead of /santa/)
         2. Serving static files from directories registered with serve_static_files()
 
-        Called once from __init__ to ensure it works with both server.run() and
-        direct use of server.app with gunicorn/uvicorn.
+        Called via startup event (not __init__) to ensure it runs AFTER all other routes
+        are registered. This prevents the catch-all from overshadowing custom routes
+        like /get_token that users may add to server.app.
         """
         @self.app.get("/{full_path:path}")
         @self.app.post("/{full_path:path}")
