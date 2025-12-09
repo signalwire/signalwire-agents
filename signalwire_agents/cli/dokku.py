@@ -103,7 +103,6 @@ TIMEOUT=30
 ATTEMPTS=5
 
 /health
-/ready
 """
 
 GITIGNORE_TEMPLATE = """# Environment
@@ -251,7 +250,7 @@ class {agent_class}(AgentBase):
     """{agent_name} agent for Dokku deployment."""
 
     def __init__(self):
-        super().__init__(name="{agent_slug}", route="/{route}")
+        super().__init__(name="{agent_slug}", route="/swml")
 
         self._configure_prompts()
         self.add_language("English", "en-US", "rime.spore")
@@ -321,6 +320,13 @@ def health_check():
         "status": "ok",
         "agents": len(server.agents),
         "routes": list(server.agents.keys())
+    }}
+
+@app.get("/ready")
+def readiness_check():
+    return {{
+        "status": "ready",
+        "agents": len(server.agents)
     }}
 
 # Register catch-all for static files (needed for gunicorn since _run_server() isn't called)
@@ -521,12 +527,12 @@ WEB_INDEX_TEMPLATE = '''<!DOCTYPE html>
                 </div>
                 <div class="endpoint">
                     <span class="method post">POST</span>
-                    <span class="path">/{route}</span>
+                    <span class="path">/swml</span>
                     <span class="desc">SWML endpoint</span>
                 </div>
                 <div class="endpoint">
                     <span class="method post">POST</span>
-                    <span class="path">/{route}/swaig</span>
+                    <span class="path">/swml/swaig</span>
                     <span class="desc">SWAIG functions</span>
                 </div>
             </div>
@@ -568,8 +574,11 @@ APP_JSON_TEMPLATE = '''{{
     "web": [
       {{
         "type": "startup",
-        "name": "web check",
-        "path": "/health"
+        "name": "port listening",
+        "listening": true,
+        "attempts": 10,
+        "wait": 5,
+        "timeout": 60
       }}
     ]
   }}
@@ -1194,8 +1203,7 @@ class DokkuProjectGenerator:
             self._write_file('app.py', APP_TEMPLATE_WITH_WEB.format(
                 agent_name=self.app_name,
                 agent_class=self.agent_class,
-                agent_slug=self.agent_slug,
-                route=self.agent_slug
+                agent_slug=self.agent_slug
             ))
             self._write_web_files()
         else:
