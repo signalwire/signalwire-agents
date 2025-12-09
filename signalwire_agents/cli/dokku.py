@@ -150,8 +150,8 @@ SIGNALWIRE_TOKEN=your-api-token
 # This should be your publicly accessible URL (e.g., ngrok, dokku domain)
 SWML_PROXY_URL_BASE=https://your-app.example.com
 
-# Basic Auth for SWML endpoints (recommended)
-SWML_BASIC_AUTH_USER=admin
+# Basic Auth for SWML endpoints (password required, user defaults to 'signalwire')
+# SWML_BASIC_AUTH_USER=signalwire
 SWML_BASIC_AUTH_PASSWORD=your-secure-password
 
 # Agent Configuration
@@ -384,7 +384,7 @@ def setup_swml_handler():
     token = os.getenv("SIGNALWIRE_TOKEN", "")
     agent_name = os.getenv("AGENT_NAME", "{agent_slug}")
     proxy_url = os.getenv("SWML_PROXY_URL_BASE", "")
-    auth_user = os.getenv("SWML_BASIC_AUTH_USER", "")
+    auth_user = os.getenv("SWML_BASIC_AUTH_USER", "signalwire")
     auth_pass = os.getenv("SWML_BASIC_AUTH_PASSWORD", "")
 
     if not all([sw_host, project, token]):
@@ -395,8 +395,8 @@ def setup_swml_handler():
         print("SWML_PROXY_URL_BASE not set - skipping SWML handler setup")
         return
 
-    # Build SWML URL with basic auth
-    if auth_user and auth_pass and "://" in proxy_url:
+    # Build SWML URL with basic auth (user defaults to 'signalwire' if not set)
+    if auth_pass and "://" in proxy_url:
         scheme, rest = proxy_url.split("://", 1)
         swml_url = f"{{scheme}}://{{auth_user}}:{{auth_pass}}@{{rest}}/swml"
     else:
