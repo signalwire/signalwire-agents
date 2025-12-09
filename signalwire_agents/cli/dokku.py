@@ -1520,7 +1520,7 @@ swaig-test app.py --list-tools
 # Templates - CI/CD Mode
 # =============================================================================
 
-DEPLOY_WORKFLOW_TEMPLATE = '''# Auto-deploy to Dokku on push
+DEPLOY_WORKFLOW_TEMPLATE = '''# Deploy to Dokku - calls reusable workflow from dokku-deploy-system
 name: Deploy
 
 on:
@@ -1528,150 +1528,24 @@ on:
   push:
     branches: [main, staging, develop]
 
+permissions:
+  contents: read
+  deployments: write
+
 concurrency:
   group: deploy-${{{{ github.ref }}}}
   cancel-in-progress: true
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    environment: ${{{{ github.ref_name == 'main' && 'production' || github.ref_name == 'staging' && 'staging' || 'development' }}}}
-    env:
-      BASE_APP_NAME: ${{{{ github.event.repository.name }}}}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set variables
-        id: vars
-        run: |
-          BRANCH="${{GITHUB_REF#refs/heads/}}"
-          case "$BRANCH" in
-            main)    APP="${{BASE_APP_NAME}}"; ENV="production" ;;
-            staging) APP="${{BASE_APP_NAME}}-staging"; ENV="staging" ;;
-            develop) APP="${{BASE_APP_NAME}}-dev"; ENV="development" ;;
-            *)       APP="${{BASE_APP_NAME}}"; ENV="production" ;;
-          esac
-          echo "app_name=$APP" >> $GITHUB_OUTPUT
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "${{{{ secrets.DOKKU_SSH_PRIVATE_KEY }}}}" > ~/.ssh/key && chmod 600 ~/.ssh/key
-          ssh-keyscan -H ${{{{ secrets.DOKKU_HOST }}}} >> ~/.ssh/known_hosts
-          echo -e "Host dokku\\n  HostName ${{{{ secrets.DOKKU_HOST }}}}\\n  User dokku\\n  IdentityFile ~/.ssh/key" > ~/.ssh/config
-
-      - name: Create app
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          ssh dokku apps:exists $APP_NAME 2>/dev/null || ssh dokku apps:create $APP_NAME
-
-      - name: Unlock app
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          ssh dokku apps:unlock $APP_NAME 2>/dev/null || true
-
-      - name: Configure env
-        env:
-          ALL_SECRETS: ${{{{ toJSON(secrets) }}}}
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
-
-          # Start with required vars
-          CONFIG_VARS="APP_ENV=${{{{ steps.vars.outputs.environment }}}} APP_URL=https://${{DOMAIN}} AGENT_NAME=${{APP_NAME}}"
-
-          # Loop through all secrets and add them (skip GitHub's internal ones)
-          for key in $(echo "$ALL_SECRETS" | jq -r 'keys[]'); do
-            # Skip GitHub internal secrets and deployment-only secrets
-            case "$key" in
-              github_token|GITHUB_TOKEN|DOKKU_*|BASE_DOMAIN|SLACK_WEBHOOK_URL) continue ;;
-            esac
-            value=$(echo "$ALL_SECRETS" | jq -r --arg k "$key" '.[$k]')
-            [ -n "$value" ] && CONFIG_VARS="$CONFIG_VARS $key=$value"
-          done
-
-          ssh dokku config:set --no-restart $APP_NAME $CONFIG_VARS
-
-      - name: Deploy
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          git remote add dokku dokku@${{{{ secrets.DOKKU_HOST }}}}:$APP_NAME 2>/dev/null || true
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/key" git push dokku HEAD:main -f
-
-      - name: Configure domain
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          ssh dokku domains:clear $APP_NAME 2>/dev/null || true
-          ssh dokku domains:add $APP_NAME $DOMAIN
-
-      - name: SSL
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          echo "Checking SSL status..."
-          SSL_STATUS=$(ssh dokku letsencrypt:active $APP_NAME 2>/dev/null || echo "error")
-          echo "SSL status: $SSL_STATUS"
-          if [ "$SSL_STATUS" = "true" ]; then
-            echo "SSL already active"
-          else
-            echo "Enabling SSL..."
-            ssh dokku letsencrypt:enable $APP_NAME 2>&1 || echo "SSL enable failed"
-          fi
-
-      - name: Verify
-        id: verify
-        run: |
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          sleep 10
-          if curl -sf "https://${{DOMAIN}}/health"; then
-            echo "HTTPS OK: https://${{DOMAIN}}"
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "url=https://${{DOMAIN}}" >> $GITHUB_OUTPUT
-          elif curl -sf "http://${{DOMAIN}}/health"; then
-            echo "HTTP only: http://${{DOMAIN}}"
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "url=http://${{DOMAIN}}" >> $GITHUB_OUTPUT
-          else
-            echo "Check logs"
-            echo "status=failed" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Notify Slack
-        if: always()
-        env:
-          SLACK_WEBHOOK_URL: ${{{{ secrets.SLACK_WEBHOOK_URL }}}}
-        run: |
-          [ -z "$SLACK_WEBHOOK_URL" ] && exit 0
-          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          if [ "${{{{ steps.verify.outputs.status }}}}" == "success" ]; then
-            COLOR="good"
-            STATUS="✅ Deployed"
-          else
-            COLOR="danger"
-            STATUS="❌ Deploy failed"
-          fi
-          curl -X POST -H 'Content-type: application/json' \\
-            --data "{{
-              \\"attachments\\": [{{
-                \\"color\\": \\"$COLOR\\",
-                \\"title\\": \\"$STATUS: $APP_NAME\\",
-                \\"fields\\": [
-                  {{\\"title\\": \\"Environment\\", \\"value\\": \\"${{{{ steps.vars.outputs.environment }}}}\\", \\"short\\": true}},
-                  {{\\"title\\": \\"Branch\\", \\"value\\": \\"${{{{ github.ref_name }}}}\\", \\"short\\": true}},
-                  {{\\"title\\": \\"URL\\", \\"value\\": \\"https://$DOMAIN\\", \\"short\\": false}}
-                ],
-                \\"footer\\": \\"<${{{{ github.server_url }}}}/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}|View Workflow>\\"
-              }}]
-            }}" \\
-            "$SLACK_WEBHOOK_URL" || true
+    uses: signalwire-demos/dokku-deploy-system/.github/workflows/deploy.yml@main
+    secrets: inherit
+    # Optional: customize health check path
+    # with:
+    #   health_check_path: '/health'
 '''
 
-PREVIEW_WORKFLOW_TEMPLATE = '''# Preview environments for pull requests
+PREVIEW_WORKFLOW_TEMPLATE = '''# Preview environments for pull requests - calls reusable workflow from dokku-deploy-system
 name: Preview
 
 on:
@@ -1681,87 +1555,13 @@ on:
 concurrency:
   group: preview-${{{{ github.event.pull_request.number }}}}
 
-env:
-  APP_NAME: ${{{{ github.event.repository.name }}}}-pr-${{{{ github.event.pull_request.number }}}}
-
 jobs:
-  deploy:
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "${{{{ secrets.DOKKU_SSH_PRIVATE_KEY }}}}" > ~/.ssh/key && chmod 600 ~/.ssh/key
-          ssh-keyscan -H ${{{{ secrets.DOKKU_HOST }}}} >> ~/.ssh/known_hosts
-
-      - name: Create app
-        run: |
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:exists $APP_NAME 2>/dev/null || \\
-            ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:create $APP_NAME
-
-      - name: Configure env
-        env:
-          ALL_SECRETS: ${{{{ toJSON(secrets) }}}}
-        run: |
-          DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
-
-          # Start with required vars
-          CONFIG_VARS="APP_ENV=preview APP_URL=https://$DOMAIN AGENT_NAME=$APP_NAME"
-
-          # Loop through all secrets and add them (skip deployment-only secrets)
-          for key in $(echo "$ALL_SECRETS" | jq -r 'keys[]'); do
-            case "$key" in
-              github_token|GITHUB_TOKEN|DOKKU_*|BASE_DOMAIN|SLACK_WEBHOOK_URL) continue ;;
-            esac
-            value=$(echo "$ALL_SECRETS" | jq -r --arg k "$key" '.[$k]')
-            [ -n "$value" ] && CONFIG_VARS="$CONFIG_VARS $key=$value"
-          done
-
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} config:set --no-restart $APP_NAME $CONFIG_VARS
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} resource:limit $APP_NAME --memory 256m || true
-
-      - name: Deploy
-        run: |
-          git remote add dokku dokku@${{{{ secrets.DOKKU_HOST }}}}:$APP_NAME 2>/dev/null || true
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/key" git push dokku HEAD:main -f
-
-      - name: Configure domain
-        run: |
-          DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:clear $APP_NAME 2>/dev/null || true
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:add $APP_NAME $DOMAIN
-
-      - name: SSL
-        run: |
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} letsencrypt:enable $APP_NAME || true
-
-      - name: Comment URL
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const url = `https://${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}`;
-            const body = `## 🚀 Preview\\n\\n✅ Deployed: [${{url}}](${{url}})\\n\\n<sub>Auto-destroyed on PR close</sub>`;
-            const comments = await github.rest.issues.listComments({{owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number}});
-            const bot = comments.data.find(c => c.user.type === 'Bot' && c.body.includes('Preview'));
-            if (bot) await github.rest.issues.updateComment({{owner: context.repo.owner, repo: context.repo.repo, comment_id: bot.id, body}});
-            else await github.rest.issues.createComment({{owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body}});
-
-  cleanup:
-    if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Destroy preview
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{{{ secrets.DOKKU_SSH_PRIVATE_KEY }}}}" > ~/.ssh/key && chmod 600 ~/.ssh/key
-          ssh-keyscan -H ${{{{ secrets.DOKKU_HOST }}}} >> ~/.ssh/known_hosts
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:destroy ${{{{ env.APP_NAME }}}} --force || true
+  preview:
+    uses: signalwire-demos/dokku-deploy-system/.github/workflows/preview.yml@main
+    secrets: inherit
+    # Optional: customize memory limit for previews
+    # with:
+    #   memory_limit: '256m'
 '''
 
 DOKKU_CONFIG_TEMPLATE = '''# ═══════════════════════════════════════════════════════════════════════════════
