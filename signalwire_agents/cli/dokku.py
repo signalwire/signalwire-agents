@@ -769,7 +769,7 @@ jobs:
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           ssh dokku apps:unlock $APP_NAME 2>/dev/null || true
 
-      - name: Configure
+      - name: Configure env
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
@@ -778,14 +778,19 @@ jobs:
             APP_URL="https://${{DOMAIN}}" \\
             SWML_BASIC_AUTH_USER="${{{{ secrets.SWML_BASIC_AUTH_USER }}}}" \\
             SWML_BASIC_AUTH_PASSWORD="${{{{ secrets.SWML_BASIC_AUTH_PASSWORD }}}}"
-          ssh dokku domains:clear $APP_NAME 2>/dev/null || true
-          ssh dokku domains:add $APP_NAME $DOMAIN
 
       - name: Deploy
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           git remote add dokku dokku@${{{{ secrets.DOKKU_HOST }}}}:$APP_NAME 2>/dev/null || true
           GIT_SSH_COMMAND="ssh -i ~/.ssh/key" git push dokku HEAD:main -f
+
+      - name: Configure domain
+        run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
+          ssh dokku domains:clear $APP_NAME 2>/dev/null || true
+          ssh dokku domains:add $APP_NAME $DOMAIN
 
       - name: SSL
         run: |
