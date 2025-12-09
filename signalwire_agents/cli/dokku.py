@@ -241,8 +241,7 @@ Deployed to Dokku with automatic health checks, SWAIG support, and web interface
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from signalwire_agents import AgentBase, SwaigFunctionResult
-from fastapi.staticfiles import StaticFiles
+from signalwire_agents import AgentBase, AgentServer, SwaigFunctionResult
 
 # Load environment variables from .env file
 load_dotenv()
@@ -252,7 +251,7 @@ class {agent_class}(AgentBase):
     """{agent_name} agent for Dokku deployment."""
 
     def __init__(self):
-        super().__init__(name="{agent_slug}")
+        super().__init__(name="{agent_slug}", route="/{route}")
 
         self._configure_prompts()
         self.add_language("English", "en-US", "rime.spore")
@@ -303,19 +302,20 @@ class {agent_class}(AgentBase):
             )
 
 
-# Create agent instance
-agent = {agent_class}()
+# Create server and register agent
+server = AgentServer(host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
+server.register({agent_class}())
 
-# Get the FastAPI app
-app = agent.get_app()
-
-# Mount static files from web/ directory at root
+# Serve static files from web/ directory (no auth required)
 web_dir = Path(__file__).parent / "web"
 if web_dir.exists():
-    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
+    server.serve_static_files(str(web_dir))
+
+# Expose the ASGI app for gunicorn
+app = server.app
 
 if __name__ == "__main__":
-    agent.run()
+    server.run()
 '''
 
 WEB_INDEX_TEMPLATE = '''<!DOCTYPE html>
