@@ -842,17 +842,32 @@ jobs:
           echo "${{{{ secrets.DOKKU_SSH_PRIVATE_KEY }}}}" > ~/.ssh/key && chmod 600 ~/.ssh/key
           ssh-keyscan -H ${{{{ secrets.DOKKU_HOST }}}} >> ~/.ssh/known_hosts
 
-      - name: Deploy preview
+      - name: Create app
         run: |
-          DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
           ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:exists $APP_NAME 2>/dev/null || \\
             ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:create $APP_NAME
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} config:set --no-restart $APP_NAME APP_ENV=preview APP_URL="https://$DOMAIN"
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:clear $APP_NAME 2>/dev/null || true
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:add $APP_NAME $DOMAIN
+
+      - name: Configure env
+        run: |
+          DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
+          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} config:set --no-restart $APP_NAME \\
+            APP_ENV=preview \\
+            APP_URL="https://$DOMAIN"
           ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} resource:limit $APP_NAME --memory 256m || true
+
+      - name: Deploy
+        run: |
           git remote add dokku dokku@${{{{ secrets.DOKKU_HOST }}}}:$APP_NAME 2>/dev/null || true
           GIT_SSH_COMMAND="ssh -i ~/.ssh/key" git push dokku HEAD:main -f
+
+      - name: Configure domain
+        run: |
+          DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
+          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:clear $APP_NAME 2>/dev/null || true
+          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} domains:add $APP_NAME $DOMAIN
+
+      - name: SSL
+        run: |
           ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} letsencrypt:enable $APP_NAME || true
 
       - name: Comment URL
