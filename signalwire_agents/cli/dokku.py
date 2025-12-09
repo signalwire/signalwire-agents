@@ -313,22 +313,6 @@ if web_dir.exists():
 # Expose the ASGI app for gunicorn
 app = server.app
 
-# Register health endpoint (needed for gunicorn since _run_server() isn't called)
-@app.get("/health")
-def health_check():
-    return {{
-        "status": "ok",
-        "agents": len(server.agents),
-        "routes": list(server.agents.keys())
-    }}
-
-@app.get("/ready")
-def readiness_check():
-    return {{
-        "status": "ready",
-        "agents": len(server.agents)
-    }}
-
 # Register catch-all for static files (needed for gunicorn since _run_server() isn't called)
 from fastapi import Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse

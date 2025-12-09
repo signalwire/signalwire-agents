@@ -67,11 +67,15 @@ class AgentServer:
         
         # Keep track of registered agents
         self.agents: Dict[str, AgentBase] = {}
-        
+
         # Keep track of SIP routing configuration
         self._sip_routing_enabled = False
         self._sip_route = None
         self._sip_username_mapping: Dict[str, str] = {}  # Maps SIP usernames to routes
+
+        # Register health endpoints immediately so they're available
+        # whether using server.run() or server.app with gunicorn
+        self._register_health_endpoints()
     
     def register(self, agent: AgentBase, route: Optional[str] = None) -> None:
         """
@@ -519,13 +523,13 @@ class AgentServer:
         sys.stdout.flush()
         
         return response
-    
-    def _run_server(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
-        """Original server mode logic"""
-        if not self.agents:
-            self.logger.warning("Starting server with no registered agents")
-            
-        # Add a health check endpoint
+
+    def _register_health_endpoints(self) -> None:
+        """Register health and readiness endpoints.
+
+        Called during __init__ so endpoints are available whether using
+        server.run() or accessing server.app directly with gunicorn.
+        """
         @self.app.get("/health")
         def health_check():
             return {
@@ -533,7 +537,19 @@ class AgentServer:
                 "agents": len(self.agents),
                 "routes": list(self.agents.keys())
             }
-            
+
+        @self.app.get("/ready")
+        def readiness_check():
+            return {
+                "status": "ready",
+                "agents": len(self.agents)
+            }
+
+    def _run_server(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
+        """Original server mode logic"""
+        if not self.agents:
+            self.logger.warning("Starting server with no registered agents")
+
         # Add catch-all route handler to handle both trailing slash and non-trailing slash versions
         @self.app.get("/{full_path:path}")
         @self.app.post("/{full_path:path}")
