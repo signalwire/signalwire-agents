@@ -233,3 +233,6 @@ Dockerfile.local
 k8s-local/
 *.local.yaml
 test.db
+
+# Test/example projects
+myagent/
