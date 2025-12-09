@@ -1502,14 +1502,26 @@ jobs:
           ssh dokku apps:unlock $APP_NAME 2>/dev/null || true
 
       - name: Configure env
+        env:
+          ALL_SECRETS: ${{{{ toJSON(secrets) }}}}
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          ssh dokku config:set --no-restart $APP_NAME \\
-            APP_ENV="${{{{ steps.vars.outputs.environment }}}}" \\
-            APP_URL="https://${{DOMAIN}}" \\
-            SWML_BASIC_AUTH_USER="${{{{ secrets.SWML_BASIC_AUTH_USER }}}}" \\
-            SWML_BASIC_AUTH_PASSWORD="${{{{ secrets.SWML_BASIC_AUTH_PASSWORD }}}}"
+
+          # Start with required vars
+          CONFIG_VARS="APP_ENV=${{{{ steps.vars.outputs.environment }}}} APP_URL=https://${{DOMAIN}} AGENT_NAME=${{APP_NAME}}"
+
+          # Loop through all secrets and add them (skip GitHub's internal ones)
+          for key in $(echo "$ALL_SECRETS" | jq -r 'keys[]'); do
+            # Skip GitHub internal secrets and deployment-only secrets
+            case "$key" in
+              github_token|GITHUB_TOKEN|DOKKU_*|BASE_DOMAIN|SLACK_WEBHOOK_URL) continue ;;
+            esac
+            value=$(echo "$ALL_SECRETS" | jq -r --arg k "$key" '.[$k]')
+            [ -n "$value" ] && CONFIG_VARS="$CONFIG_VARS $key=$value"
+          done
+
+          ssh dokku config:set --no-restart $APP_NAME $CONFIG_VARS
 
       - name: Deploy
         run: |
@@ -1622,11 +1634,24 @@ jobs:
             ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} apps:create $APP_NAME
 
       - name: Configure env
+        env:
+          ALL_SECRETS: ${{{{ toJSON(secrets) }}}}
         run: |
           DOMAIN="${{{{ env.APP_NAME }}}}.${{{{ secrets.BASE_DOMAIN }}}}"
-          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} config:set --no-restart $APP_NAME \\
-            APP_ENV=preview \\
-            APP_URL="https://$DOMAIN"
+
+          # Start with required vars
+          CONFIG_VARS="APP_ENV=preview APP_URL=https://$DOMAIN AGENT_NAME=$APP_NAME"
+
+          # Loop through all secrets and add them (skip deployment-only secrets)
+          for key in $(echo "$ALL_SECRETS" | jq -r 'keys[]'); do
+            case "$key" in
+              github_token|GITHUB_TOKEN|DOKKU_*|BASE_DOMAIN|SLACK_WEBHOOK_URL) continue ;;
+            esac
+            value=$(echo "$ALL_SECRETS" | jq -r --arg k "$key" '.[$k]')
+            [ -n "$value" ] && CONFIG_VARS="$CONFIG_VARS $key=$value"
+          done
+
+          ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} config:set --no-restart $APP_NAME $CONFIG_VARS
           ssh -i ~/.ssh/key dokku@${{{{ secrets.DOKKU_HOST }}}} resource:limit $APP_NAME --memory 256m || true
 
       - name: Deploy
