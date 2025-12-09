@@ -76,6 +76,10 @@ class AgentServer:
         # Register health endpoints immediately so they're available
         # whether using server.run() or server.app with gunicorn
         self._register_health_endpoints()
+
+        # Register catch-all handler for routes without trailing slash and static files
+        # This ensures routing works with both server.run() and gunicorn
+        self._register_catch_all_handler()
     
     def register(self, agent: AgentBase, route: Optional[str] = None) -> None:
         """
@@ -104,12 +108,12 @@ class AgentServer:
             
         # Store the agent
         self.agents[route] = agent
-        
+
         # Get the router and register it using the standard approach
         # The agent's router already handles both trailing slash versions properly
         router = agent.as_router()
         self.app.include_router(router, prefix=route)
-        
+
         self.logger.info(f"Registered agent '{agent.get_name()}' at route '{route}'")
         
         # If SIP routing is enabled and auto-mapping is on, register SIP usernames for this agent
@@ -550,9 +554,6 @@ class AgentServer:
         if not self.agents:
             self.logger.warning("Starting server with no registered agents")
 
-        # Register catch-all route handler (handles agent routing and static files)
-        self._register_catch_all_handler()
-
         # Set host and port
         host = host or self.host
         port = port or self.port
@@ -682,9 +683,6 @@ class AgentServer:
 
         self.logger.info(f"Serving static files from '{directory}' at route '{route or '/'}'")
 
-        # Register catch-all handler immediately so it works with gunicorn
-        # (when using server.app directly instead of server.run())
-        self._register_catch_all_handler()
 
     def _serve_static_file(self, file_path: str, route: str = "/") -> Optional[Response]:
         """
@@ -742,14 +740,9 @@ class AgentServer:
         1. Routing requests without trailing slashes to agents (e.g., /santa instead of /santa/)
         2. Serving static files from directories registered with serve_static_files()
 
-        The handler is registered once and works with both server.run() and
+        Called once from __init__ to ensure it works with both server.run() and
         direct use of server.app with gunicorn/uvicorn.
         """
-        # Only register once
-        if getattr(self, '_catch_all_registered', False):
-            return
-        self._catch_all_registered = True
-
         @self.app.get("/{full_path:path}")
         @self.app.post("/{full_path:path}")
         async def handle_all_routes(request: Request, full_path: str):
