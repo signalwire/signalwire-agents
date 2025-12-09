@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.14] - 2025-12-09
+
+- Add WebRTC calling support to `sw-agent-dokku` generated apps
+  - Dynamic token generation via `/get_token` endpoint (24-hour expiration)
+  - `/get_credentials` endpoint for curl examples in web UI
+  - `/get_resource_info` endpoint for SignalWire dashboard integration
+  - Auto-create/update SWML handlers on startup
+  - Enhanced web UI with WebRTC calling controls and audio settings
+- Add SignalWire credentials to generated `app.json` and `.env.example` templates
+- Add `requests` dependency to generated requirements.txt
+
 ## [1.0.13] - 2025-12-09
 
 - Add `sw-agent-dokku` CLI for scaffolding Dokku deployments
