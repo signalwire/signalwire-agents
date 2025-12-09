@@ -331,8 +331,13 @@ def readiness_check():
 
 # Register catch-all for static files (needed for gunicorn since _run_server() isn't called)
 from fastapi import Request, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 import mimetypes
+
+# Redirect /swml to /swml/ (trailing slash required by FastAPI router)
+@app.api_route("/swml", methods=["GET", "POST"])
+async def swml_redirect():
+    return RedirectResponse(url="/swml/", status_code=307)
 
 @app.get("/{{full_path:path}}")
 async def serve_static(request: Request, full_path: str):
@@ -775,13 +780,20 @@ jobs:
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           ssh dokku apps:exists $APP_NAME 2>/dev/null || ssh dokku apps:create $APP_NAME
 
+      - name: Unlock app
+        run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          ssh dokku apps:unlock $APP_NAME 2>/dev/null || true
+
       - name: Configure
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
           ssh dokku config:set --no-restart $APP_NAME \\
             APP_ENV="${{{{ steps.vars.outputs.environment }}}}" \\
-            APP_URL="https://${{DOMAIN}}"
+            APP_URL="https://${{DOMAIN}}" \\
+            SWML_BASIC_AUTH_USER="${{{{ secrets.SWML_BASIC_AUTH_USER }}}}" \\
+            SWML_BASIC_AUTH_PASSWORD="${{{{ secrets.SWML_BASIC_AUTH_PASSWORD }}}}"
           ssh dokku domains:clear $APP_NAME 2>/dev/null || true
           ssh dokku domains:add $APP_NAME $DOMAIN
 
@@ -794,14 +806,22 @@ jobs:
       - name: SSL
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
-          ssh dokku letsencrypt:active $APP_NAME 2>/dev/null || ssh dokku letsencrypt:enable $APP_NAME || true
+          echo "Checking SSL status..."
+          SSL_STATUS=$(ssh dokku letsencrypt:active $APP_NAME 2>/dev/null || echo "error")
+          echo "SSL status: $SSL_STATUS"
+          if [ "$SSL_STATUS" = "true" ]; then
+            echo "SSL already active"
+          else
+            echo "Enabling SSL..."
+            ssh dokku letsencrypt:enable $APP_NAME 2>&1 || echo "SSL enable failed"
+          fi
 
       - name: Verify
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
           sleep 10
-          curl -sf "https://${{DOMAIN}}/health" && echo "Deployed: https://${{DOMAIN}}" || echo "Check logs: ssh dokku@${{{{ secrets.DOKKU_HOST }}}} logs $APP_NAME"
+          curl -sf "https://${{DOMAIN}}/health" && echo "HTTPS OK: https://${{DOMAIN}}" || curl -sf "http://${{DOMAIN}}/health" && echo "HTTP only: http://${{DOMAIN}}" || echo "Check logs"
 '''
 
 PREVIEW_WORKFLOW_TEMPLATE = '''# Preview environments for pull requests
