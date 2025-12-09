@@ -675,11 +675,10 @@ swaig-test app.py --list-tools
 # =============================================================================
 
 DEPLOY_WORKFLOW_TEMPLATE = '''# Auto-deploy to Dokku on push
-# Copy this file to your repository's .github/workflows/ directory
-
 name: Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, staging, develop]
 
@@ -687,40 +686,29 @@ concurrency:
   group: deploy-${{{{ github.ref }}}}
   cancel-in-progress: true
 
-env:
-  BASE_APP_NAME: ${{{{ github.event.repository.name }}}}
-
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      app_name: ${{{{ steps.env.outputs.app_name }}}}
-      environment: ${{{{ steps.env.outputs.environment }}}}
-      domain: ${{{{ steps.env.outputs.domain }}}}
-    steps:
-      - id: env
-        run: |
-          BRANCH="${{GITHUB_REF#refs/heads/}}"
-          case "$BRANCH" in
-            main)    APP="${{{{ env.BASE_APP_NAME }}}}"; ENV="production" ;;
-            staging) APP="${{{{ env.BASE_APP_NAME }}}}-staging"; ENV="staging" ;;
-            develop) APP="${{{{ env.BASE_APP_NAME }}}}-dev"; ENV="development" ;;
-          esac
-          echo "app_name=$APP" >> $GITHUB_OUTPUT
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-          echo "domain=$APP.${{{{ secrets.BASE_DOMAIN }}}}" >> $GITHUB_OUTPUT
-
   deploy:
-    needs: setup
     runs-on: ubuntu-latest
-    environment: ${{{{ needs.setup.outputs.environment }}}}
+    environment: ${{{{ github.ref_name == 'main' && 'production' || github.ref_name == 'staging' && 'staging' || 'development' }}}}
     env:
-      APP_NAME: ${{{{ needs.setup.outputs.app_name }}}}
-      DOMAIN: ${{{{ needs.setup.outputs.domain }}}}
+      BASE_APP_NAME: ${{{{ github.event.repository.name }}}}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set variables
+        id: vars
+        run: |
+          BRANCH="${{GITHUB_REF#refs/heads/}}"
+          case "$BRANCH" in
+            main)    APP="${{BASE_APP_NAME}}"; ENV="production" ;;
+            staging) APP="${{BASE_APP_NAME}}-staging"; ENV="staging" ;;
+            develop) APP="${{BASE_APP_NAME}}-dev"; ENV="development" ;;
+            *)       APP="${{BASE_APP_NAME}}"; ENV="production" ;;
+          esac
+          echo "app_name=$APP" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
 
       - name: Setup SSH
         run: |
@@ -730,28 +718,37 @@ jobs:
           echo -e "Host dokku\\n  HostName ${{{{ secrets.DOKKU_HOST }}}}\\n  User dokku\\n  IdentityFile ~/.ssh/key" > ~/.ssh/config
 
       - name: Create app
-        run: ssh dokku apps:exists $APP_NAME 2>/dev/null || ssh dokku apps:create $APP_NAME
+        run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          ssh dokku apps:exists $APP_NAME 2>/dev/null || ssh dokku apps:create $APP_NAME
 
       - name: Configure
         run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
           ssh dokku config:set --no-restart $APP_NAME \\
-            APP_ENV="${{{{ needs.setup.outputs.environment }}}}" \\
-            APP_URL="https://$DOMAIN"
+            APP_ENV="${{{{ steps.vars.outputs.environment }}}}" \\
+            APP_URL="https://${{DOMAIN}}"
           ssh dokku domains:clear $APP_NAME 2>/dev/null || true
           ssh dokku domains:add $APP_NAME $DOMAIN
 
       - name: Deploy
         run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           git remote add dokku dokku@${{{{ secrets.DOKKU_HOST }}}}:$APP_NAME 2>/dev/null || true
           GIT_SSH_COMMAND="ssh -i ~/.ssh/key" git push dokku HEAD:main -f
 
       - name: SSL
-        run: ssh dokku letsencrypt:active $APP_NAME 2>/dev/null || ssh dokku letsencrypt:enable $APP_NAME || true
+        run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          ssh dokku letsencrypt:active $APP_NAME 2>/dev/null || ssh dokku letsencrypt:enable $APP_NAME || true
 
       - name: Verify
         run: |
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
           sleep 10
-          curl -sf "https://$DOMAIN/health" && echo "✅ https://$DOMAIN" || echo "⚠️ Check logs"
+          curl -sf "https://${{DOMAIN}}/health" && echo "Deployed: https://${{DOMAIN}}" || echo "Check logs: ssh dokku@${{{{ secrets.DOKKU_HOST }}}} logs $APP_NAME"
 '''
 
 PREVIEW_WORKFLOW_TEMPLATE = '''# Preview environments for pull requests
