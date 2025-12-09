@@ -383,7 +383,7 @@ def setup_swml_handler():
     project = os.getenv("SIGNALWIRE_PROJECT_ID", "")
     token = os.getenv("SIGNALWIRE_TOKEN", "")
     agent_name = os.getenv("AGENT_NAME", "{agent_slug}")
-    proxy_url = os.getenv("SWML_PROXY_URL_BASE", "")
+    proxy_url = os.getenv("SWML_PROXY_URL_BASE", os.getenv("APP_URL", ""))
     auth_user = os.getenv("SWML_BASIC_AUTH_USER", "signalwire")
     auth_pass = os.getenv("SWML_BASIC_AUTH_PASSWORD", "")
 
