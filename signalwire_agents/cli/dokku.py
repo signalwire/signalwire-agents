@@ -1109,9 +1109,11 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
             return div.innerHTML;
         }}
 
-        // WebRTC calling
+        // WebRTC calling - robust pattern from santa app.js
         let client = null;
         let roomSession = null;
+        let currentToken = null;
+        let currentDestination = null;
 
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
@@ -1123,8 +1125,15 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
         }}
 
         async function connect() {{
+            // Debounce - prevent double-clicks
+            if (connectBtn.disabled) {{
+                console.log('Call already in progress');
+                return;
+            }}
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+
             try {{
-                connectBtn.disabled = true;
                 updateCallStatus('Getting token...');
 
                 const tokenResp = await fetch('/get_token');
@@ -1134,17 +1143,28 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
                     throw new Error(tokenData.error);
                 }}
 
+                currentToken = tokenData.token;
+                currentDestination = tokenData.address;
+
                 if (tokenData.address) {{
                     destinationInput.value = tokenData.address;
                 }}
 
+                console.log('Got token, destination:', currentDestination);
                 updateCallStatus('Connecting...');
 
-                client = await window.SignalWire.SignalWire({{
-                    token: tokenData.token
-                }});
+                // Initialize SignalWire client
+                if (window.SignalWire && typeof window.SignalWire.SignalWire === 'function') {{
+                    console.log('Initializing SignalWire client...');
+                    client = await window.SignalWire.SignalWire({{
+                        token: currentToken
+                    }});
+                }} else {{
+                    console.error('SignalWire SDK structure:', window.SignalWire);
+                    throw new Error('SignalWire.SignalWire function not found');
+                }}
 
-                const destination = tokenData.address || destinationInput.value;
+                const destination = currentDestination || destinationInput.value;
                 roomSession = await client.dial({{
                     to: destination,
                     audio: {{
@@ -1155,22 +1175,37 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
                     video: false
                 }});
 
+                console.log('Room session created:', roomSession);
+
                 roomSession.on('call.joined', () => {{
+                    console.log('Call joined');
                     updateCallStatus('Connected');
                     disconnectBtn.disabled = false;
                 }});
 
                 roomSession.on('call.left', () => {{
+                    console.log('Call left');
                     updateCallStatus('Call ended');
                     cleanup();
                 }});
 
                 roomSession.on('destroy', () => {{
+                    console.log('Session destroyed');
                     updateCallStatus('Call ended');
                     cleanup();
                 }});
 
+                roomSession.on('room.left', () => {{
+                    console.log('Room left');
+                    cleanup();
+                }});
+
                 await roomSession.start();
+                console.log('Call started successfully');
+
+                // Update UI
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-block';
 
             }} catch (err) {{
                 console.error('Connection error:', err);
@@ -1180,25 +1215,64 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
         }}
 
         async function disconnect() {{
+            console.log('Disconnect called');
+            await hangup();
+        }}
+
+        async function hangup() {{
             try {{
                 if (roomSession) {{
+                    console.log('Hanging up call...');
                     await roomSession.hangup();
+                    console.log('Call hung up successfully');
                 }}
             }} catch (err) {{
-                console.error('Disconnect error:', err);
+                console.error('Hangup error:', err);
             }}
             cleanup();
         }}
 
         function cleanup() {{
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
+            console.log('Cleanup called');
+
+            // Clean up local stream if it exists
+            if (roomSession && roomSession.localStream) {{
+                console.log('Stopping local stream tracks');
+                roomSession.localStream.getTracks().forEach(track => {{
+                    track.stop();
+                }});
+            }}
+
             roomSession = null;
-            client = null;
+
+            // Disconnect the client properly
+            if (client) {{
+                try {{
+                    console.log('Disconnecting client');
+                    client.disconnect();
+                }} catch (e) {{
+                    console.log('Client disconnect error:', e);
+                }}
+                client = null;
+            }}
+
+            // Reset UI
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Call Agent';
+            connectBtn.style.display = 'inline-block';
+            disconnectBtn.disabled = true;
+            disconnectBtn.style.display = 'none';
         }}
 
         connectBtn.addEventListener('click', connect);
         disconnectBtn.addEventListener('click', disconnect);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {{
+            if (roomSession) {{
+                hangup();
+            }}
+        }});
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', async function() {{
