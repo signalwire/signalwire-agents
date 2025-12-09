@@ -96,6 +96,7 @@ REQUIREMENTS_TEMPLATE = """signalwire-agents>=1.0.13
 gunicorn>=21.0.0
 uvicorn>=0.24.0
 python-dotenv>=1.0.0
+requests>=2.28.0
 """
 
 CHECKS_TEMPLATE = """WAIT=5
@@ -138,8 +139,23 @@ Thumbs.db
 """
 
 ENV_EXAMPLE_TEMPLATE = """# SignalWire Agent Configuration
+# =============================================================================
+
+# SignalWire Credentials (required for WebRTC calling)
+SIGNALWIRE_SPACE_NAME=your-space
+SIGNALWIRE_PROJECT_ID=your-project-id
+SIGNALWIRE_TOKEN=your-api-token
+
+# Public URL for SWML callbacks (required for WebRTC calling)
+# This should be your publicly accessible URL (e.g., ngrok, dokku domain)
+SWML_PROXY_URL_BASE=https://your-app.example.com
+
+# Basic Auth for SWML endpoints (recommended)
 SWML_BASIC_AUTH_USER=admin
 SWML_BASIC_AUTH_PASSWORD=your-secure-password
+
+# Agent Configuration
+AGENT_NAME={app_name}
 
 # App Configuration
 APP_ENV=production
@@ -235,11 +251,15 @@ APP_TEMPLATE_WITH_WEB = '''#!/usr/bin/env python3
 {agent_name} - SignalWire AI Agent
 
 Deployed to Dokku with automatic health checks, SWAIG support, and web interface.
+Includes WebRTC calling support with dynamic token generation.
 """
 
 import os
+import time
 from pathlib import Path
 from dotenv import load_dotenv
+import requests
+from starlette.responses import JSONResponse
 from signalwire_agents import AgentBase, AgentServer, SwaigFunctionResult
 
 # Load environment variables from .env file
@@ -301,41 +321,245 @@ class {agent_class}(AgentBase):
             )
 
 
-# Create server and register agent
+# =============================================================================
+# SignalWire SWML Handler Management
+# =============================================================================
+
+def get_signalwire_host():
+    """Get the full SignalWire host from space name."""
+    space = os.getenv("SIGNALWIRE_SPACE_NAME", "")
+    if not space:
+        return None
+    if "." in space:
+        return space
+    return f"{{space}}.signalwire.com"
+
+
+def find_existing_handler(sw_host, auth, agent_name):
+    """Find an existing SWML handler by name."""
+    try:
+        resp = requests.get(
+            f"https://{{sw_host}}/api/fabric/resources/external_swml_handlers",
+            auth=auth,
+            headers={{"Accept": "application/json"}}
+        )
+        if resp.status_code != 200:
+            return None
+
+        handlers = resp.json().get("data", [])
+        for handler in handlers:
+            swml_webhook = handler.get("swml_webhook", {{}})
+            handler_name = swml_webhook.get("name") or handler.get("display_name")
+            if handler_name == agent_name:
+                handler_id = handler.get("id")
+                handler_url = swml_webhook.get("primary_request_url", "")
+                addr_resp = requests.get(
+                    f"https://{{sw_host}}/api/fabric/resources/external_swml_handlers/{{handler_id}}/addresses",
+                    auth=auth,
+                    headers={{"Accept": "application/json"}}
+                )
+                if addr_resp.status_code == 200:
+                    addresses = addr_resp.json().get("data", [])
+                    if addresses:
+                        return {{
+                            "id": handler_id,
+                            "name": handler_name,
+                            "url": handler_url,
+                            "address_id": addresses[0]["id"],
+                            "address": addresses[0]["channels"]["audio"]
+                        }}
+    except Exception as e:
+        print(f"Error checking existing handlers: {{e}}")
+    return None
+
+
+# Store SWML handler info
+swml_handler_info = {{"id": None, "address_id": None, "address": None}}
+
+
+def setup_swml_handler():
+    """Set up SWML handler on startup."""
+    sw_host = get_signalwire_host()
+    project = os.getenv("SIGNALWIRE_PROJECT_ID", "")
+    token = os.getenv("SIGNALWIRE_TOKEN", "")
+    agent_name = os.getenv("AGENT_NAME", "{agent_slug}")
+    proxy_url = os.getenv("SWML_PROXY_URL_BASE", "")
+    auth_user = os.getenv("SWML_BASIC_AUTH_USER", "")
+    auth_pass = os.getenv("SWML_BASIC_AUTH_PASSWORD", "")
+
+    if not all([sw_host, project, token]):
+        print("SignalWire credentials not configured - skipping SWML handler setup")
+        return
+
+    if not proxy_url:
+        print("SWML_PROXY_URL_BASE not set - skipping SWML handler setup")
+        return
+
+    # Build SWML URL with basic auth
+    if auth_user and auth_pass and "://" in proxy_url:
+        scheme, rest = proxy_url.split("://", 1)
+        swml_url = f"{{scheme}}://{{auth_user}}:{{auth_pass}}@{{rest}}/swml"
+    else:
+        swml_url = proxy_url + "/swml"
+
+    auth = (project, token)
+    headers = {{"Content-Type": "application/json", "Accept": "application/json"}}
+
+    existing = find_existing_handler(sw_host, auth, agent_name)
+    if existing:
+        swml_handler_info["id"] = existing["id"]
+        swml_handler_info["address_id"] = existing["address_id"]
+        swml_handler_info["address"] = existing["address"]
+
+        if existing.get("url") != swml_url:
+            try:
+                requests.put(
+                    f"https://{{sw_host}}/api/fabric/resources/external_swml_handlers/{{existing['id']}}",
+                    json={{"primary_request_url": swml_url, "primary_request_method": "POST"}},
+                    auth=auth,
+                    headers=headers
+                )
+                print(f"Updated SWML handler: {{existing['name']}}")
+            except Exception as e:
+                print(f"Failed to update handler URL: {{e}}")
+        else:
+            print(f"Using existing SWML handler: {{existing['name']}}")
+        print(f"Call address: {{existing['address']}}")
+    else:
+        try:
+            handler_resp = requests.post(
+                f"https://{{sw_host}}/api/fabric/resources/external_swml_handlers",
+                json={{
+                    "name": agent_name,
+                    "used_for": "calling",
+                    "primary_request_url": swml_url,
+                    "primary_request_method": "POST"
+                }},
+                auth=auth,
+                headers=headers
+            )
+            handler_resp.raise_for_status()
+            handler_id = handler_resp.json().get("id")
+            swml_handler_info["id"] = handler_id
+
+            addr_resp = requests.get(
+                f"https://{{sw_host}}/api/fabric/resources/external_swml_handlers/{{handler_id}}/addresses",
+                auth=auth,
+                headers={{"Accept": "application/json"}}
+            )
+            addr_resp.raise_for_status()
+            addresses = addr_resp.json().get("data", [])
+            if addresses:
+                swml_handler_info["address_id"] = addresses[0]["id"]
+                swml_handler_info["address"] = addresses[0]["channels"]["audio"]
+                print(f"Created SWML handler: {{agent_name}}")
+                print(f"Call address: {{swml_handler_info['address']}}")
+        except Exception as e:
+            print(f"Failed to create SWML handler: {{e}}")
+
+
+# =============================================================================
+# Server Setup
+# =============================================================================
+
 server = AgentServer(host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
 server.register({agent_class}())
 
-# Serve static files from web/ directory (no auth required)
+# Serve static files from web/ directory
 web_dir = Path(__file__).parent / "web"
 if web_dir.exists():
     server.serve_static_files(str(web_dir))
 
-# Expose the ASGI app for gunicorn
-app = server.app
 
-# Register catch-all for static files (needed for gunicorn since _run_server() isn't called)
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+@server.app.get("/get_token")
+def get_token():
+    """Get a guest token for WebRTC calls."""
+    sw_host = get_signalwire_host()
+    project = os.getenv("SIGNALWIRE_PROJECT_ID", "")
+    token = os.getenv("SIGNALWIRE_TOKEN", "")
+
+    if not all([sw_host, project, token]):
+        return JSONResponse({{"error": "SignalWire credentials not configured"}}, status_code=500)
+
+    if not swml_handler_info["address_id"]:
+        return JSONResponse({{"error": "SWML handler not configured - check startup logs"}}, status_code=500)
+
+    auth = (project, token)
+    headers = {{"Content-Type": "application/json", "Accept": "application/json"}}
+
+    try:
+        expire_at = int(time.time()) + 3600 * 24  # 24 hours
+
+        guest_resp = requests.post(
+            f"https://{{sw_host}}/api/fabric/guests/tokens",
+            json={{
+                "allowed_addresses": [swml_handler_info["address_id"]],
+                "expire_at": expire_at
+            }},
+            auth=auth,
+            headers=headers
+        )
+        guest_resp.raise_for_status()
+        guest_token = guest_resp.json().get("token", "")
+
+        return {{
+            "token": guest_token,
+            "address": swml_handler_info["address"]
+        }}
+
+    except requests.exceptions.RequestException as e:
+        print(f"Token request failed: {{e}}")
+        return JSONResponse({{"error": str(e)}}, status_code=500)
+
+
+@server.app.get("/get_credentials")
+def get_credentials():
+    """Get basic auth credentials for curl examples."""
+    return {{
+        "user": os.getenv("SWML_BASIC_AUTH_USER", ""),
+        "password": os.getenv("SWML_BASIC_AUTH_PASSWORD", "")
+    }}
+
+
+@server.app.get("/get_resource_info")
+def get_resource_info():
+    """Get SWML handler resource info for dashboard link."""
+    sw_host = get_signalwire_host()
+    space_name = os.getenv("SIGNALWIRE_SPACE_NAME", "")
+    return {{
+        "space_name": space_name,
+        "resource_id": swml_handler_info["id"],
+        "dashboard_url": f"https://{{sw_host}}/neon/resources/{{swml_handler_info['id']}}/edit?t=addresses" if sw_host and swml_handler_info["id"] else None
+    }}
+
+
+# =============================================================================
+# Static File Handling
+# =============================================================================
+
 from fastapi import Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 import mimetypes
 
-# Redirect /swml to /swml/ (trailing slash required by FastAPI router)
-@app.api_route("/swml", methods=["GET", "POST"])
+@server.app.api_route("/swml", methods=["GET", "POST"])
 async def swml_redirect():
     return RedirectResponse(url="/swml/", status_code=307)
 
-@app.get("/{{full_path:path}}")
+@server.app.get("/{{full_path:path}}")
 async def serve_static(request: Request, full_path: str):
     """Serve static files from web/ directory"""
     if not web_dir.exists():
         raise HTTPException(status_code=404, detail="Not Found")
 
-    # Handle root path
     if not full_path or full_path == "/":
         full_path = "index.html"
 
     file_path = web_dir / full_path
 
-    # Security: prevent directory traversal
     try:
         file_path = file_path.resolve()
         if not str(file_path).startswith(str(web_dir.resolve())):
@@ -347,11 +571,17 @@ async def serve_static(request: Request, full_path: str):
         media_type, _ = mimetypes.guess_type(str(file_path))
         return FileResponse(file_path, media_type=media_type)
 
-    # Try index.html for directory paths
     if (web_dir / full_path / "index.html").exists():
         return FileResponse(web_dir / full_path / "index.html", media_type="text/html")
 
     raise HTTPException(status_code=404, detail="Not Found")
+
+
+# Set up SWML handler on startup
+setup_swml_handler()
+
+# Expose ASGI app for gunicorn
+app = server.app
 
 if __name__ == "__main__":
     server.run()
@@ -364,181 +594,683 @@ WEB_INDEX_TEMPLATE = '''<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{agent_name}</title>
     <style>
-        :root {{
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --text: #1e293b;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-        }}
-        * {{
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }}
+        * {{ box-sizing: border-box; }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }}
-        .container {{
-            max-width: 600px;
-            width: 100%;
-        }}
-        .card {{
-            background: var(--card);
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            text-align: center;
-        }}
-        .logo {{
-            width: 80px;
-            height: 80px;
-            background: var(--primary);
-            border-radius: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-        }}
-        .logo svg {{
-            width: 48px;
-            height: 48px;
-            fill: white;
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            color: #333;
         }}
         h1 {{
-            font-size: 1.75rem;
-            margin-bottom: 0.5rem;
+            color: #044cf6;
+            border-bottom: 3px solid #044cf6;
+            padding-bottom: 10px;
         }}
-        .subtitle {{
-            color: var(--text-muted);
-            margin-bottom: 2rem;
+        h2 {{
+            color: #333;
+            margin-top: 40px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
         }}
         .status {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: #dcfce7;
-            color: #166534;
-            border-radius: 2rem;
-            font-size: 0.875rem;
-            font-weight: 500;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
         }}
-        .status::before {{
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: #22c55e;
-            border-radius: 50%;
-        }}
-        .endpoints {{
-            margin-top: 2rem;
-            text-align: left;
-            border-top: 1px solid var(--border);
-            padding-top: 1.5rem;
-        }}
-        .endpoints h2 {{
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-        }}
-        .endpoint {{
-            display: flex;
-            align-items: center;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border);
-        }}
-        .endpoint:last-child {{
-            border-bottom: none;
-        }}
-        .method {{
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            margin-right: 1rem;
-            min-width: 50px;
+        .call-section {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 20px 0;
+            color: white;
             text-align: center;
         }}
-        .method.get {{
-            background: #dbeafe;
-            color: #1d4ed8;
+        .call-section h2 {{
+            color: white;
+            border: none;
+            margin-top: 0;
         }}
-        .method.post {{
-            background: #dcfce7;
-            color: #166534;
+        .call-controls {{
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
         }}
+        .call-btn {{
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+        .call-btn:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+        }}
+        .call-btn.connect {{
+            background: #10b981;
+            color: white;
+        }}
+        .call-btn.connect:hover:not(:disabled) {{
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+        }}
+        .call-btn.disconnect {{
+            background: #ef4444;
+            color: white;
+        }}
+        .call-btn.disconnect:hover:not(:disabled) {{
+            background: #dc2626;
+        }}
+        .call-status {{
+            margin-top: 15px;
+            font-size: 14px;
+            opacity: 0.9;
+        }}
+        .destination-input {{
+            padding: 12px 15px;
+            font-size: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            width: 250px;
+        }}
+        .destination-input::placeholder {{
+            color: rgba(255,255,255,0.6);
+        }}
+        .destination-input:focus {{
+            outline: none;
+            border-color: rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.2);
+        }}
+        .endpoint {{
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }}
+        .endpoint h3 {{
+            margin-top: 0;
+            color: #044cf6;
+        }}
+        .method {{
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 10px;
+        }}
+        .method.get {{ background: #61affe; color: white; }}
+        .method.post {{ background: #49cc90; color: white; }}
         .path {{
             font-family: monospace;
-            color: var(--text);
+            font-size: 16px;
+            color: #333;
         }}
-        .desc {{
+        code, pre {{
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }}
+        code {{
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }}
+        pre {{
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0;
+        }}
+        pre .comment {{ color: #6a9955; }}
+        .tabs {{
+            display: flex;
+            gap: 0;
+            margin-top: 15px;
+        }}
+        .tab {{
+            padding: 8px 16px;
+            background: #e9ecef;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.2s;
+        }}
+        .tab:hover {{ background: #dee2e6; }}
+        .tab.active {{
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-color: #1e1e1e;
+        }}
+        .tab-content {{
+            display: none;
+            border-radius: 0 8px 8px 8px;
+        }}
+        .tab-content.active {{ display: block; }}
+        .browser-panel {{
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 0 8px 8px 8px;
+            padding: 15px;
+        }}
+        .try-btn {{
+            padding: 10px 20px;
+            background: #044cf6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+        }}
+        .try-btn:hover {{ background: #0339c2; }}
+        .try-btn:disabled {{
+            background: #ccc;
+            cursor: not-allowed;
+        }}
+        .response-area {{
+            margin-top: 15px;
+            display: none;
+        }}
+        .response-area.visible {{ display: block; }}
+        .response-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }}
+        .response-status {{
+            font-size: 13px;
+            font-weight: 500;
+        }}
+        .response-status.success {{ color: #10b981; }}
+        .response-status.error {{ color: #ef4444; }}
+        .response-time {{
+            font-size: 12px;
+            color: #666;
+        }}
+        .response-body {{
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }}
+        .curl-panel {{
+            position: relative;
+        }}
+        .copy-btn {{
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: rgba(255,255,255,0.1);
+            color: #999;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }}
+        .copy-btn:hover {{
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }}
+        .audio-settings {{
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }}
+        .audio-setting {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.9);
+        }}
+        .audio-setting input[type="checkbox"] {{
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }}
+        .audio-setting label {{
+            cursor: pointer;
+        }}
+        .phone-info {{
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid #044cf6;
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin: 30px 0;
+            max-width: 800px;
             margin-left: auto;
-            color: var(--text-muted);
-            font-size: 0.875rem;
+            margin-right: auto;
+        }}
+        .phone-info h3 {{
+            margin: 0 0 10px 0;
+            color: #fff;
+            font-size: 16px;
+        }}
+        .phone-info p {{
+            margin: 0 0 15px 0;
+            color: rgba(255,255,255,0.8);
+            font-size: 14px;
+            line-height: 1.5;
+        }}
+        .phone-info a {{
+            display: inline-block;
+            padding: 10px 20px;
+            background: #044cf6;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+        }}
+        .phone-info a:hover {{
+            background: #0339c2;
+        }}
+        .phone-info.hidden {{
+            display: none;
+        }}
+        .footer {{
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 14px;
         }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="logo">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-            </div>
-            <h1>{agent_name}</h1>
-            <p class="subtitle">SignalWire AI Agent</p>
-            <span class="status">Running on Dokku</span>
+    <h1>{agent_name}</h1>
 
-            <div class="endpoints">
-                <h2>API Endpoints</h2>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <span class="path">/health</span>
-                    <span class="desc">Health check</span>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <span class="path">/ready</span>
-                    <span class="desc">Readiness check</span>
-                </div>
-                <div class="endpoint">
-                    <span class="method post">POST</span>
-                    <span class="path">/swml</span>
-                    <span class="desc">SWML endpoint</span>
-                </div>
-                <div class="endpoint">
-                    <span class="method post">POST</span>
-                    <span class="path">/swml/swaig</span>
-                    <span class="desc">SWAIG functions</span>
-                </div>
+    <div class="status">
+        Your agent is running and ready to receive calls!
+    </div>
+
+    <div class="call-section">
+        <h2>Call Your Agent</h2>
+        <p>Test your agent directly from the browser using WebRTC.</p>
+        <div class="call-controls">
+            <input type="text" id="destination" class="destination-input" placeholder="Address will be auto-filled" />
+            <button id="connectBtn" class="call-btn connect">Call Agent</button>
+            <button id="disconnectBtn" class="call-btn disconnect" disabled>Hang Up</button>
+        </div>
+        <div class="audio-settings">
+            <div class="audio-setting">
+                <input type="checkbox" id="echoCancellation" checked>
+                <label for="echoCancellation">Echo Cancellation</label>
+            </div>
+            <div class="audio-setting">
+                <input type="checkbox" id="noiseSuppression">
+                <label for="noiseSuppression">Noise Suppression</label>
+            </div>
+            <div class="audio-setting">
+                <input type="checkbox" id="autoGainControl">
+                <label for="autoGainControl">Auto Gain Control</label>
+            </div>
+        </div>
+        <div id="callStatus" class="call-status"></div>
+    </div>
+
+    <div id="phoneInfo" class="phone-info hidden">
+        <h3>Want to call from a phone number?</h3>
+        <p>You can assign a SignalWire phone number to this agent. Click below to add a number in the dashboard.</p>
+        <a id="dashboardLink" href="#" target="_blank">Add Phone Number in Dashboard</a>
+    </div>
+
+    <h2>Endpoints</h2>
+
+    <div class="endpoint">
+        <h3><span class="method post">POST</span> <span class="path">/swml</span></h3>
+        <p>Main SWML endpoint for SignalWire to fetch agent configuration.</p>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'swml-browser')">Browser</div>
+            <div class="tab" onclick="switchTab(this, 'swml-curl')">curl</div>
+        </div>
+        <div id="swml-browser" class="tab-content active">
+            <div class="browser-panel">
+                <button class="try-btn" onclick="tryEndpoint('POST', '/swml', {{}}, 'swml-response', true)">Try it</button>
+                <div id="swml-response" class="response-area"></div>
+            </div>
+        </div>
+        <div id="swml-curl" class="tab-content">
+            <div class="curl-panel">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre><span class="comment"># Get the SWML configuration</span>
+curl -X POST <span class="base-url"></span>/swml \\
+  -u <span class="auth-creds"></span> \\
+  -H "Content-Type: application/json" \\
+  -d '{{}}'</pre>
             </div>
         </div>
     </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <span class="path">/get_token</span></h3>
+        <p>Get a guest token for WebRTC calls. Returns a token and call address.</p>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'token-browser')">Browser</div>
+            <div class="tab" onclick="switchTab(this, 'token-curl')">curl</div>
+        </div>
+        <div id="token-browser" class="tab-content active">
+            <div class="browser-panel">
+                <button class="try-btn" onclick="tryEndpoint('GET', '/get_token', null, 'token-response')">Try it</button>
+                <div id="token-response" class="response-area"></div>
+            </div>
+        </div>
+        <div id="token-curl" class="tab-content">
+            <div class="curl-panel">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre><span class="comment"># Get a guest token</span>
+curl <span class="base-url"></span>/get_token</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method post">POST</span> <span class="path">/swml/swaig/</span></h3>
+        <p>SWAIG function endpoint. Test your agent's functions.</p>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab(this, 'swaig-browser')">Browser</div>
+            <div class="tab" onclick="switchTab(this, 'swaig-curl')">curl</div>
+        </div>
+        <div id="swaig-browser" class="tab-content active">
+            <div class="browser-panel">
+                <button class="try-btn" onclick="tryEndpoint('POST', '/swml/swaig/', {{function: 'get_info', argument: {{parsed: [{{topic: 'SignalWire'}}]}}}}, 'swaig-response', true)">Try it</button>
+                <div id="swaig-response" class="response-area"></div>
+            </div>
+        </div>
+        <div id="swaig-curl" class="tab-content">
+            <div class="curl-panel">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                <pre><span class="comment"># Call a SWAIG function</span>
+curl -X POST <span class="base-url"></span>/swml/swaig/ \\
+  -u <span class="auth-creds"></span> \\
+  -H "Content-Type: application/json" \\
+  -d '{{"function": "get_info", "argument": {{"parsed": [{{"topic": "SignalWire"}}]}}}}'</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <span class="path">/health</span></h3>
+        <p>Health check endpoint for load balancers and monitoring.</p>
+    </div>
+
+    <div class="footer">
+        Powered by <a href="https://signalwire.com">SignalWire</a> and the
+        <a href="https://github.com/signalwire/signalwire-agents">SignalWire Agents SDK</a>
+    </div>
+
+    <script src="https://cdn.signalwire.com/@signalwire/client"></script>
+    <script>
+        let authCreds = null;
+
+        function switchTab(tabEl, contentId) {{
+            const endpoint = tabEl.closest('.endpoint');
+            endpoint.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            endpoint.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tabEl.classList.add('active');
+            document.getElementById(contentId).classList.add('active');
+        }}
+
+        function copyCode(btn) {{
+            const pre = btn.parentElement.querySelector('pre');
+            const text = pre.textContent;
+            navigator.clipboard.writeText(text).then(() => {{
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = orig, 1500);
+            }});
+        }}
+
+        async function tryEndpoint(method, path, body, responseId, requiresAuth) {{
+            const responseArea = document.getElementById(responseId);
+            responseArea.classList.add('visible');
+            responseArea.innerHTML = '<div class="response-status">Loading...</div>';
+
+            const startTime = performance.now();
+            try {{
+                const options = {{
+                    method: method,
+                    headers: {{}}
+                }};
+                if (body) {{
+                    options.headers['Content-Type'] = 'application/json';
+                    options.body = JSON.stringify(body);
+                }}
+                if (requiresAuth && authCreds) {{
+                    options.headers['Authorization'] = 'Basic ' + btoa(authCreds.user + ':' + authCreds.password);
+                }}
+
+                const resp = await fetch(path, options);
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
+
+                let data;
+                const contentType = resp.headers.get('content-type') || '';
+                if (contentType.includes('json')) {{
+                    data = await resp.json();
+                    data = JSON.stringify(data, null, 2);
+                }} else {{
+                    data = await resp.text();
+                }}
+
+                const statusClass = resp.ok ? 'success' : 'error';
+                responseArea.innerHTML = `
+                    <div class="response-header">
+                        <span class="response-status ${{statusClass}}">${{resp.status}} ${{resp.statusText}}</span>
+                        <span class="response-time">${{duration}}ms</span>
+                    </div>
+                    <div class="response-body">${{escapeHtml(data)}}</div>
+                `;
+            }} catch (err) {{
+                responseArea.innerHTML = `
+                    <div class="response-header">
+                        <span class="response-status error">Error</span>
+                    </div>
+                    <div class="response-body">${{escapeHtml(err.message)}}</div>
+                `;
+            }}
+        }}
+
+        function escapeHtml(text) {{
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }}
+
+        // WebRTC calling
+        let client = null;
+        let roomSession = null;
+
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const destinationInput = document.getElementById('destination');
+        const callStatus = document.getElementById('callStatus');
+
+        function updateCallStatus(message) {{
+            callStatus.textContent = message;
+        }}
+
+        async function connect() {{
+            try {{
+                connectBtn.disabled = true;
+                updateCallStatus('Getting token...');
+
+                const tokenResp = await fetch('/get_token');
+                const tokenData = await tokenResp.json();
+
+                if (tokenData.error) {{
+                    throw new Error(tokenData.error);
+                }}
+
+                if (tokenData.address) {{
+                    destinationInput.value = tokenData.address;
+                }}
+
+                updateCallStatus('Connecting...');
+
+                client = await window.SignalWire.SignalWire({{
+                    token: tokenData.token
+                }});
+
+                const destination = tokenData.address || destinationInput.value;
+                roomSession = await client.dial({{
+                    to: destination,
+                    audio: {{
+                        echoCancellation: document.getElementById('echoCancellation').checked,
+                        noiseSuppression: document.getElementById('noiseSuppression').checked,
+                        autoGainControl: document.getElementById('autoGainControl').checked
+                    }},
+                    video: false
+                }});
+
+                roomSession.on('call.joined', () => {{
+                    updateCallStatus('Connected');
+                    disconnectBtn.disabled = false;
+                }});
+
+                roomSession.on('call.left', () => {{
+                    updateCallStatus('Call ended');
+                    cleanup();
+                }});
+
+                roomSession.on('destroy', () => {{
+                    updateCallStatus('Call ended');
+                    cleanup();
+                }});
+
+                await roomSession.start();
+
+            }} catch (err) {{
+                console.error('Connection error:', err);
+                updateCallStatus('Error: ' + err.message);
+                cleanup();
+            }}
+        }}
+
+        async function disconnect() {{
+            try {{
+                if (roomSession) {{
+                    await roomSession.hangup();
+                }}
+            }} catch (err) {{
+                console.error('Disconnect error:', err);
+            }}
+            cleanup();
+        }}
+
+        function cleanup() {{
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            roomSession = null;
+            client = null;
+        }}
+
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', async function() {{
+            const baseUrl = window.location.origin;
+            document.querySelectorAll('.base-url').forEach(function(el) {{
+                el.textContent = baseUrl;
+            }});
+
+            // Fetch auth credentials
+            try {{
+                const credsResp = await fetch('/get_credentials');
+                if (credsResp.ok) {{
+                    authCreds = await credsResp.json();
+                    document.querySelectorAll('.auth-creds').forEach(function(el) {{
+                        el.textContent = authCreds.user + ':' + authCreds.password;
+                    }});
+                }}
+            }} catch (e) {{
+                document.querySelectorAll('.auth-creds').forEach(function(el) {{
+                    el.textContent = 'user:password';
+                }});
+            }}
+
+            // Fetch resource info for dashboard link
+            try {{
+                const resourceResp = await fetch('/get_resource_info');
+                if (resourceResp.ok) {{
+                    const resourceInfo = await resourceResp.json();
+                    if (resourceInfo.dashboard_url) {{
+                        document.getElementById('dashboardLink').href = resourceInfo.dashboard_url;
+                        document.getElementById('phoneInfo').classList.remove('hidden');
+                    }}
+                }}
+            }} catch (e) {{
+                console.log('Could not fetch resource info:', e);
+            }}
+        }});
+    </script>
 </body>
 </html>
 '''
 
 APP_JSON_TEMPLATE = '''{{
   "name": "{app_name}",
-  "description": "SignalWire AI Agent",
-  "keywords": ["signalwire", "ai", "agent", "python"],
+  "description": "SignalWire AI Agent with WebRTC calling support",
+  "keywords": ["signalwire", "ai", "agent", "python", "webrtc"],
   "env": {{
     "APP_ENV": {{
       "description": "Application environment",
       "value": "production"
+    }},
+    "AGENT_NAME": {{
+      "description": "Name for the SWML handler resource",
+      "value": "{app_name}"
+    }},
+    "SIGNALWIRE_SPACE_NAME": {{
+      "description": "SignalWire space name (e.g., 'myspace' or 'myspace.signalwire.com')",
+      "required": true
+    }},
+    "SIGNALWIRE_PROJECT_ID": {{
+      "description": "SignalWire project ID",
+      "required": true
+    }},
+    "SIGNALWIRE_TOKEN": {{
+      "description": "SignalWire API token",
+      "required": true
+    }},
+    "SWML_PROXY_URL_BASE": {{
+      "description": "Public URL base for SWML callbacks (e.g., 'https://myapp.example.com')",
+      "required": true
     }},
     "SWML_BASIC_AUTH_USER": {{
       "description": "Basic auth username for SWML endpoints",
@@ -806,11 +1538,53 @@ jobs:
           fi
 
       - name: Verify
+        id: verify
         run: |
           APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
           DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
           sleep 10
-          curl -sf "https://${{DOMAIN}}/health" && echo "HTTPS OK: https://${{DOMAIN}}" || curl -sf "http://${{DOMAIN}}/health" && echo "HTTP only: http://${{DOMAIN}}" || echo "Check logs"
+          if curl -sf "https://${{DOMAIN}}/health"; then
+            echo "HTTPS OK: https://${{DOMAIN}}"
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "url=https://${{DOMAIN}}" >> $GITHUB_OUTPUT
+          elif curl -sf "http://${{DOMAIN}}/health"; then
+            echo "HTTP only: http://${{DOMAIN}}"
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "url=http://${{DOMAIN}}" >> $GITHUB_OUTPUT
+          else
+            echo "Check logs"
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{{{ secrets.SLACK_WEBHOOK_URL }}}}
+        run: |
+          [ -z "$SLACK_WEBHOOK_URL" ] && exit 0
+          APP_NAME="${{{{ steps.vars.outputs.app_name }}}}"
+          DOMAIN="${{APP_NAME}}.${{{{ secrets.BASE_DOMAIN }}}}"
+          if [ "${{{{ steps.verify.outputs.status }}}}" == "success" ]; then
+            COLOR="good"
+            STATUS="✅ Deployed"
+          else
+            COLOR="danger"
+            STATUS="❌ Deploy failed"
+          fi
+          curl -X POST -H 'Content-type: application/json' \\
+            --data "{{
+              \\"attachments\\": [{{
+                \\"color\\": \\"$COLOR\\",
+                \\"title\\": \\"$STATUS: $APP_NAME\\",
+                \\"fields\\": [
+                  {{\\"title\\": \\"Environment\\", \\"value\\": \\"${{{{ steps.vars.outputs.environment }}}}\\", \\"short\\": true}},
+                  {{\\"title\\": \\"Branch\\", \\"value\\": \\"${{{{ github.ref_name }}}}\\", \\"short\\": true}},
+                  {{\\"title\\": \\"URL\\", \\"value\\": \\"https://$DOMAIN\\", \\"short\\": false}}
+                ],
+                \\"footer\\": \\"<${{{{ github.server_url }}}}/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}|View Workflow>\\"
+              }}]
+            }}" \\
+            "$SLACK_WEBHOOK_URL" || true
 '''
 
 PREVIEW_WORKFLOW_TEMPLATE = '''# Preview environments for pull requests
