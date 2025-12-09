@@ -550,65 +550,9 @@ class AgentServer:
         if not self.agents:
             self.logger.warning("Starting server with no registered agents")
 
-        # Add catch-all route handler to handle both trailing slash and non-trailing slash versions
-        @self.app.get("/{full_path:path}")
-        @self.app.post("/{full_path:path}")
-        async def handle_all_routes(request: Request, full_path: str):
-            """Handle requests that don't match registered routes (e.g. /matti instead of /matti/)"""
-            # Check if this path maps to one of our registered agents
-            for route, agent in self.agents.items():
-                # Check for exact match with registered route
-                if full_path == route.lstrip("/"):
-                    # This is a request to an agent's root without trailing slash
-                    return await agent._handle_root_request(request)
-                elif full_path.startswith(route.lstrip("/") + "/"):
-                    # This is a request to an agent's sub-path
-                    relative_path = full_path[len(route.lstrip("/")):]
-                    relative_path = relative_path.lstrip("/")
+        # Register catch-all route handler (handles agent routing and static files)
+        self._register_catch_all_handler()
 
-                    # Route to appropriate handler based on path
-                    if not relative_path or relative_path == "/":
-                        return await agent._handle_root_request(request)
-
-                    clean_path = relative_path.rstrip("/")
-                    if clean_path == "debug":
-                        return await agent._handle_debug_request(request)
-                    elif clean_path == "swaig":
-                        from fastapi import Response
-                        return await agent._handle_swaig_request(request, Response())
-                    elif clean_path == "post_prompt":
-                        return await agent._handle_post_prompt_request(request)
-                    elif clean_path == "check_for_input":
-                        return await agent._handle_check_for_input_request(request)
-
-                    # Check for custom routing callbacks
-                    if hasattr(agent, '_routing_callbacks'):
-                        for callback_path, callback_fn in agent._routing_callbacks.items():
-                            cb_path_clean = callback_path.strip("/")
-                            if clean_path == cb_path_clean:
-                                request.state.callback_path = callback_path
-                                return await agent._handle_root_request(request)
-
-            # No matching agent - check for static files
-            if hasattr(self, '_static_directories'):
-                # Check each static directory route
-                for static_route, static_dir in self._static_directories.items():
-                    # For root static route, serve any unmatched path
-                    if static_route == "" or static_route == "/":
-                        response = self._serve_static_file(full_path, "")
-                        if response:
-                            return response
-                    # For prefixed static routes, check if path matches
-                    elif full_path.startswith(static_route.lstrip("/") + "/") or full_path == static_route.lstrip("/"):
-                        relative_path = full_path[len(static_route.lstrip("/")):].lstrip("/")
-                        response = self._serve_static_file(relative_path, static_route)
-                        if response:
-                            return response
-
-            # No matching agent or static file found
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="Not Found")
-            
         # Set host and port
         host = host or self.host
         port = port or self.port
@@ -738,6 +682,10 @@ class AgentServer:
 
         self.logger.info(f"Serving static files from '{directory}' at route '{route or '/'}'")
 
+        # Register catch-all handler immediately so it works with gunicorn
+        # (when using server.app directly instead of server.run())
+        self._register_catch_all_handler()
+
     def _serve_static_file(self, file_path: str, route: str = "/") -> Optional[Response]:
         """
         Internal method to serve a static file.
@@ -785,3 +733,77 @@ class AgentServer:
             return None
 
         return FileResponse(full_path)
+
+    def _register_catch_all_handler(self) -> None:
+        """
+        Register catch-all route handler for agent routing and static files.
+
+        This handler is needed for:
+        1. Routing requests without trailing slashes to agents (e.g., /santa instead of /santa/)
+        2. Serving static files from directories registered with serve_static_files()
+
+        The handler is registered once and works with both server.run() and
+        direct use of server.app with gunicorn/uvicorn.
+        """
+        # Only register once
+        if getattr(self, '_catch_all_registered', False):
+            return
+        self._catch_all_registered = True
+
+        @self.app.get("/{full_path:path}")
+        @self.app.post("/{full_path:path}")
+        async def handle_all_routes(request: Request, full_path: str):
+            """Handle requests that don't match registered routes (e.g. /matti instead of /matti/)"""
+            # Check if this path maps to one of our registered agents
+            for route, agent in self.agents.items():
+                # Check for exact match with registered route
+                if full_path == route.lstrip("/"):
+                    # This is a request to an agent's root without trailing slash
+                    return await agent._handle_root_request(request)
+                elif full_path.startswith(route.lstrip("/") + "/"):
+                    # This is a request to an agent's sub-path
+                    relative_path = full_path[len(route.lstrip("/")):]
+                    relative_path = relative_path.lstrip("/")
+
+                    # Route to appropriate handler based on path
+                    if not relative_path or relative_path == "/":
+                        return await agent._handle_root_request(request)
+
+                    clean_path = relative_path.rstrip("/")
+                    if clean_path == "debug":
+                        return await agent._handle_debug_request(request)
+                    elif clean_path == "swaig":
+                        from fastapi import Response
+                        return await agent._handle_swaig_request(request, Response())
+                    elif clean_path == "post_prompt":
+                        return await agent._handle_post_prompt_request(request)
+                    elif clean_path == "check_for_input":
+                        return await agent._handle_check_for_input_request(request)
+
+                    # Check for custom routing callbacks
+                    if hasattr(agent, '_routing_callbacks'):
+                        for callback_path, callback_fn in agent._routing_callbacks.items():
+                            cb_path_clean = callback_path.strip("/")
+                            if clean_path == cb_path_clean:
+                                request.state.callback_path = callback_path
+                                return await agent._handle_root_request(request)
+
+            # No matching agent - check for static files
+            if hasattr(self, '_static_directories'):
+                # Check each static directory route
+                for static_route, static_dir in self._static_directories.items():
+                    # For root static route, serve any unmatched path
+                    if static_route == "" or static_route == "/":
+                        response = self._serve_static_file(full_path, "")
+                        if response:
+                            return response
+                    # For prefixed static routes, check if path matches
+                    elif full_path.startswith(static_route.lstrip("/") + "/") or full_path == static_route.lstrip("/"):
+                        relative_path = full_path[len(static_route.lstrip("/")):].lstrip("/")
+                        response = self._serve_static_file(relative_path, static_route)
+                        if response:
+                            return response
+
+            # No matching agent or static file found
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
