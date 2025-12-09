@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.15] - 2025-12-09
+
+- Fix catch-all handler overshadowing custom routes in `sw-agent-dokku` generated apps
+- Fix static files and routes without trailing slash for gunicorn compatibility
+- Add tests for AgentServer custom route handling
+
 ## [1.0.14] - 2025-12-09
 
 - Add WebRTC calling support to `sw-agent-dokku` generated apps
