@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.16] - 2025-12-11
+
+- Support PORT environment variable for server port configuration
+- Add Slack notification support to `sw-agent-dokku` deploy workflow template
+
 ## [1.0.15] - 2025-12-09
 
 - Fix catch-all handler overshadowing custom routes in `sw-agent-dokku` generated apps

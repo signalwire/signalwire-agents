@@ -92,7 +92,7 @@ PROCFILE_TEMPLATE = """web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --
 RUNTIME_TEMPLATE = """python-3.11
 """
 
-REQUIREMENTS_TEMPLATE = """signalwire-agents>=1.0.13
+REQUIREMENTS_TEMPLATE = """signalwire-agents>=1.0.16
 gunicorn>=21.0.0
 uvicorn>=0.24.0
 python-dotenv>=1.0.0
