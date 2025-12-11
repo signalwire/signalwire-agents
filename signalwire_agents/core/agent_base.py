@@ -109,7 +109,7 @@ class AgentBase(
         name: str,
         route: str = "/",
         host: str = "0.0.0.0",
-        port: int = 3000,
+        port: Optional[int] = None,
         basic_auth: Optional[Tuple[str, str]] = None,
         use_pom: bool = True,
         token_expiry_secs: int = 3600,
@@ -182,7 +182,7 @@ class AgentBase(
         
         # Setup logger for this instance
         self.log = logger.bind(agent=name)
-        self.log.info("agent_initializing", route=route, host=host, port=port)
+        self.log.info("agent_initializing", agent=name, route=route, host=self.host, port=self.port)
         
         # Store agent-specific parameters
         self._default_webhook_url = default_webhook_url

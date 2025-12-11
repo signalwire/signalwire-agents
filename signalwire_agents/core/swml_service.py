@@ -64,7 +64,7 @@ class SWMLService:
         name: str,
         route: str = "/",
         host: str = "0.0.0.0",
-        port: int = 3000,
+        port: Optional[int] = None,
         basic_auth: Optional[Tuple[str, str]] = None,
         schema_path: Optional[str] = None,
         config_file: Optional[str] = None
@@ -84,7 +84,8 @@ class SWMLService:
         self.name = name
         self.route = route.rstrip("/")  # Ensure no trailing slash
         self.host = host
-        self.port = port
+        # Use provided port, or PORT env var, or default to 3000
+        self.port = port if port is not None else int(os.environ.get("PORT", 3000))
         
         # Initialize logger for this instance FIRST before using it
         self.log = logger.bind(service=name)
@@ -107,7 +108,7 @@ class SWMLService:
                            proxy_url_base=self._proxy_url_base)
         self._proxy_detection_done = False
         self._proxy_debug = os.environ.get('SWML_PROXY_DEBUG', '').lower() in ('true', '1', 'yes')
-        self.log.info("service_initializing", route=self.route, host=host, port=port)
+        self.log.info("service_initializing", route=self.route, host=self.host, port=self.port)
         
         # Set basic auth credentials
         if basic_auth is not None:
