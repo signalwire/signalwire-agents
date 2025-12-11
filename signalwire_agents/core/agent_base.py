@@ -162,7 +162,8 @@ class AgentBase(
         # Apply service config values, with constructor parameters taking precedence
         final_route = route if route != "/" else service_config.get('route', route)
         final_host = host if host != "0.0.0.0" else service_config.get('host', host)
-        final_port = port if port != 3000 else service_config.get('port', port)
+        # For port: use explicit param if provided, else config file, else let SWMLService use PORT env var
+        final_port = port if port is not None else service_config.get('port', None)
         final_name = service_config.get('name', name)
         
         # Initialize the SWMLService base class
