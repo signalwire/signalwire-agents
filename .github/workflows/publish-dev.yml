@@ -1,0 +1,84 @@
+name: Publish Dev Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.github/workflows/publish-release.yml'
+
+jobs:
+  publish-dev:
+    runs-on: ubuntu-latest
+    environment: pypi-dev
+    permissions:
+      id-token: write  # For trusted publishing (OIDC)
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Get base version and set dev version
+        id: version
+        run: |
+          # Extract current version from pyproject.toml
+          BASE_VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
+          echo "Base version: $BASE_VERSION"
+
+          # Create dev version with run number
+          DEV_VERSION="${BASE_VERSION}.dev${{ github.run_number }}"
+          echo "Dev version: $DEV_VERSION"
+          echo "dev_version=$DEV_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version for dev release
+        run: |
+          DEV_VERSION="${{ steps.version.outputs.dev_version }}"
+
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$DEV_VERSION\"/" pyproject.toml
+
+          # Update __init__.py
+          sed -i "s/__version__ = \".*\"/__version__ = \"$DEV_VERSION\"/" signalwire_agents/__init__.py
+
+          # Update agent_server.py
+          sed -i "s/version=\"[^\"]*\"/version=\"$DEV_VERSION\"/" signalwire_agents/agent_server.py
+
+          echo "Updated version to $DEV_VERSION"
+          grep "version" pyproject.toml | head -1
+          grep "__version__" signalwire_agents/__init__.py
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload dist/*
+
+      - name: Summary
+        run: |
+          echo "## Dev Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.dev_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Install with:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install signalwire-agents==${{ steps.version.outputs.dev_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "# or for latest dev:" >> $GITHUB_STEP_SUMMARY
+          echo "pip install signalwire-agents --pre" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
