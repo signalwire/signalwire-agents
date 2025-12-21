@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.17] - 2025-12-21
+
+- Add GitHub Actions for automated PyPI publishing
+  - `publish-dev.yml`: Publishes dev versions (X.Y.Z.devN) on push to main
+  - `publish-release.yml`: Publishes stable releases on version tags (v*)
+
 ## [1.0.16] - 2025-12-11
 
 - Support PORT environment variable for server port configuration
