@@ -875,20 +875,28 @@ class WebMixin:
             
             # Extract summary from the correct location in the request
             summary = agent_to_use._find_summary_in_post_data(body, req_log)
-            
+
             # Call the summary handler with the summary and the full body
+            result = None
             try:
                 if summary:
-                    agent_to_use.on_summary(summary, body)
+                    result = agent_to_use.on_summary(summary, body)
                     req_log.debug("summary_handler_called_successfully")
                 else:
                     # If no summary found but still want to process the data
-                    agent_to_use.on_summary(None, body)
+                    result = agent_to_use.on_summary(None, body)
                     req_log.debug("summary_handler_called_with_null_summary")
             except Exception as e:
                 req_log.error("error_in_summary_handler", error=str(e))
-            
-            # Return success
+
+            # For fetch_conversation, return the result from on_summary
+            # SignalWire expects conversation_summary in the response
+            action = body.get("action", "")
+            if action == "fetch_conversation" and result is not None:
+                req_log.info("request_successful", action=action, returning_result=True)
+                return result
+
+            # Return success for save/post actions
             req_log.info("request_successful")
             return {"success": True}
         except Exception as e:
