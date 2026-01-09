@@ -441,12 +441,17 @@ class PgVectorSearchBackend:
             List of search results with scores and metadata
         """
         self._ensure_connection()
-        
+
         # Extract query terms for metadata search
         query_terms = enhanced_text.lower().split()
-        
+
         # Vector search
         vector_results = self._vector_search(query_vector, count * 2, tags)
+
+        # Apply similarity threshold to raw vector scores BEFORE weighting
+        # This ensures threshold behaves intuitively (filters on actual similarity, not weighted score)
+        if similarity_threshold > 0:
+            vector_results = [r for r in vector_results if r['score'] >= similarity_threshold]
 
         # Keyword search
         keyword_results = self._keyword_search(enhanced_text, count * 2, tags)
@@ -454,24 +459,15 @@ class PgVectorSearchBackend:
         # Metadata search
         metadata_results = self._metadata_search(query_terms, count * 2, tags)
 
-
-        # Merge all results
+        # Merge all results (threshold already applied to vector results)
         merged_results = self._merge_all_results(vector_results, keyword_results, metadata_results, keyword_weight)
 
-
-        # Filter by distance threshold
-        filtered_results = [
-            r for r in merged_results
-            if r['score'] >= similarity_threshold
-        ]
-
-        
         # Ensure 'score' field exists for CLI compatibility
-        for r in filtered_results:
+        for r in merged_results:
             if 'score' not in r:
                 r['score'] = r.get('final_score', 0.0)
 
-        return filtered_results[:count]
+        return merged_results[:count]
     
     def _vector_search(self, query_vector: List[float], count: int,
                       tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
