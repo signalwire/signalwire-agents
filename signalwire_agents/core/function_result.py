@@ -770,32 +770,32 @@ class SwaigFunctionResult:
         # Use execute_swml to add the action
         return self.execute_swml(swml_doc)
 
-    def record_call(self, control_id: Optional[str] = None, stereo: bool = False, 
-                   format: str = "wav", direction: str = "both", 
+    def record_call(self, control_id: Optional[str] = None, stereo: bool = False,
+                   format: str = "wav", direction: str = "both",
                    terminators: Optional[str] = None, beep: bool = False,
-                   input_sensitivity: float = 44.0, initial_timeout: float = 0.0,
-                   end_silence_timeout: float = 0.0, max_length: Optional[float] = None,
+                   input_sensitivity: float = 44.0, initial_timeout: Optional[float] = None,
+                   end_silence_timeout: Optional[float] = None, max_length: Optional[float] = None,
                    status_url: Optional[str] = None) -> 'SwaigFunctionResult':
         """
         Start background call recording using SWML.
-        
-        This is a virtual helper that generates SWML to start recording the call 
-        in the background. Unlike foreground recording, the script continues 
+
+        This is a virtual helper that generates SWML to start recording the call
+        in the background. Unlike foreground recording, the script continues
         executing while recording happens in the background.
-        
+
         Args:
             control_id: Identifier for this recording (for use with stop_record_call)
             stereo: Record in stereo (default: False)
-            format: Recording format - "wav" or "mp3" (default: "wav") 
+            format: Recording format - "wav" or "mp3" (default: "wav")
             direction: Audio direction - "speak", "listen", or "both" (default: "both")
             terminators: Digits that stop recording when pressed
             beep: Play beep before recording (default: False)
             input_sensitivity: Input sensitivity for recording (default: 44.0)
-            initial_timeout: Time in seconds to wait for speech start (default: 0.0)
-            end_silence_timeout: Time in seconds to wait in silence before ending (default: 0.0)
+            initial_timeout: Time in seconds to wait for speech start (for voicemail-style recording)
+            end_silence_timeout: Time in seconds to wait in silence before ending (for voicemail-style recording)
             max_length: Maximum recording length in seconds
             status_url: URL to send recording status events to
-            
+
         Returns:
             self for method chaining
         """
@@ -813,17 +813,19 @@ class SwaigFunctionResult:
             "format": format,
             "direction": direction,
             "beep": beep,
-            "input_sensitivity": input_sensitivity,
-            "initial_timeout": initial_timeout,
-            "end_silence_timeout": end_silence_timeout
+            "input_sensitivity": input_sensitivity
         }
-        
+
         # Add optional parameters
         if control_id:
             record_params["control_id"] = control_id
         if terminators:
             record_params["terminators"] = terminators
-        if max_length:
+        if initial_timeout is not None:
+            record_params["initial_timeout"] = initial_timeout
+        if end_silence_timeout is not None:
+            record_params["end_silence_timeout"] = end_silence_timeout
+        if max_length is not None:
             record_params["max_length"] = max_length
         if status_url:
             record_params["status_url"] = status_url
@@ -1141,14 +1143,14 @@ class SwaigFunctionResult:
     def stop_tap(self, control_id: Optional[str] = None) -> 'SwaigFunctionResult':
         """
         Stop an active tap stream using SWML.
-        
+
         This is a virtual helper that generates SWML to stop a tap stream
         that was started with tap().
-        
+
         Args:
             control_id: ID of the tap to stop (optional)
                        If not set, the last tap started will be stopped
-            
+
         Returns:
             self for method chaining
         """
@@ -1158,7 +1160,7 @@ class SwaigFunctionResult:
         else:
             # For simple case with no control_id, use empty object
             stop_params = {}
-        
+
         # Generate SWML document
         swml_doc = {
             "version": "1.0.0",
