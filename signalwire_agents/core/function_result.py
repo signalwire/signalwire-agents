@@ -1170,9 +1170,163 @@ class SwaigFunctionResult:
                 ]
             }
         }
-        
+
         # Use execute_swml to add the action
         return self.execute_swml(swml_doc)
+
+    def execute_rpc(self, method: str, params: Optional[Dict[str, Any]] = None,
+                    call_id: Optional[str] = None, node_id: Optional[str] = None) -> 'SwaigFunctionResult':
+        """
+        Execute an RPC method on a call using SWML.
+
+        This is a generic helper for executing RPC commands. For common operations,
+        consider using the specific helpers: rpc_dial(), rpc_ai_message(), rpc_ai_unhold().
+
+        Args:
+            method: The RPC method to execute (e.g., "dial", "ai_message", "ai_unhold")
+            params: Parameters for the RPC method (optional)
+            call_id: Target call ID for the RPC (optional)
+            node_id: Target node ID for the RPC (optional)
+
+        Returns:
+            self for method chaining
+
+        Example:
+            result = (
+                SwaigFunctionResult("Executing RPC")
+                .execute_rpc(
+                    method="ai_message",
+                    call_id="some-call-id",
+                    params={"role": "system", "message_text": "Hello"}
+                )
+            )
+        """
+        # Build the execute_rpc parameters
+        rpc_params: Dict[str, Any] = {"method": method}
+
+        if call_id:
+            rpc_params["call_id"] = call_id
+        if node_id:
+            rpc_params["node_id"] = node_id
+        if params:
+            rpc_params["params"] = params
+
+        # Generate SWML document
+        swml_doc = {
+            "version": "1.0.0",
+            "sections": {
+                "main": [
+                    {"execute_rpc": rpc_params}
+                ]
+            }
+        }
+
+        # Use execute_swml to add the action
+        return self.execute_swml(swml_doc)
+
+    def rpc_dial(self, to_number: str, from_number: str, dest_swml: str,
+                 device_type: str = "phone") -> 'SwaigFunctionResult':
+        """
+        Dial out to a number with a destination SWML URL using execute_rpc.
+
+        This is commonly used in call screening scenarios where you place a caller
+        on hold and dial out to a human, with the dest_swml specifying what agent
+        handles the outbound leg.
+
+        Args:
+            to_number: Phone number to dial (E.164 format)
+            from_number: Caller ID to use (E.164 format)
+            dest_swml: URL to the SWML that handles the outbound call
+            device_type: Device type, typically "phone" (default: "phone")
+
+        Returns:
+            self for method chaining
+
+        Example:
+            result = (
+                SwaigFunctionResult("Please hold while I connect you.")
+                .hold(timeout=120)
+                .rpc_dial(
+                    to_number="+15551234567",
+                    from_number="+15559876543",
+                    dest_swml="https://example.com/call-agent?caller=John"
+                )
+            )
+        """
+        return self.execute_rpc(
+            method="dial",
+            params={
+                "devices": {
+                    "type": device_type,
+                    "params": {
+                        "to_number": to_number,
+                        "from_number": from_number
+                    }
+                },
+                "dest_swml": dest_swml
+            }
+        )
+
+    def rpc_ai_message(self, call_id: str, message_text: str,
+                       role: str = "system") -> 'SwaigFunctionResult':
+        """
+        Inject a message into an AI agent on another call using execute_rpc.
+
+        This is useful for cross-call communication, such as notifying a held
+        caller's AI agent about a status change or instructing it to relay
+        a message.
+
+        Args:
+            call_id: The call ID of the target call
+            message_text: The message text to inject into the AI conversation
+            role: The role for the message, typically "system" (default: "system")
+
+        Returns:
+            self for method chaining
+
+        Example:
+            result = (
+                SwaigFunctionResult("I'll let them know.")
+                .rpc_ai_message(
+                    call_id=original_call_id,
+                    message_text="The person you were trying to reach is unavailable. Please take a message."
+                )
+            )
+        """
+        return self.execute_rpc(
+            method="ai_message",
+            call_id=call_id,
+            params={
+                "role": role,
+                "message_text": message_text
+            }
+        )
+
+    def rpc_ai_unhold(self, call_id: str) -> 'SwaigFunctionResult':
+        """
+        Unhold another call using execute_rpc.
+
+        This releases a call from hold state, typically used after injecting
+        a message to the held caller's AI agent.
+
+        Args:
+            call_id: The call ID of the call to unhold
+
+        Returns:
+            self for method chaining
+
+        Example:
+            result = (
+                SwaigFunctionResult("Understood, I'll let them know.")
+                .rpc_ai_message(call_id, "No one is available. Please take a message.")
+                .rpc_ai_unhold(call_id)
+            )
+        """
+        return self.execute_rpc(
+            method="ai_unhold",
+            call_id=call_id,
+            params={}
+        )
 
     @staticmethod
     def create_payment_prompt(for_situation: str, actions: List[Dict[str, str]], 
