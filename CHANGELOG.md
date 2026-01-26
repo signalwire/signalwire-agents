@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.18] - 2026-01-26
+
+- Fix `record_call()` default timeouts causing silent recording failures
+  - Change `initial_timeout` and `end_silence_timeout` defaults from `0.0` to `None`
+  - Timeout parameters now only included in SWML when explicitly set
+- Add SWML schema search MCP server (`mcp/swml-schema-search/`)
+- Fix bug in vector search scoring for pgvector backend
+- Fix `fetch_conversation` response handling in post_prompt endpoint
+
 ## [1.0.17] - 2025-12-21
 
 - Add GitHub Actions for automated PyPI publishing
