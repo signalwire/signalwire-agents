@@ -67,11 +67,12 @@ class SWMLService:
         port: Optional[int] = None,
         basic_auth: Optional[Tuple[str, str]] = None,
         schema_path: Optional[str] = None,
-        config_file: Optional[str] = None
+        config_file: Optional[str] = None,
+        schema_validation: bool = True
     ):
         """
         Initialize a new SWML service
-        
+
         Args:
             name: Service name/identifier
             route: HTTP route path for this service
@@ -80,7 +81,10 @@ class SWMLService:
             basic_auth: Optional (username, password) tuple for basic auth
             schema_path: Optional path to the schema file
             config_file: Optional path to configuration file
+            schema_validation: Enable schema validation. Default True. Can also be
+                              disabled via SWML_SKIP_SCHEMA_VALIDATION=1 env var.
         """
+        self._schema_validation = schema_validation
         self.name = name
         self.route = route.rstrip("/")  # Ensure no trailing slash
         self.host = host
@@ -127,8 +131,9 @@ class SWMLService:
                 self.log.warning("schema_not_found")
         
         # Initialize schema utils
-        self.schema_utils = SchemaUtils(schema_path)
-        self.log.debug("schema_validation_initialized", engine="jsonschema-rs")
+        self.schema_utils = SchemaUtils(schema_path, schema_validation=self._schema_validation)
+        if self.schema_utils.full_validation_available:
+            self.log.debug("schema_validation_enabled", engine="jsonschema-rs")
 
         # Initialize verb handler registry
         self.verb_registry = VerbHandlerRegistry()

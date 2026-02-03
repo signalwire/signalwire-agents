@@ -56,14 +56,20 @@ class SchemaUtils:
     Utility class for loading and working with SWML schemas
     """
     
-    def __init__(self, schema_path: Optional[str] = None):
+    def __init__(self, schema_path: Optional[str] = None, schema_validation: bool = True):
         """
         Initialize the schema utilities.
 
         Args:
             schema_path: Path to the schema file
+            schema_validation: Enable schema validation. Can also be disabled via
+                              SWML_SKIP_SCHEMA_VALIDATION=1 environment variable.
         """
         self.log = logger.bind(component="schema_utils")
+
+        # Check env var override (env var can disable, but explicit False in code wins)
+        env_skip = os.environ.get('SWML_SKIP_SCHEMA_VALIDATION', '').lower() in ('1', 'true', 'yes')
+        self._validation_enabled = schema_validation and not env_skip
 
         self.schema_path = schema_path
         if not self.schema_path:
@@ -76,10 +82,12 @@ class SchemaUtils:
         if self.verbs:
             self.log.debug("first_verbs_extracted", verbs=list(self.verbs.keys())[:5])
 
-        # Initialize full schema validator
+        # Initialize full schema validator if validation is enabled
         self._full_validator = None
-        if self.schema:
+        if self._validation_enabled and self.schema:
             self._init_full_validator()
+        elif not self._validation_enabled:
+            self.log.warning("schema_validation_disabled")
 
     def _init_full_validator(self) -> None:
         """Initialize the jsonschema-rs validator for full schema validation."""
