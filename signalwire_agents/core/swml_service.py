@@ -128,7 +128,8 @@ class SWMLService:
         
         # Initialize schema utils
         self.schema_utils = SchemaUtils(schema_path)
-        
+        self.log.debug("schema_validation_initialized", engine="jsonschema-rs")
+
         # Initialize verb handler registry
         self.verb_registry = VerbHandlerRegistry()
         
@@ -327,7 +328,17 @@ class SWMLService:
         msg = f"'{self.__class__.__name__}' object has no attribute '{name}'"
         self.log.debug("getattr_invalid_attribute", attribute=name, error=msg)
         raise AttributeError(msg)
-    
+
+    @property
+    def full_validation_enabled(self) -> bool:
+        """
+        Check if full JSON Schema validation is enabled.
+
+        Returns:
+            True if schema validator is initialized
+        """
+        return self.schema_utils.full_validation_available if self.schema_utils else False
+
     def _find_schema_path(self) -> Optional[str]:
         """
         Find the schema.json file location

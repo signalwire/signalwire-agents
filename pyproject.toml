@@ -12,17 +12,16 @@ authors = [
 readme = "README.md"
 license = {text = "MIT"}
 keywords = ["signalwire", "ai", "agents", "voice", "telephony", "swaig", "swml"]
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "fastapi>=0.115.12",
@@ -36,6 +35,7 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "pytz>=2023.3",
     "lxml>=4.9.0",
+    "jsonschema-rs>=0.20.0",
 ]
 
 # Optional dependencies for search functionality

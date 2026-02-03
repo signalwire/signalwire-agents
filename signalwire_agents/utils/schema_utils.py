@@ -10,13 +10,17 @@ See LICENSE file in the project root for full license information.
 
 # -*- coding: utf-8 -*-
 """
-Schema utilities for SWML validation and verb extraction
+Schema utilities for SWML validation and verb extraction.
+
+Uses jsonschema-rs for full JSON Schema validation with type checking.
 """
 
 import os
 import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
+
+import jsonschema_rs
 
 try:
     import structlog
@@ -54,23 +58,40 @@ class SchemaUtils:
     
     def __init__(self, schema_path: Optional[str] = None):
         """
-        Initialize the schema utilities
-        
+        Initialize the schema utilities.
+
         Args:
             schema_path: Path to the schema file
         """
         self.log = logger.bind(component="schema_utils")
-        
+
         self.schema_path = schema_path
         if not self.schema_path:
             self.schema_path = self._get_default_schema_path()
             self.log.debug("using_default_schema_path", path=self.schema_path)
-        
+
         self.schema = self.load_schema()
         self.verbs = self._extract_verb_definitions()
         self.log.debug("schema_initialized", verb_count=len(self.verbs))
         if self.verbs:
             self.log.debug("first_verbs_extracted", verbs=list(self.verbs.keys())[:5])
+
+        # Initialize full schema validator
+        self._full_validator = None
+        if self.schema:
+            self._init_full_validator()
+
+    def _init_full_validator(self) -> None:
+        """Initialize the jsonschema-rs validator for full schema validation."""
+        self._full_validator = jsonschema_rs.Draft202012Validator(self.schema)
+        self.log.info("schema_validator_initialized",
+                    validator="jsonschema-rs",
+                    verbs=len(self.verbs))
+
+    @property
+    def full_validation_available(self) -> bool:
+        """Check if full JSON Schema validation is available."""
+        return self._full_validator is not None
         
     def _get_default_schema_path(self) -> Optional[str]:
         """
@@ -243,38 +264,123 @@ class SchemaUtils:
     
     def validate_verb(self, verb_name: str, verb_config: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """
-        Validate a verb configuration against the schema
-        
+        Validate a verb configuration against the schema.
+
+        Performs full JSON Schema validation including type checking and nested
+        object validation using jsonschema-rs.
+
         Args:
             verb_name: The name of the verb (e.g., "ai", "answer", etc.)
             verb_config: The configuration for the verb
-            
+
         Returns:
             (is_valid, error_messages) tuple
         """
-        # Simple validation for now - can be enhanced with more complete JSON Schema validation
         errors = []
-        
+
         # Check if the verb exists in the schema
         if verb_name not in self.verbs:
             errors.append(f"Unknown verb: {verb_name}")
             return False, errors
-            
+
+        # Use full validation if validator is available
+        # getattr handles cases where __init__ wasn't called (e.g., tests with mocked schemas)
+        if getattr(self, '_full_validator', None):
+            return self._validate_verb_full(verb_name, verb_config)
+
+        # Lightweight validation for mocked/test schemas without full document structure
+        return self._validate_verb_lightweight(verb_name, verb_config)
+
+    def _validate_verb_full(self, verb_name: str, verb_config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """
+        Perform full JSON Schema validation using jsonschema-rs.
+
+        Wraps the verb in a minimal SWML document structure for validation
+        since the schema requires the full document context.
+
+        Args:
+            verb_name: The name of the verb
+            verb_config: The configuration for the verb
+
+        Returns:
+            (is_valid, error_messages) tuple
+        """
+        # Check if schema supports document structure (has 'sections' in properties)
+        # Use lightweight for partial/test schemas that don't have full document structure
+        schema_props = self.schema.get('properties', {})
+        if 'sections' not in schema_props:
+            return self._validate_verb_lightweight(verb_name, verb_config)
+
+        # Wrap the verb in a minimal SWML document structure
+        minimal_doc = {
+            "version": "1.0.0",
+            "sections": {
+                "main": [
+                    {verb_name: verb_config}
+                ]
+            }
+        }
+
+        try:
+            self._full_validator.validate(minimal_doc)
+            return True, []
+        except jsonschema_rs.ValidationError as e:
+            error_msg = str(e)
+            if len(error_msg) > 500:
+                error_msg = error_msg[:500] + "..."
+            return False, [f"Schema validation error for '{verb_name}': {error_msg}"]
+
+    def _validate_verb_lightweight(self, verb_name: str, verb_config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """
+        Perform lightweight validation (verb existence + required fields only).
+
+        This is the fallback when jsonschema-rs is not available.
+
+        Args:
+            verb_name: The name of the verb
+            verb_config: The configuration for the verb
+
+        Returns:
+            (is_valid, error_messages) tuple
+        """
+        errors = []
+
         # Get the required properties for this verb
         required_props = self.get_verb_required_properties(verb_name)
-        
+
         # Check if all required properties are present
         for prop in required_props:
             if prop not in verb_config:
                 errors.append(f"Missing required property '{prop}' for verb '{verb_name}'")
-                
-        # Return validation result
+
         return len(errors) == 0, errors
     
+    def validate_document(self, document: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """
+        Validate a complete SWML document against the schema.
+
+        Args:
+            document: The complete SWML document to validate
+
+        Returns:
+            (is_valid, error_messages) tuple
+        """
+        if not self._full_validator:
+            return False, ["Schema validator not initialized"]
+
+        try:
+            self._full_validator.validate(document)
+            return True, []
+        except jsonschema_rs.ValidationError as e:
+            error_msg = str(e)
+            if len(error_msg) > 500:
+                error_msg = error_msg[:500] + "..."
+            return False, [f"Document validation error: {error_msg}"]
+
     def get_all_verb_names(self) -> List[str]:
         """
         Get all verb names defined in the schema
-        
+
         Returns:
             List of verb names
         """
