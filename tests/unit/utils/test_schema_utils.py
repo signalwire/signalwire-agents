@@ -668,10 +668,823 @@ class TestSchemaUtilsIntegration:
         """Test handling of empty schema"""
         with patch.object(SchemaUtils, 'load_schema', return_value={}):
             utils = SchemaUtils("/path/to/schema.json")
-            
+
             assert utils.get_all_verb_names() == []
             assert utils.get_verb_properties("ai") == {}
             assert utils.get_verb_parameters("ai") == {}
-            
+
             is_valid, errors = utils.validate_verb("ai", {})
-            assert is_valid is False 
+            assert is_valid is False
+
+
+class TestCompositionKeywords:
+    """Test handling of allOf, anyOf, and oneOf composition keywords"""
+
+    def test_resolve_ref_valid(self):
+        """Test resolving a valid $ref"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "MyType": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}}
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils._resolve_ref("#/$defs/MyType")
+
+        assert result == {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    def test_resolve_ref_not_found(self):
+        """Test resolving a $ref that doesn't exist"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {"$defs": {}}
+        utils.log = Mock()
+
+        result = utils._resolve_ref("#/$defs/NonExistent")
+
+        assert result == {}
+
+    def test_resolve_ref_invalid_format(self):
+        """Test resolving a $ref with unsupported format"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {"$defs": {}}
+        utils.log = Mock()
+
+        result = utils._resolve_ref("http://example.com/schema")
+
+        assert result == {}
+
+    def test_merge_properties_from_allof(self):
+        """Test merging properties from allOf - all required fields should be merged"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "BaseType": {
+                    "type": "object",
+                    "properties": {"id": {"type": "integer"}},
+                    "required": ["id"]
+                },
+                "ExtendedType": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"]
+                }
+            }
+        }
+        utils.log = Mock()
+
+        composition = [
+            {"$ref": "#/$defs/BaseType"},
+            {"$ref": "#/$defs/ExtendedType"}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "allOf")
+
+        assert "properties" in result
+        assert "id" in result["properties"]
+        assert "name" in result["properties"]
+        assert "required" in result
+        assert set(result["required"]) == {"id", "name"}
+
+    def test_merge_properties_from_oneof(self):
+        """Test merging properties from oneOf - required fields should NOT be merged"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "TypeA": {
+                    "type": "object",
+                    "properties": {"a_prop": {"type": "string"}},
+                    "required": ["a_prop"]
+                },
+                "TypeB": {
+                    "type": "object",
+                    "properties": {"b_prop": {"type": "integer"}},
+                    "required": ["b_prop"]
+                }
+            }
+        }
+        utils.log = Mock()
+
+        composition = [
+            {"$ref": "#/$defs/TypeA"},
+            {"$ref": "#/$defs/TypeB"}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "oneOf")
+
+        # Properties are merged (for discovery)
+        assert "properties" in result
+        assert "a_prop" in result["properties"]
+        assert "b_prop" in result["properties"]
+        # Required fields are NOT merged for oneOf
+        assert "required" not in result
+
+    def test_merge_properties_from_anyof(self):
+        """Test merging properties from anyOf - required fields should NOT be merged"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "TypeA": {
+                    "type": "object",
+                    "properties": {"a_prop": {"type": "string"}},
+                    "required": ["a_prop"]
+                },
+                "TypeB": {
+                    "type": "object",
+                    "properties": {"b_prop": {"type": "integer"}},
+                    "required": ["b_prop"]
+                }
+            }
+        }
+        utils.log = Mock()
+
+        composition = [
+            {"$ref": "#/$defs/TypeA"},
+            {"$ref": "#/$defs/TypeB"}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "anyOf")
+
+        # Properties are merged (for discovery)
+        assert "properties" in result
+        assert "a_prop" in result["properties"]
+        assert "b_prop" in result["properties"]
+        # Required fields are NOT merged for anyOf
+        assert "required" not in result
+
+    def test_merge_properties_inline_definitions(self):
+        """Test merging properties from inline definitions (not $ref)"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {"$defs": {}}
+        utils.log = Mock()
+
+        composition = [
+            {"type": "object", "properties": {"inline_a": {"type": "string"}}},
+            {"type": "object", "properties": {"inline_b": {"type": "integer"}}}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "anyOf")
+
+        assert "properties" in result
+        assert "inline_a" in result["properties"]
+        assert "inline_b" in result["properties"]
+
+    def test_extract_verb_definitions_with_oneof(self):
+        """Test verb extraction when SWMLMethod uses oneOf"""
+        schema = {
+            "$defs": {
+                "SWMLMethod": {
+                    "oneOf": [
+                        {"$ref": "#/$defs/PlayMethod"},
+                        {"$ref": "#/$defs/StopMethod"}
+                    ]
+                },
+                "PlayMethod": {
+                    "properties": {
+                        "play": {"type": "object", "properties": {"url": {"type": "string"}}}
+                    }
+                },
+                "StopMethod": {
+                    "properties": {
+                        "stop": {"type": "object", "properties": {}}
+                    }
+                }
+            }
+        }
+
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = schema
+        utils.log = Mock()
+
+        verbs = utils._extract_verb_definitions()
+
+        assert "play" in verbs
+        assert "stop" in verbs
+
+    def test_extract_verb_definitions_with_allof(self):
+        """Test verb extraction when SWMLMethod uses allOf"""
+        schema = {
+            "$defs": {
+                "SWMLMethod": {
+                    "allOf": [
+                        {"$ref": "#/$defs/RecordMethod"}
+                    ]
+                },
+                "RecordMethod": {
+                    "properties": {
+                        "record": {"type": "object", "properties": {"format": {"type": "string"}}}
+                    }
+                }
+            }
+        }
+
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = schema
+        utils.log = Mock()
+
+        verbs = utils._extract_verb_definitions()
+
+        assert "record" in verbs
+
+    def test_get_verb_properties_with_oneof(self):
+        """Test get_verb_properties when verb value uses oneOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "ConnectSingle": {
+                    "type": "object",
+                    "properties": {"to": {"type": "string"}},
+                    "required": ["to"]
+                },
+                "ConnectMultiple": {
+                    "type": "object",
+                    "properties": {"to": {"type": "array"}, "timeout": {"type": "integer"}}
+                }
+            }
+        }
+        utils.verbs = {
+            "connect": {
+                "name": "connect",
+                "schema_name": "Connect",
+                "definition": {
+                    "properties": {
+                        "connect": {
+                            "oneOf": [
+                                {"$ref": "#/$defs/ConnectSingle"},
+                                {"$ref": "#/$defs/ConnectMultiple"}
+                            ],
+                            "description": "Connect to endpoint"
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_properties("connect")
+
+        # Should have merged properties
+        assert "properties" in result
+        assert "to" in result["properties"]
+        assert "timeout" in result["properties"]
+        # Should preserve description
+        assert result.get("description") == "Connect to endpoint"
+
+    def test_get_verb_properties_with_anyof(self):
+        """Test get_verb_properties when verb value uses anyOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "PlayURL": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}}
+                },
+                "PlayTTS": {
+                    "type": "object",
+                    "properties": {"say": {"type": "string"}, "voice": {"type": "string"}}
+                }
+            }
+        }
+        utils.verbs = {
+            "play": {
+                "name": "play",
+                "schema_name": "Play",
+                "definition": {
+                    "properties": {
+                        "play": {
+                            "anyOf": [
+                                {"$ref": "#/$defs/PlayURL"},
+                                {"$ref": "#/$defs/PlayTTS"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_properties("play")
+
+        assert "properties" in result
+        assert "url" in result["properties"]
+        assert "say" in result["properties"]
+        assert "voice" in result["properties"]
+
+    def test_get_verb_properties_with_allof(self):
+        """Test get_verb_properties when verb value uses allOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "BaseConfig": {
+                    "type": "object",
+                    "properties": {"enabled": {"type": "boolean"}},
+                    "required": ["enabled"]
+                },
+                "ExtendedConfig": {
+                    "type": "object",
+                    "properties": {"level": {"type": "integer"}},
+                    "required": ["level"]
+                }
+            }
+        }
+        utils.verbs = {
+            "config": {
+                "name": "config",
+                "schema_name": "Config",
+                "definition": {
+                    "properties": {
+                        "config": {
+                            "allOf": [
+                                {"$ref": "#/$defs/BaseConfig"},
+                                {"$ref": "#/$defs/ExtendedConfig"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_properties("config")
+
+        assert "properties" in result
+        assert "enabled" in result["properties"]
+        assert "level" in result["properties"]
+
+    def test_get_verb_required_properties_with_allof(self):
+        """Test get_verb_required_properties when verb value uses allOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "BaseConfig": {
+                    "type": "object",
+                    "properties": {"enabled": {"type": "boolean"}},
+                    "required": ["enabled"]
+                },
+                "ExtendedConfig": {
+                    "type": "object",
+                    "properties": {"level": {"type": "integer"}},
+                    "required": ["level"]
+                }
+            }
+        }
+        utils.verbs = {
+            "config": {
+                "name": "config",
+                "schema_name": "Config",
+                "definition": {
+                    "properties": {
+                        "config": {
+                            "allOf": [
+                                {"$ref": "#/$defs/BaseConfig"},
+                                {"$ref": "#/$defs/ExtendedConfig"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_required_properties("config")
+
+        # allOf should merge all required fields
+        assert set(result) == {"enabled", "level"}
+
+    def test_get_verb_required_properties_with_oneof(self):
+        """Test get_verb_required_properties when verb value uses oneOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "TypeA": {
+                    "type": "object",
+                    "properties": {"a_prop": {"type": "string"}},
+                    "required": ["a_prop"]
+                },
+                "TypeB": {
+                    "type": "object",
+                    "properties": {"b_prop": {"type": "string"}},
+                    "required": ["b_prop"]
+                }
+            }
+        }
+        utils.verbs = {
+            "test": {
+                "name": "test",
+                "schema_name": "Test",
+                "definition": {
+                    "properties": {
+                        "test": {
+                            "oneOf": [
+                                {"$ref": "#/$defs/TypeA"},
+                                {"$ref": "#/$defs/TypeB"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_required_properties("test")
+
+        # oneOf should NOT merge required fields
+        assert result == []
+
+    def test_get_verb_parameters_with_composition(self):
+        """Test get_verb_parameters works correctly with composition keywords"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "ConnectSingle": {
+                    "type": "object",
+                    "properties": {"to": {"type": "string"}}
+                },
+                "ConnectMultiple": {
+                    "type": "object",
+                    "properties": {"timeout": {"type": "integer"}}
+                }
+            }
+        }
+        utils.verbs = {
+            "connect": {
+                "name": "connect",
+                "schema_name": "Connect",
+                "definition": {
+                    "properties": {
+                        "connect": {
+                            "oneOf": [
+                                {"$ref": "#/$defs/ConnectSingle"},
+                                {"$ref": "#/$defs/ConnectMultiple"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_parameters("connect")
+
+        assert "to" in result
+        assert "timeout" in result
+
+    def test_get_type_annotation_allof(self):
+        """Test type annotation for allOf returns Any"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+
+        param_def = {
+            "allOf": [
+                {"type": "object", "properties": {"a": {"type": "string"}}},
+                {"type": "object", "properties": {"b": {"type": "integer"}}}
+            ]
+        }
+
+        result = utils._get_type_annotation(param_def)
+
+        assert result == "Any"
+
+    def test_get_type_annotation_oneof(self):
+        """Test type annotation for oneOf returns Any"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+
+        param_def = {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "integer"}
+            ]
+        }
+
+        result = utils._get_type_annotation(param_def)
+
+        assert result == "Any"
+
+    def test_validate_verb_with_composition(self):
+        """Test validation works correctly with verbs using composition keywords"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "BaseConfig": {
+                    "type": "object",
+                    "properties": {"enabled": {"type": "boolean"}},
+                    "required": ["enabled"]
+                },
+                "ExtendedConfig": {
+                    "type": "object",
+                    "properties": {"level": {"type": "integer"}},
+                    "required": ["level"]
+                }
+            }
+        }
+        utils.verbs = {
+            "config": {
+                "name": "config",
+                "schema_name": "Config",
+                "definition": {
+                    "properties": {
+                        "config": {
+                            "allOf": [
+                                {"$ref": "#/$defs/BaseConfig"},
+                                {"$ref": "#/$defs/ExtendedConfig"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        # Valid config with all required fields
+        is_valid, errors = utils.validate_verb("config", {"enabled": True, "level": 5})
+        assert is_valid is True
+        assert errors == []
+
+        # Invalid config missing required fields
+        is_valid, errors = utils.validate_verb("config", {"enabled": True})
+        assert is_valid is False
+        assert any("level" in e for e in errors)
+
+    def test_integration_schema_with_oneof_verbs(self):
+        """Integration test for schema with oneOf verb definitions"""
+        schema_data = {
+            "$defs": {
+                "SWMLMethod": {
+                    "oneOf": [
+                        {"$ref": "#/$defs/Connect"},
+                        {"$ref": "#/$defs/Play"}
+                    ]
+                },
+                "Connect": {
+                    "properties": {
+                        "connect": {
+                            "oneOf": [
+                                {"$ref": "#/$defs/ConnectSingle"},
+                                {"$ref": "#/$defs/ConnectParallel"}
+                            ],
+                            "description": "Connect to endpoint"
+                        }
+                    }
+                },
+                "ConnectSingle": {
+                    "type": "object",
+                    "properties": {"to": {"type": "string"}},
+                    "required": ["to"]
+                },
+                "ConnectParallel": {
+                    "type": "object",
+                    "properties": {
+                        "to": {"type": "array"},
+                        "timeout": {"type": "integer"}
+                    }
+                },
+                "Play": {
+                    "properties": {
+                        "play": {
+                            "type": "object",
+                            "properties": {"url": {"type": "string"}},
+                            "required": ["url"]
+                        }
+                    }
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(schema_data, f)
+            schema_path = f.name
+
+        try:
+            utils = SchemaUtils(schema_path)
+
+            # Verb extraction should work
+            verb_names = utils.get_all_verb_names()
+            assert "connect" in verb_names
+            assert "play" in verb_names
+
+            # Should get merged properties for connect (oneOf)
+            connect_params = utils.get_verb_parameters("connect")
+            assert "to" in connect_params
+            assert "timeout" in connect_params
+
+            # Play should work normally
+            play_params = utils.get_verb_parameters("play")
+            assert "url" in play_params
+
+            # Validation should work
+            is_valid, errors = utils.validate_verb("play", {"url": "http://example.com"})
+            assert is_valid is True
+
+        finally:
+            os.unlink(schema_path)
+
+    def test_anyof_with_shared_required_fields(self):
+        """Test anyOf where branches share common required fields (like SMS scenario)"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "SMSWithBody": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "body": {"type": "string"}
+                    },
+                    "required": ["to_number", "from_number", "body"]
+                },
+                "SMSWithMedia": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "media": {"type": "array"},
+                        "body": {"type": "string"}  # optional here
+                    },
+                    "required": ["to_number", "from_number", "media"]
+                }
+            }
+        }
+        utils.log = Mock()
+
+        composition = [
+            {"$ref": "#/$defs/SMSWithBody"},
+            {"$ref": "#/$defs/SMSWithMedia"}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "anyOf")
+
+        # All properties should be merged
+        assert "properties" in result
+        assert "to_number" in result["properties"]
+        assert "from_number" in result["properties"]
+        assert "body" in result["properties"]
+        assert "media" in result["properties"]
+
+        # For anyOf: only fields required in ALL branches should be required
+        # Intersection of ["to_number", "from_number", "body"] and ["to_number", "from_number", "media"]
+        # = ["to_number", "from_number"]
+        assert "required" in result
+        assert set(result["required"]) == {"to_number", "from_number"}
+
+    def test_oneof_with_type_conflicts(self):
+        """Test oneOf where same property has different types"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "SingleValue": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}}
+                },
+                "MultiValue": {
+                    "type": "object",
+                    "properties": {"value": {"type": "array"}}
+                }
+            }
+        }
+        utils.log = Mock()
+
+        composition = [
+            {"$ref": "#/$defs/SingleValue"},
+            {"$ref": "#/$defs/MultiValue"}
+        ]
+
+        result = utils._merge_properties_from_composition(composition, "oneOf")
+
+        # Property should be merged but marked as conflicting
+        assert "properties" in result
+        assert "value" in result["properties"]
+        assert result["properties"]["value"].get("_conflicting_types") is True
+
+    def test_type_annotation_for_conflicting_types(self):
+        """Test that conflicting types return Any annotation"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+
+        # Property with conflicting types flag
+        param_def = {
+            "type": "string",
+            "_conflicting_types": True
+        }
+
+        result = utils._get_type_annotation(param_def)
+
+        assert result == "Any"
+
+    def test_type_annotation_for_normal_property(self):
+        """Test that normal properties still get correct type annotation"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+
+        # Property without conflicting types flag
+        param_def = {"type": "string"}
+
+        result = utils._get_type_annotation(param_def)
+
+        assert result == "str"
+
+    def test_verb_required_with_shared_required_anyof(self):
+        """Test get_verb_required_properties returns intersection for anyOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "SMSWithBody": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "body": {"type": "string"}
+                    },
+                    "required": ["to_number", "from_number", "body"]
+                },
+                "SMSWithMedia": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "media": {"type": "array"}
+                    },
+                    "required": ["to_number", "from_number", "media"]
+                }
+            }
+        }
+        utils.verbs = {
+            "send_sms": {
+                "name": "send_sms",
+                "schema_name": "SendSMS",
+                "definition": {
+                    "properties": {
+                        "send_sms": {
+                            "anyOf": [
+                                {"$ref": "#/$defs/SMSWithBody"},
+                                {"$ref": "#/$defs/SMSWithMedia"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        result = utils.get_verb_required_properties("send_sms")
+
+        # Should return intersection: to_number and from_number
+        assert set(result) == {"to_number", "from_number"}
+
+    def test_validate_verb_with_shared_required_anyof(self):
+        """Test validation correctly requires intersection fields for anyOf"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.schema = {
+            "$defs": {
+                "SMSWithBody": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "body": {"type": "string"}
+                    },
+                    "required": ["to_number", "from_number", "body"]
+                },
+                "SMSWithMedia": {
+                    "type": "object",
+                    "properties": {
+                        "to_number": {"type": "string"},
+                        "from_number": {"type": "string"},
+                        "media": {"type": "array"}
+                    },
+                    "required": ["to_number", "from_number", "media"]
+                }
+            }
+        }
+        utils.verbs = {
+            "send_sms": {
+                "name": "send_sms",
+                "schema_name": "SendSMS",
+                "definition": {
+                    "properties": {
+                        "send_sms": {
+                            "anyOf": [
+                                {"$ref": "#/$defs/SMSWithBody"},
+                                {"$ref": "#/$defs/SMSWithMedia"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        utils.log = Mock()
+
+        # Valid: has both shared required fields
+        is_valid, errors = utils.validate_verb("send_sms", {
+            "to_number": "+1234567890",
+            "from_number": "+0987654321",
+            "body": "Hello"  # one variant's specific field
+        })
+        assert is_valid is True
+
+        # Invalid: missing shared required field
+        is_valid, errors = utils.validate_verb("send_sms", {
+            "to_number": "+1234567890",
+            "body": "Hello"
+        })
+        assert is_valid is False
+        assert any("from_number" in e for e in errors)

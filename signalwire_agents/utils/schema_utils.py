@@ -165,80 +165,123 @@ class SchemaUtils:
     def _extract_verb_definitions(self) -> Dict[str, Dict[str, Any]]:
         """
         Extract verb definitions from the schema
-        
+
         Returns:
             A dictionary mapping verb names to their definitions
         """
         verbs = {}
-        
-        # Extract from SWMLMethod anyOf
-        if "$defs" in self.schema and "SWMLMethod" in self.schema["$defs"]:
-            swml_method = self.schema["$defs"]["SWMLMethod"]
-            self.log.debug("swml_method_found", keys=list(swml_method.keys()))
-            
-            if "anyOf" in swml_method:
-                self.log.debug("anyof_found", count=len(swml_method['anyOf']))
-                
-                for ref in swml_method["anyOf"]:
-                    if "$ref" in ref:
-                        # Extract the verb name from the reference
-                        verb_ref = ref["$ref"]
-                        verb_name = verb_ref.split("/")[-1]
-                        self.log.debug("processing_verb_reference", ref=verb_ref, name=verb_name)
-                        
-                        # Look up the verb definition
-                        if verb_name in self.schema["$defs"]:
-                            verb_def = self.schema["$defs"][verb_name]
-                            
-                            # Extract the actual verb name (lowercase)
-                            if "properties" in verb_def:
-                                prop_names = list(verb_def["properties"].keys())
-                                if prop_names:
-                                    actual_verb = prop_names[0]
-                                    verbs[actual_verb] = {
-                                        "name": actual_verb,
-                                        "schema_name": verb_name,
-                                        "definition": verb_def
-                                    }
-                                    self.log.debug("verb_added", verb=actual_verb)
-        else:
+
+        if "$defs" not in self.schema or "SWMLMethod" not in self.schema["$defs"]:
             self.log.warning("missing_swml_method_or_defs")
             if "$defs" in self.schema:
                 self.log.debug("available_definitions", defs=list(self.schema['$defs'].keys()))
-        
+            return verbs
+
+        swml_method = self.schema["$defs"]["SWMLMethod"]
+        self.log.debug("swml_method_found", keys=list(swml_method.keys()))
+
+        # Extract verb references from anyOf, oneOf, or allOf
+        verb_refs = []
+        for keyword in ("anyOf", "oneOf", "allOf"):
+            if keyword in swml_method:
+                self.log.debug(f"{keyword}_found", count=len(swml_method[keyword]))
+                verb_refs.extend(swml_method[keyword])
+                break  # Only one composition keyword should be present at this level
+
+        for ref in verb_refs:
+            if "$ref" not in ref:
+                continue
+
+            # Extract the verb name from the reference
+            verb_ref = ref["$ref"]
+            verb_name = verb_ref.split("/")[-1]
+            self.log.debug("processing_verb_reference", ref=verb_ref, name=verb_name)
+
+            # Look up the verb definition
+            if verb_name not in self.schema["$defs"]:
+                continue
+
+            verb_def = self.schema["$defs"][verb_name]
+
+            # Extract the actual verb name (lowercase) from properties
+            if "properties" not in verb_def:
+                continue
+
+            prop_names = list(verb_def["properties"].keys())
+            if not prop_names:
+                continue
+
+            actual_verb = prop_names[0]
+            verbs[actual_verb] = {
+                "name": actual_verb,
+                "schema_name": verb_name,
+                "definition": verb_def
+            }
+            self.log.debug("verb_added", verb=actual_verb)
+
         return verbs
     
     def get_verb_properties(self, verb_name: str) -> Dict[str, Any]:
         """
         Get the properties for a specific verb
-        
+
         Args:
             verb_name: The name of the verb (e.g., "ai", "answer", etc.)
-            
+
         Returns:
-            The properties for the verb or an empty dict if not found
+            The properties for the verb or an empty dict if not found.
+            For verbs using oneOf/anyOf/allOf, returns merged properties from all branches.
         """
-        if verb_name in self.verbs:
-            verb_def = self.verbs[verb_name]["definition"]
-            if "properties" in verb_def and verb_name in verb_def["properties"]:
-                return verb_def["properties"][verb_name]
-        return {}
-    
+        if verb_name not in self.verbs:
+            return {}
+
+        verb_def = self.verbs[verb_name]["definition"]
+        if "properties" not in verb_def or verb_name not in verb_def["properties"]:
+            return {}
+
+        verb_props = verb_def["properties"][verb_name]
+
+        # Handle composition keywords - merge properties from referenced schemas
+        for keyword in ("allOf", "anyOf", "oneOf"):
+            if keyword in verb_props:
+                merged = self._merge_properties_from_composition(verb_props[keyword], keyword)
+                # Preserve description and other metadata from original
+                result = {k: v for k, v in verb_props.items() if k != keyword}
+                result.update(merged)
+                return result
+
+        return verb_props
+
     def get_verb_required_properties(self, verb_name: str) -> List[str]:
         """
         Get the required properties for a specific verb
-        
+
         Args:
             verb_name: The name of the verb (e.g., "ai", "answer", etc.)
-            
+
         Returns:
             List of required property names for the verb or an empty list if not found
         """
-        if verb_name in self.verbs:
-            verb_def = self.verbs[verb_name]["definition"]
-            if "properties" in verb_def and verb_name in verb_def["properties"]:
-                verb_props = verb_def["properties"][verb_name]
-                return verb_props.get("required", [])
+        if verb_name not in self.verbs:
+            return []
+
+        verb_def = self.verbs[verb_name]["definition"]
+        if "properties" not in verb_def or verb_name not in verb_def["properties"]:
+            return []
+
+        verb_props = verb_def["properties"][verb_name]
+
+        # Check for direct required field
+        if "required" in verb_props:
+            return verb_props["required"]
+
+        # Handle composition keywords - for allOf, merge required from all branches
+        # For oneOf/anyOf, only return commonly required fields (intersection)
+        for keyword in ("allOf", "anyOf", "oneOf"):
+            if keyword in verb_props:
+                merged = self._merge_properties_from_composition(verb_props[keyword], keyword)
+                return merged.get("required", [])
+
         return []
     
     def validate_verb(self, verb_name: str, verb_config: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -387,18 +430,111 @@ class SchemaUtils:
         
         return "\n".join(body)
     
+    def _resolve_ref(self, ref: str) -> Dict[str, Any]:
+        """
+        Resolve a $ref reference to its definition
+
+        Args:
+            ref: The $ref string (e.g., "#/$defs/SomeDef")
+
+        Returns:
+            The resolved definition or empty dict if not found
+        """
+        if not ref.startswith("#/$defs/"):
+            self.log.debug("unsupported_ref_format", ref=ref)
+            return {}
+
+        def_name = ref.split("/")[-1]
+        if "$defs" in self.schema and def_name in self.schema["$defs"]:
+            return self.schema["$defs"][def_name]
+
+        self.log.debug("ref_not_found", ref=ref, def_name=def_name)
+        return {}
+
+    def _merge_properties_from_composition(self, composition: List[Dict[str, Any]], keyword: str) -> Dict[str, Any]:
+        """
+        Merge properties from a composition keyword (allOf, anyOf, oneOf)
+
+        Args:
+            composition: List of schema references/definitions
+            keyword: The composition keyword ("allOf", "anyOf", "oneOf")
+
+        Returns:
+            Merged properties dictionary. For oneOf/anyOf:
+            - Properties are merged for discovery (all possible properties)
+            - If same property has different types, marked with _conflicting_types=True
+            - Required fields are the INTERSECTION (required in ALL branches)
+        """
+        merged_properties = {}
+        all_required_sets = []  # Track required fields from each branch
+
+        for item in composition:
+            resolved = item
+            if "$ref" in item:
+                resolved = self._resolve_ref(item["$ref"])
+
+            # Get properties from the resolved schema
+            if "properties" in resolved:
+                for prop_name, prop_def in resolved["properties"].items():
+                    if prop_name in merged_properties:
+                        # Property already exists - check for type conflict
+                        existing = merged_properties[prop_name]
+                        existing_type = existing.get("type")
+                        new_type = prop_def.get("type")
+
+                        # If types differ (and both are defined), mark as conflicting
+                        if existing_type and new_type and existing_type != new_type:
+                            merged_properties[prop_name] = {
+                                **existing,
+                                "_conflicting_types": True
+                            }
+                        # Otherwise keep existing (first definition wins for type)
+                    else:
+                        merged_properties[prop_name] = prop_def
+
+            # Collect required fields from this branch
+            if "required" in resolved:
+                all_required_sets.append(set(resolved["required"]))
+
+        # Compute final required fields based on keyword
+        final_required = []
+        if keyword == "allOf":
+            # For allOf: UNION of all required fields (all must be satisfied)
+            for req_set in all_required_sets:
+                final_required.extend(req_set)
+            final_required = list(set(final_required))  # deduplicate
+        elif all_required_sets:
+            # For oneOf/anyOf: INTERSECTION of required fields
+            # (only fields required in ALL branches are truly required)
+            common_required = all_required_sets[0]
+            for req_set in all_required_sets[1:]:
+                common_required = common_required & req_set
+            final_required = list(common_required)
+
+        result = {}
+        if merged_properties:
+            result["properties"] = merged_properties
+        if final_required:
+            result["required"] = final_required
+
+        return result
+
     def _get_type_annotation(self, param_def: Dict[str, Any]) -> str:
         """
         Get the Python type annotation for a parameter
-        
+
         Args:
             param_def: Parameter definition from the schema
-            
+
         Returns:
             Python type annotation as a string
         """
+        # If this property has conflicting types from oneOf/anyOf merge, use Any
+        if param_def.get("_conflicting_types"):
+            return "Any"
+
         schema_type = param_def.get("type")
-        
+
         if schema_type == "string":
             return "str"
         elif schema_type == "integer":
@@ -416,8 +552,8 @@ class SchemaUtils:
         elif schema_type == "object":
             return "Dict[str, Any]"
         else:
-            # Handle complex types or oneOf/anyOf
-            if "anyOf" in param_def or "oneOf" in param_def:
+            # Handle complex types or allOf/oneOf/anyOf
+            if "allOf" in param_def or "anyOf" in param_def or "oneOf" in param_def:
                 return "Any"
             if "$ref" in param_def:
                 return "Any"  # Could be enhanced to resolve references
