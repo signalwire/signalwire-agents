@@ -369,10 +369,17 @@ class TestVerbProperties:
 
 class TestVerbValidation:
     """Test verb validation functionality"""
-    
+
     def setup_method(self):
         """Set up test data"""
         self.utils = SchemaUtils.__new__(SchemaUtils)
+        self.utils.log = Mock()
+
+        # Define the schema with $defs for jsonschema validation
+        self.utils.schema = {
+            "$defs": {}  # Empty $defs - verbs are self-contained in this test
+        }
+
         self.utils.verbs = {
             "ai": {
                 "name": "ai",
@@ -391,44 +398,55 @@ class TestVerbValidation:
                 }
             }
         }
-    
+
     def test_validate_verb_valid_config(self):
         """Test validation with valid configuration"""
         config = {"prompt": "You are helpful"}
-        
+
         is_valid, errors = self.utils.validate_verb("ai", config)
-        
+
         assert is_valid is True
         assert errors == []
-    
+
     def test_validate_verb_missing_required(self):
         """Test validation with missing required property"""
         config = {"temperature": 0.7}
-        
+
         is_valid, errors = self.utils.validate_verb("ai", config)
-        
+
         assert is_valid is False
-        assert len(errors) == 1
-        assert "Missing required property 'prompt'" in errors[0]
-    
+        assert len(errors) >= 1
+        # jsonschema error format: "'prompt' is a required property"
+        assert any("prompt" in err and "required" in err for err in errors)
+
     def test_validate_verb_nonexistent_verb(self):
         """Test validation with nonexistent verb"""
         config = {"some": "config"}
-        
+
         is_valid, errors = self.utils.validate_verb("nonexistent", config)
-        
+
         assert is_valid is False
         assert len(errors) == 1
         assert "Unknown verb: nonexistent" in errors[0]
-    
+
     def test_validate_verb_extra_properties_allowed(self):
-        """Test validation allows extra properties"""
+        """Test validation allows extra properties (no additionalProperties: false)"""
         config = {"prompt": "You are helpful", "extra_prop": "value"}
-        
+
         is_valid, errors = self.utils.validate_verb("ai", config)
-        
+
         assert is_valid is True
         assert errors == []
+
+    def test_validate_verb_type_validation(self):
+        """Test that jsonschema validates types correctly"""
+        # Temperature should be a number, not a string
+        config = {"prompt": "You are helpful", "temperature": "not a number"}
+
+        is_valid, errors = self.utils.validate_verb("ai", config)
+
+        assert is_valid is False
+        assert any("temperature" in err or "number" in err for err in errors)
 
 
 class TestCodeGeneration:

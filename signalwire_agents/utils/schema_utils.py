@@ -18,6 +18,10 @@ import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 
+# jsonschema is required for full JSON Schema Draft 2020-12 validation
+from jsonschema import Draft202012Validator, ValidationError
+from jsonschema.exceptions import best_match
+
 try:
     import structlog
     # Ensure structlog is configured
@@ -241,35 +245,84 @@ class SchemaUtils:
                 return verb_props.get("required", [])
         return []
     
+    def _get_verb_schema(self, verb_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the JSON Schema for validating a verb config.
+
+        This constructs a schema that can be used with jsonschema.validate() by:
+        1. Getting the verb's property schema
+        2. Including all $defs from the main schema so $ref references resolve
+
+        Args:
+            verb_name: The name of the verb
+
+        Returns:
+            A schema dict suitable for jsonschema validation, or None if not found
+        """
+        verb_props = self.get_verb_properties(verb_name)
+        if not verb_props:
+            return None
+
+        # Create a schema with the $defs from the main schema so refs work
+        schema = verb_props.copy()
+        if "$defs" in self.schema:
+            schema["$defs"] = self.schema["$defs"]
+
+        return schema
+
     def validate_verb(self, verb_name: str, verb_config: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """
-        Validate a verb configuration against the schema
-        
+        Validate a verb configuration against the JSON Schema.
+
+        Uses the jsonschema library for full JSON Schema Draft 2020-12 validation,
+        which checks all constraints including:
+        - Required properties
+        - Type checking (string, number, boolean, array, object)
+        - Pattern matching (regex constraints)
+        - Enum values
+        - Minimum/maximum values
+        - MinLength/maxLength for strings
+        - MinItems/maxItems for arrays
+        - anyOf/oneOf/allOf composition
+        - And all other JSON Schema keywords
+
         Args:
             verb_name: The name of the verb (e.g., "ai", "answer", etc.)
             verb_config: The configuration for the verb
-            
+
         Returns:
             (is_valid, error_messages) tuple
         """
-        # Simple validation for now - can be enhanced with more complete JSON Schema validation
         errors = []
-        
+
         # Check if the verb exists in the schema
         if verb_name not in self.verbs:
             errors.append(f"Unknown verb: {verb_name}")
             return False, errors
-            
-        # Get the required properties for this verb
-        required_props = self.get_verb_required_properties(verb_name)
-        
-        # Check if all required properties are present
-        for prop in required_props:
-            if prop not in verb_config:
-                errors.append(f"Missing required property '{prop}' for verb '{verb_name}'")
-                
-        # Return validation result
-        return len(errors) == 0, errors
+
+        # Get the verb schema for validation
+        verb_schema = self._get_verb_schema(verb_name)
+        if not verb_schema:
+            self.log.debug("verb_schema_not_found", verb=verb_name,
+                          message="Could not extract verb schema, allowing config")
+            return True, []
+
+        # Use jsonschema for full validation
+        validator = Draft202012Validator(verb_schema)
+        validation_errors = list(validator.iter_errors(verb_config))
+
+        if not validation_errors:
+            return True, []
+
+        # Collect all error messages with their paths
+        for error in validation_errors:
+            if error.path:
+                path_str = ".".join(str(p) for p in error.path)
+                errors.append(f"{path_str}: {error.message}")
+            else:
+                errors.append(error.message)
+
+        return False, errors
     
     def get_all_verb_names(self) -> List[str]:
         """
