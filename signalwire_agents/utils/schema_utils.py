@@ -22,6 +22,17 @@ from typing import Dict, Any, List, Optional, Tuple
 
 import jsonschema_rs
 
+
+class SchemaValidationError(Exception):
+    """Raised when SWML schema validation fails."""
+
+    def __init__(self, verb_name: str, errors: List[str]):
+        self.verb_name = verb_name
+        self.errors = errors
+        message = f"Schema validation failed for '{verb_name}': {'; '.join(errors)}"
+        super().__init__(message)
+
+
 try:
     import structlog
     # Ensure structlog is configured
@@ -284,6 +295,10 @@ class SchemaUtils:
         Returns:
             (is_valid, error_messages) tuple
         """
+        # Skip all validation if disabled
+        if not self._validation_enabled:
+            return True, []
+
         errors = []
 
         # Check if the verb exists in the schema

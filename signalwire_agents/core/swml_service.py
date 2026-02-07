@@ -40,7 +40,7 @@ except ImportError:
         "fastapi is required. Install it with: pip install fastapi"
     )
 
-from signalwire_agents.utils.schema_utils import SchemaUtils
+from signalwire_agents.utils.schema_utils import SchemaUtils, SchemaValidationError
 from signalwire_agents.core.swml_handler import VerbHandlerRegistry, SWMLVerbHandler
 from signalwire_agents.core.security_config import SecurityConfig
 
@@ -454,15 +454,13 @@ class SWMLService:
             is_valid, errors = self.schema_utils.validate_verb(verb_name, config)
         
         if not is_valid:
-            # Log validation errors
-            self.log.warning(f"verb_validation_error", verb=verb_name, errors=errors)
-            return False
-        
+            raise SchemaValidationError(verb_name, errors)
+
         # Add the verb to the main section
         verb_obj = {verb_name: config}
         self._current_document["sections"]["main"].append(verb_obj)
         return True
-    
+
     def add_section(self, section_name: str) -> bool:
         """
         Add a new section to the document
@@ -517,15 +515,13 @@ class SWMLService:
             is_valid, errors = self.schema_utils.validate_verb(verb_name, config)
         
         if not is_valid:
-            # Log validation errors
-            self.log.warning(f"verb_validation_error", verb=verb_name, section=section_name, errors=errors)
-            return False
-        
+            raise SchemaValidationError(verb_name, errors)
+
         # Add the verb to the section
         verb_obj = {verb_name: config}
         self._current_document["sections"][section_name].append(verb_obj)
         return True
-    
+
     def get_document(self) -> Dict[str, Any]:
         """
         Get the current SWML document
