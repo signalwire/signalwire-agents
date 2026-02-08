@@ -252,8 +252,10 @@ class SecurityConfig:
             Tuple of (username, password)
         """
         username = self.basic_auth_user or "signalwire"
-        password = self.basic_auth_password or secrets.token_urlsafe(32)
-        
+        if not self.basic_auth_password:
+            self.basic_auth_password = secrets.token_urlsafe(32)
+        password = self.basic_auth_password
+
         return username, password
     
     def get_security_headers(self, is_https: bool = False) -> Dict[str, str]:

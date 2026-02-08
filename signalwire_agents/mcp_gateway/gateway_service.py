@@ -74,6 +74,7 @@ class MCPGateway:
         self.session_manager = SessionManager(self.config)
         self.server = None
         self._shutdown_requested = False
+        self._shutdown_cleanup_done = False
         
         # Configure rate limiting from config
         self.rate_config = self.config.get('rate_limiting', {})
@@ -281,14 +282,19 @@ class MCPGateway:
             if auth_header.startswith('Bearer '):
                 token = auth_header[7:]
                 expected_token = server_config.get('auth_token')
-                if expected_token and token == expected_token:
+                import hmac
+                if expected_token and hmac.compare_digest(token, expected_token):
                     return f(*args, **kwargs)
-            
+
             # Fall back to Basic auth
             auth = request.authorization
-            if auth and auth.username == server_config.get('auth_user') and \
-               auth.password == server_config.get('auth_password'):
-                return f(*args, **kwargs)
+            if auth and auth.username and auth.password:
+                import hmac
+                expected_user = server_config.get('auth_user', '')
+                expected_pass = server_config.get('auth_password', '')
+                if (hmac.compare_digest(auth.username, expected_user) and
+                    hmac.compare_digest(auth.password, expected_pass)):
+                    return f(*args, **kwargs)
             
             # Log failed auth attempt
             self._log_security_event('auth_failed', {
@@ -513,11 +519,11 @@ class MCPGateway:
     
     def shutdown(self):
         """Shutdown the gateway service"""
-        if self._shutdown_requested:
-            # Already shutting down
+        if self._shutdown_cleanup_done:
+            # Already cleaned up
             return
-            
-        self._shutdown_requested = True
+
+        self._shutdown_cleanup_done = True
         logger.info("Shutting down MCP Gateway...")
         
         # Shutdown components in parallel for faster shutdown
@@ -542,7 +548,7 @@ class MCPGateway:
         if self.server and hasattr(self.server, 'shutdown'):
             try:
                 self.server.shutdown()
-            except:
+            except Exception:
                 pass
         
         logger.info("MCP Gateway shutdown complete")

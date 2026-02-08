@@ -2107,7 +2107,7 @@ def cmd_deploy(args):
             with open('app.json') as f:
                 app_json = json.load(f)
                 app_name = app_json.get('name')
-        except:
+        except Exception:
             pass
 
     if not app_name:
@@ -2232,7 +2232,7 @@ def _get_app_name() -> str:
         try:
             with open('app.json') as f:
                 return json.load(f).get('name', '')
-        except:
+        except Exception:
             pass
     return prompt("App name", Path.cwd().name)
 

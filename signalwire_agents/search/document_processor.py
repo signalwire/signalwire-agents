@@ -324,7 +324,7 @@ class DocumentProcessor:
                     continue
                 
                 # For each page/slide, use sentence-based chunking if it's large
-                if len(page_content) > self.chunk_size:
+                if len(page_content) > self.chunk_size * 6:  # chunk_size is in words, ~6 chars/word
                     page_chunks = self._sentence_based_chunking(
                         page_content, 
                         max_sentences_per_chunk=self._calculate_sentences_per_chunk(page_content)
@@ -418,7 +418,7 @@ class DocumentProcessor:
 
                 # Check if chunk is getting too large - use smart splitting
                 # But don't split inside code blocks
-                if current_size >= self.chunk_size and not in_code_block:
+                if current_size >= self.chunk_size * 6 and not in_code_block:  # chunk_size is in words, ~6 chars/word
                     # Try to split at paragraph boundary first
                     split_point = self._find_best_split_point(current_chunk)
 
@@ -526,7 +526,7 @@ class DocumentProcessor:
             current_size += len(line) + 1
             
             # Handle oversized chunks
-            if current_size >= self.chunk_size:
+            if current_size >= self.chunk_size * 6:  # chunk_size is in words, ~6 chars/word
                 chunks.append(self._create_chunk(
                     content='\n'.join(current_chunk),
                     filename=filename,
@@ -900,7 +900,8 @@ class DocumentProcessor:
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
             
-            model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+            from signalwire_agents.search.query_processor import _get_cached_model
+            model = _get_cached_model('sentence-transformers/all-mpnet-base-v2')
             embeddings = model.encode(sentences, show_progress_bar=False)
             
             # Calculate similarity between adjacent sentences
@@ -1071,9 +1072,9 @@ class DocumentProcessor:
             if is_qa_relevant or len(current_chunk) == 0:
                 current_chunk.append(sentence)
                 # Add surrounding context (previous and next sentences)
-                if i > 0 and sentences[i-1] not in current_chunk:
+                if i > 0 and sentences[i-1] not in current_chunk and sentences[i-1] not in current_context:
                     current_context.append(sentences[i-1])
-                if i < len(sentences) - 1:
+                if i < len(sentences) - 1 and sentences[i+1] not in current_chunk and sentences[i+1] not in current_context:
                     current_context.append(sentences[i+1])
             else:
                 current_chunk.append(sentence)

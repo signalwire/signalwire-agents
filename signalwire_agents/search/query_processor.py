@@ -79,13 +79,17 @@ def load_spacy_model(language: str):
 
 # Model cache - stores multiple models by name
 _model_cache = {}  # model_name -> SentenceTransformer instance
-_model_lock = None
+import threading
+_model_lock = threading.Lock()
 
 def set_global_model(model):
     """Legacy function - adds model to cache instead of setting globally"""
-    if model and hasattr(model, 'model_name'):
-        _model_cache[model.model_name] = model
-        logger.info(f"Model added to cache: {model.model_name}")
+    if model:
+        # Try to get model name from various attributes
+        model_name = getattr(model, 'model_name', None) or getattr(model, '_model_name', None)
+        if model_name:
+            _model_cache[model_name] = model
+            logger.info(f"Model added to cache: {model_name}")
 
 def _get_cached_model(model_name: str = None):
     """Get or create cached sentence transformer model
@@ -98,11 +102,6 @@ def _get_cached_model(model_name: str = None):
     # Default model
     if model_name is None:
         model_name = 'sentence-transformers/all-mpnet-base-v2'
-
-    # Initialize lock if needed
-    if _model_lock is None:
-        import threading
-        _model_lock = threading.Lock()
 
     # Check if model is already in cache
     if model_name in _model_cache:

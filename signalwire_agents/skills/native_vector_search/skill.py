@@ -334,13 +334,13 @@ class NativeVectorSearchSkill(SkillBase):
             self.query_nlp_backend = self.nlp_backend
         
         # Validate parameters
-        if self.index_nlp_backend not in ['nltk', 'spacy']:
-            self.logger.warning(f"Invalid index_nlp_backend '{self.index_nlp_backend}', using 'nltk'")
-            self.index_nlp_backend = 'nltk'
-            
-        if self.query_nlp_backend not in ['nltk', 'spacy']:
-            self.logger.warning(f"Invalid query_nlp_backend '{self.query_nlp_backend}', using 'nltk'")
-            self.query_nlp_backend = 'nltk'
+        if self.index_nlp_backend not in ['basic', 'nltk', 'spacy']:
+            self.logger.warning(f"Invalid index_nlp_backend '{self.index_nlp_backend}', using 'basic'")
+            self.index_nlp_backend = 'basic'
+
+        if self.query_nlp_backend not in ['basic', 'nltk', 'spacy']:
+            self.logger.warning(f"Invalid query_nlp_backend '{self.query_nlp_backend}', using 'basic'")
+            self.query_nlp_backend = 'basic'
         
         # Check if local search functionality is available (heavy imports only for local mode)
         try:
@@ -782,9 +782,9 @@ class NativeVectorSearchSkill(SkillBase):
             try:
                 stats = self.search_engine.get_stats()
                 global_data['search_stats'] = stats
-            except:
+            except Exception:
                 pass
-        
+
         return global_data
         
     def get_prompt_sections(self) -> List[Dict[str, Any]]:
@@ -816,5 +816,5 @@ class NativeVectorSearchSkill(SkillBase):
             for temp_dir in self._temp_dirs:
                 try:
                     shutil.rmtree(temp_dir)
-                except:
-                    pass 
+                except Exception:
+                    pass

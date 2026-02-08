@@ -171,7 +171,7 @@ class WikipediaSearchSkill(SkillBase):
             if len(articles) == 1:
                 return articles[0]
             else:
-                return "\n\n" + "="*50 + "\n\n".join(articles)
+                return ("\n\n" + "="*50 + "\n\n").join(articles)
                 
         except requests.exceptions.RequestException as e:
             return f"Error accessing Wikipedia: {str(e)}"

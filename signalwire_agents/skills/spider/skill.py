@@ -593,6 +593,6 @@ class SpiderSkill(SkillBase):
         """Clean up resources when skill is unloaded."""
         if hasattr(self, 'session'):
             self.session.close()
-        if hasattr(self, 'cache'):
+        if hasattr(self, 'cache') and self.cache is not None:
             self.cache.clear()
         self.logger.info("Spider skill cleaned up")

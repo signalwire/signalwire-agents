@@ -671,7 +671,7 @@ class SWMLService:
         # Check auth
         if not self._check_basic_auth(request):
             response.headers["WWW-Authenticate"] = "Basic"
-            return HTTPException(status_code=401, detail="Unauthorized")
+            raise HTTPException(status_code=401, detail="Unauthorized")
         
         # Get callback path from request state
         callback_path = getattr(request.state, "callback_path", None)
@@ -715,7 +715,8 @@ class SWMLService:
         # Apply any modifications if needed
         if modifications and isinstance(modifications, dict):
             # Get a copy of the current document
-            document = self.get_document()
+            import copy
+            document = copy.deepcopy(self.get_document())
             
             # Apply modifications (simplified implementation)
             # In a real implementation, you might want a more sophisticated merge strategy
@@ -849,8 +850,8 @@ class SWMLService:
             
             self._app = app
         
-        host = host or self.host
-        port = port or self.port
+        host = host if host is not None else self.host
+        port = port if port is not None else self.port
         
         # Get the auth credentials
         username, password = self._basic_auth
@@ -917,7 +918,7 @@ class SWMLService:
                 return False
             
             decoded = base64.b64decode(credentials).decode("utf-8")
-            username, password = decoded.split(":")
+            username, password = decoded.split(":", 1)
             
             # Compare with our credentials
             expected_username, expected_password = self._basic_auth
@@ -1067,8 +1068,8 @@ class SWMLService:
         if query_params:
             filtered_params = {k: v for k, v in query_params.items() if v}
             if filtered_params:
-                params = "&".join([f"{k}={v}" for k, v in filtered_params.items()])
-                url = f"{url}?{params}"
+                from urllib.parse import urlencode
+                url = f"{url}?{urlencode(filtered_params)}"
         
         return url
     

@@ -212,7 +212,7 @@ class ConciergeAgent(AgentBase):
         
         # Simple availability simulation - in a real application, this would
         # connect to your actual booking system
-        if service in self.services:
+        if service in [s.lower() for s in self.services]:
             # Generate a simple availability response
             return SwaigFunctionResult(
                 f"Yes, {service} is available on {date} at {time}. Would you like to make a reservation?"

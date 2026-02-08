@@ -330,7 +330,7 @@ class PromptMixin:
                         try:
                             import json
                             return json.loads(render_result)
-                        except:
+                        except (ValueError, json.JSONDecodeError):
                             # If we can't parse as JSON, fall back to raw text
                             pass
                     return render_result

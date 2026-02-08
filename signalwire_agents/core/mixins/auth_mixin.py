@@ -208,9 +208,7 @@ class AuthMixin:
             decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
             provided_username, provided_password = decoded_credentials.split(':', 1)
             
-            expected_username, expected_password = self.get_basic_auth_credentials()
-            return (provided_username == expected_username and 
-                    provided_password == expected_password)
+            return self.validate_basic_auth(provided_username, provided_password)
         except Exception:
             return False
 
@@ -256,9 +254,7 @@ class AuthMixin:
             decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
             provided_username, provided_password = decoded_credentials.split(':', 1)
             
-            expected_username, expected_password = self.get_basic_auth_credentials()
-            return (provided_username == expected_username and 
-                    provided_password == expected_password)
+            return self.validate_basic_auth(provided_username, provided_password)
         except Exception:
             return False
 

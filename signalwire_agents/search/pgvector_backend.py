@@ -87,8 +87,10 @@ class PgVectorBackend:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
             
-            # Create table
-            table_name = f"chunks_{collection_name}"
+            # Create table - sanitize collection name to prevent SQL injection
+            import re
+            sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', collection_name)
+            table_name = f"chunks_{sanitized_name}"
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS {table_name} (
                     id SERIAL PRIMARY KEY,
@@ -345,8 +347,10 @@ class PgVectorBackend:
         """Delete a collection and its data"""
         self._ensure_connection()
         
-        table_name = f"chunks_{collection_name}"
-        
+        import re
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', collection_name)
+        table_name = f"chunks_{sanitized}"
+
         with self.conn.cursor() as cursor:
             cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
             cursor.execute(
@@ -473,9 +477,8 @@ class PgVectorSearchBackend:
                       tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Perform vector similarity search"""
         with self.conn.cursor() as cursor:
-            # Set ef_search for HNSW index to ensure we get enough results
-            # ef_search must be at least as large as the LIMIT
-            cursor.execute(f"SET LOCAL hnsw.ef_search = {max(count, 40)}")
+            # Set probes for IVFFlat index to ensure we get enough results
+            cursor.execute(f"SET LOCAL ivfflat.probes = {max(count, 10)}")
             # Build query
             query = f"""
                 SELECT id, content, filename, section, tags, metadata,

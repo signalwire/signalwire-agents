@@ -43,7 +43,7 @@ class AuthHandler:
             security_config: SecurityConfig instance with auth settings
         """
         self.security_config = security_config
-        self.basic_auth = HTTPBasic() if HTTPBasic else None
+        self.basic_auth = HTTPBasic(auto_error=False) if HTTPBasic else None
         self.bearer_auth = HTTPBearer(auto_error=False) if HTTPBearer else None
         
         # Get auth methods from config
@@ -186,8 +186,8 @@ class AuthHandler:
             auth = request.authorization
             if auth and self.auth_methods.get('basic', {}).get('enabled'):
                 basic_config = self.auth_methods['basic']
-                if auth.username == basic_config['username'] and \
-                   auth.password == basic_config['password']:
+                if secrets.compare_digest(auth.username, basic_config['username']) and \
+                   secrets.compare_digest(auth.password, basic_config['password']):
                     return f(*args, **kwargs)
             
             # Authentication failed

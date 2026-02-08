@@ -165,7 +165,8 @@ class DataSphereServerlessSkill(SkillBase):
         webhook_params = {
             "document_id": self.document_id,
             "query_string": "${args.query}",  # Only this is dynamic from user input
-            "count": self.count
+            "count": self.count,
+            "distance": self.distance
         }
         
         # Add optional parameters only if they were provided

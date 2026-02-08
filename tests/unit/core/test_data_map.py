@@ -58,8 +58,8 @@ class TestDataMapBasic:
         param = data_map._parameters["location"]
         assert param["type"] == "string"
         assert param["description"] == "City name"
-        assert "required" in data_map._parameters
-        assert "location" in data_map._parameters["required"]
+        assert "_required" in data_map._parameters
+        assert "location" in data_map._parameters["_required"]
 
 
 class TestDataMapExpressions:
