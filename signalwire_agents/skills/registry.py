@@ -370,9 +370,16 @@ class SkillRegistry:
         self._entry_points_loaded = True
         
         try:
-            import pkg_resources
-            
-            for entry_point in pkg_resources.iter_entry_points('signalwire_agents.skills'):
+            from importlib.metadata import entry_points
+
+            all_eps = entry_points()
+            if hasattr(all_eps, 'select'):
+                # Python 3.12+ returns SelectableGroups; 3.10-3.11 also support select
+                skill_entries = all_eps.select(group='signalwire_agents.skills')
+            else:
+                skill_entries = all_eps.get('signalwire_agents.skills', [])
+
+            for entry_point in skill_entries:
                 try:
                     skill_class = entry_point.load()
                     if issubclass(skill_class, SkillBase):
@@ -382,34 +389,9 @@ class SkillRegistry:
                         self.logger.warning(f"Entry point '{entry_point.name}' does not provide a SkillBase subclass")
                 except Exception as e:
                     self.logger.error(f"Failed to load skill from entry point '{entry_point.name}': {e}")
-                    
-        except ImportError:
-            # pkg_resources not available, try importlib.metadata (Python 3.8+)
-            try:
-                from importlib import metadata
-                
-                entry_points = metadata.entry_points()
-                if hasattr(entry_points, 'select'):
-                    # Python 3.10+
-                    skill_entries = entry_points.select(group='signalwire_agents.skills')
-                else:
-                    # Python 3.8-3.9
-                    skill_entries = entry_points.get('signalwire_agents.skills', [])
-                
-                for entry_point in skill_entries:
-                    try:
-                        skill_class = entry_point.load()
-                        if issubclass(skill_class, SkillBase):
-                            self.register_skill(skill_class)
-                            self.logger.info(f"Loaded skill '{skill_class.SKILL_NAME}' from entry point '{entry_point.name}'")
-                        else:
-                            self.logger.warning(f"Entry point '{entry_point.name}' does not provide a SkillBase subclass")
-                    except Exception as e:
-                        self.logger.error(f"Failed to load skill from entry point '{entry_point.name}': {e}")
-                        
-            except ImportError:
-                # Neither pkg_resources nor importlib.metadata available
-                self.logger.debug("Entry point loading not available - install setuptools or use Python 3.8+")
+
+        except Exception as e:
+            self.logger.debug(f"Entry point loading failed: {e}")
     
     def list_all_skill_sources(self) -> Dict[str, List[str]]:
         """

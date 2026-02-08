@@ -183,27 +183,31 @@ class TestSWMLServiceUtilityMethods:
 
 
 class TestSWMLServiceSpecialVerbs:
-    """Test special SWML verb methods"""
-    
+    """Test special SWML verb methods via add_verb"""
+
     def test_add_answer_verb(self, mock_swml_service):
-        """Test adding answer verb"""
-        result = mock_swml_service.add_answer_verb(max_duration=30)
-        
+        """Test adding answer verb via add_verb"""
+        result = mock_swml_service.add_verb("answer", {"max_duration": 30})
+
         assert isinstance(result, bool)
-    
+
     def test_add_hangup_verb(self, mock_swml_service):
-        """Test adding hangup verb"""
-        result = mock_swml_service.add_hangup_verb(reason="completed")
-        
+        """Test adding hangup verb via add_verb"""
+        result = mock_swml_service.add_verb("hangup", {"reason": "completed"})
+
         assert isinstance(result, bool)
-    
+
     def test_add_ai_verb(self, mock_swml_service):
-        """Test adding AI verb"""
-        result = mock_swml_service.add_ai_verb(
-            prompt_text="You are a helpful assistant",
-            post_prompt="Thank you for using our service"
-        )
-        
+        """Test adding AI verb via add_verb"""
+        result = mock_swml_service.add_verb("ai", {
+            "prompt": {
+                "text": "You are a helpful assistant"
+            },
+            "post_prompt": {
+                "text": "Thank you for using our service"
+            }
+        })
+
         assert isinstance(result, bool)
 
 

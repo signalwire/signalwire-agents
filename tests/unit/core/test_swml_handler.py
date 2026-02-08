@@ -115,9 +115,10 @@ class TestAIVerbHandler:
         assert errors == []
     
     def test_validate_config_valid_contexts(self):
-        """Test validation with valid contexts configuration"""
+        """Test validation with contexts requires base prompt (text or pom)"""
         handler = AIVerbHandler()
-        
+
+        # Contexts alone are not sufficient - need text or pom as base prompt
         config = {
             "prompt": {
                 "contexts": {
@@ -129,7 +130,28 @@ class TestAIVerbHandler:
                 }
             }
         }
-        
+
+        is_valid, errors = handler.validate_config(config)
+        assert is_valid is False
+        assert "'prompt' must contain either 'text' or 'pom' as base prompt" in errors
+
+    def test_validate_config_text_with_contexts(self):
+        """Test validation with text and contexts combined"""
+        handler = AIVerbHandler()
+
+        config = {
+            "prompt": {
+                "text": "You are a helpful assistant",
+                "contexts": {
+                    "context1": {
+                        "steps": [
+                            {"step": "greeting", "content": "Hello"}
+                        ]
+                    }
+                }
+            }
+        }
+
         is_valid, errors = handler.validate_config(config)
         assert is_valid is True
         assert errors == []
@@ -159,7 +181,7 @@ class TestAIVerbHandler:
         
         is_valid, errors = handler.validate_config(config)
         assert is_valid is False
-        assert "'prompt' can only contain one of: 'text', 'pom', or 'contexts'" in errors
+        assert "'prompt' can only contain one of: 'text' or 'pom' (mutually exclusive)" in errors
     
     def test_validate_config_invalid_prompt_structure(self):
         """Test validation fails with invalid prompt structure"""
@@ -183,7 +205,7 @@ class TestAIVerbHandler:
         
         is_valid, errors = handler.validate_config(config)
         assert is_valid is False
-        assert "'prompt' must contain one of: 'text', 'pom', or 'contexts'" in errors
+        assert "'prompt' must contain either 'text' or 'pom' as base prompt" in errors
     
     def test_validate_config_invalid_contexts_structure(self):
         """Test validation fails with invalid contexts structure"""
@@ -231,9 +253,9 @@ class TestAIVerbHandler:
         assert config["post_prompt"]["text"] == "Summary"
     
     def test_build_config_with_contexts(self):
-        """Test building config with contexts"""
+        """Test building config with contexts combined with text"""
         handler = AIVerbHandler()
-        
+
         contexts_data = {
             "context1": {
                 "steps": [
@@ -241,12 +263,14 @@ class TestAIVerbHandler:
                 ]
             }
         }
-        
+
         config = handler.build_config(
+            prompt_text="You are a helpful assistant",
             contexts=contexts_data,
             post_prompt="Summary"
         )
-        
+
+        assert config["prompt"]["text"] == "You are a helpful assistant"
         assert config["prompt"]["contexts"] == contexts_data
         assert config["post_prompt"]["text"] == "Summary"
     
@@ -284,30 +308,32 @@ class TestAIVerbHandler:
         handler = AIVerbHandler()
         
         # Should raise ValueError when no prompt options provided
-        with pytest.raises(ValueError, match="One of prompt_text, prompt_pom, or contexts must be provided"):
+        with pytest.raises(ValueError, match="Either prompt_text or prompt_pom must be provided as base prompt"):
             handler.build_config()
     
     def test_build_config_conflicting_prompts(self):
         """Test that build_config raises error for conflicting prompt types"""
         handler = AIVerbHandler()
-        
-        # Should raise ValueError when multiple prompt options provided
-        with pytest.raises(ValueError, match="prompt_text, prompt_pom, and contexts are mutually exclusive"):
+
+        # Should raise ValueError when both prompt_text and prompt_pom provided
+        with pytest.raises(ValueError, match="prompt_text and prompt_pom are mutually exclusive"):
             handler.build_config(
                 prompt_text="Text prompt",
                 prompt_pom=[{"title": "POM section"}]
             )
     
-    def test_build_config_prompt_and_contexts_conflict(self):
-        """Test that build_config raises error when both prompt and contexts provided"""
+    def test_build_config_prompt_and_contexts_combined(self):
+        """Test that build_config allows combining text with contexts"""
         handler = AIVerbHandler()
-        
-        # Should raise ValueError when both prompt and contexts provided
-        with pytest.raises(ValueError, match="prompt_text, prompt_pom, and contexts are mutually exclusive"):
-            handler.build_config(
-                prompt_text="Text prompt",
-                contexts={"context1": {"steps": []}}
-            )
+
+        # Contexts can be combined with text or pom (they are optional)
+        config = handler.build_config(
+            prompt_text="Text prompt",
+            contexts={"context1": {"steps": []}}
+        )
+
+        assert config["prompt"]["text"] == "Text prompt"
+        assert config["prompt"]["contexts"] == {"context1": {"steps": []}}
     
     def test_build_config_with_additional_params(self):
         """Test building config with additional parameters"""

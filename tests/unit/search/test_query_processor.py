@@ -191,7 +191,7 @@ class TestNLTKResources:
         ensure_nltk_resources()
         
         # Should call download for each missing resource
-        assert mock_nltk.download.call_count == 4  # punkt, wordnet, averaged_perceptron_tagger, stopwords
+        assert mock_nltk.download.call_count == 5  # punkt, punkt_tab, wordnet, averaged_perceptron_tagger, stopwords
     
     @patch('signalwire_agents.search.query_processor.nltk')
     def test_ensure_nltk_resources_download_error(self, mock_nltk):
@@ -203,7 +203,7 @@ class TestNLTKResources:
             ensure_nltk_resources()
             
             # Should log warnings for failed downloads
-            assert mock_logger.warning.call_count == 4
+            assert mock_logger.warning.call_count == 5
 
 
 class TestWordNetUtilities:

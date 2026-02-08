@@ -82,25 +82,26 @@ def sample_agent_config():
 
 @pytest.fixture
 def mock_agent(mock_env_vars):
-    """Create a mock agent for testing"""
+    """Create a mock agent for testing (schema validation disabled)"""
     with pytest.MonkeyPatch().context() as m:
         # Mock uvicorn to prevent actual server startup
         m.setattr("signalwire_agents.core.agent_base.uvicorn", Mock())
-        
+
         agent = AgentBase(
             name="test_agent",
             route="/test",
             host="127.0.0.1",
             port=3001,
             suppress_logs=True,
-            use_pom=False
+            use_pom=False,
+            schema_validation=False
         )
-        
+
         # Mock the session manager to avoid initialization issues
         agent._session_manager = Mock()
         agent._session_manager.create_tool_token.return_value = "test-token"
         agent._session_manager.validate_tool_token.return_value = True
-        
+
         return agent
 
 

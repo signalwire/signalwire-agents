@@ -138,13 +138,6 @@ class SchemaUtils:
                     return str(path)
         except (ImportError, ModuleNotFoundError):
             pass
-            
-        # Fall back to pkg_resources for older Python or alternative lookup
-        try:
-            import pkg_resources
-            return pkg_resources.resource_filename("signalwire_agents", "schema.json")
-        except (ImportError, ModuleNotFoundError, pkg_resources.DistributionNotFound):
-            pass
 
         # Fall back to manual search in various locations
         import sys

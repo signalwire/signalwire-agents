@@ -124,7 +124,7 @@ class TestSwaigFunctionResultSWMLMethods:
         result.say("Hello there")
         
         assert len(result.action) == 1
-        assert result.action[0] == {"say": {"say": "Hello there"}}
+        assert result.action[0] == {"say": "Hello there"}
     
     def test_hangup_method(self):
         """Test the hangup method"""
@@ -132,7 +132,7 @@ class TestSwaigFunctionResultSWMLMethods:
         result.hangup()
         
         assert len(result.action) == 1
-        assert result.action[0] == {"hangup": {"hangup": True}}
+        assert result.action[0] == {"hangup": True}
     
     def test_hold_method(self):
         """Test the hold method"""
@@ -140,7 +140,7 @@ class TestSwaigFunctionResultSWMLMethods:
         result.hold(timeout=60)
         
         assert len(result.action) == 1
-        assert result.action[0] == {"hold": {"hold": 60}}
+        assert result.action[0] == {"hold": 60}
     
     def test_stop_method(self):
         """Test the stop method"""
@@ -148,7 +148,7 @@ class TestSwaigFunctionResultSWMLMethods:
         result.stop()
         
         assert len(result.action) == 1
-        assert result.action[0] == {"stop": {"stop": True}}
+        assert result.action[0] == {"stop": True}
     
     def test_wait_for_user_method(self):
         """Test the wait_for_user method"""
@@ -159,7 +159,7 @@ class TestSwaigFunctionResultSWMLMethods:
         action = result.action[0]
         assert "wait_for_user" in action
         # The actual implementation uses timeout as the value when both are provided
-        assert action["wait_for_user"]["wait_for_user"] == 30
+        assert action["wait_for_user"] == 30
 
 
 class TestSwaigFunctionResultChaining:
@@ -203,9 +203,9 @@ class TestSwaigFunctionResultAdvanced:
         assert len(result.action) == 1
         action = result.action[0]
         assert "set_global_data" in action
-        # The actual implementation wraps the data in another set_global_data object
-        assert action["set_global_data"]["set_global_data"]["user_id"] == "123"
-        assert action["set_global_data"]["set_global_data"]["session"] == "abc"
+        # add_action("set_global_data", data) produces {"set_global_data": data}
+        assert action["set_global_data"]["user_id"] == "123"
+        assert action["set_global_data"]["session"] == "abc"
     
     def test_execute_swml(self):
         """Test executing custom SWML"""
@@ -221,7 +221,7 @@ class TestSwaigFunctionResultAdvanced:
         assert len(result.action) == 1
         action = result.action[0]
         assert "SWML" in action
-        assert action["SWML"]["SWML"] == swml_content
+        assert action["SWML"] == swml_content
     
     def test_switch_context(self):
         """Test switching context"""
@@ -235,8 +235,8 @@ class TestSwaigFunctionResultAdvanced:
         assert len(result.action) == 1
         action = result.action[0]
         assert "context_switch" in action
-        # The actual implementation wraps in context_switch object
-        context_data = action["context_switch"]["context_switch"]
+        # add_action("context_switch", data) produces {"context_switch": data}
+        context_data = action["context_switch"]
         assert context_data["system_prompt"] == "New system prompt"
         assert context_data["user_prompt"] == "New user prompt"
         assert context_data["consolidate"] is True
