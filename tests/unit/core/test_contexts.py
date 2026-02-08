@@ -472,4 +472,549 @@ class TestContextIntegration:
         # Check other fields
         assert step_dict["step_criteria"] == "All features have been demonstrated"
         assert step_dict["functions"] == ["demo_feature_1", "demo_feature_2", "demo_feature_3"]
-        assert step_dict["valid_steps"] == ["next", "previous", "help"] 
+        assert step_dict["valid_steps"] == ["next", "previous", "help"]
+
+
+class TestStepResetAndContextNavigation:
+    """Tests for Step reset parameters and context navigation features"""
+
+    def test_set_valid_contexts(self):
+        """Test setting valid contexts on a step"""
+        step = Step("transfer")
+        result = step.set_valid_contexts(["sales", "support"])
+        assert result is step
+        assert step._valid_contexts == ["sales", "support"]
+
+    def test_set_reset_system_prompt(self):
+        """Test setting reset system prompt"""
+        step = Step("transfer")
+        result = step.set_reset_system_prompt("You are a sales agent.")
+        assert result is step
+        assert step._reset_system_prompt == "You are a sales agent."
+
+    def test_set_reset_user_prompt(self):
+        """Test setting reset user prompt"""
+        step = Step("transfer")
+        result = step.set_reset_user_prompt("Please help me buy something.")
+        assert result is step
+        assert step._reset_user_prompt == "Please help me buy something."
+
+    def test_set_reset_consolidate(self):
+        """Test setting reset consolidate flag"""
+        step = Step("transfer")
+        result = step.set_reset_consolidate(True)
+        assert result is step
+        assert step._reset_consolidate is True
+
+    def test_set_reset_full_reset(self):
+        """Test setting reset full_reset flag"""
+        step = Step("transfer")
+        result = step.set_reset_full_reset(True)
+        assert result is step
+        assert step._reset_full_reset is True
+
+    def test_to_dict_with_valid_contexts(self):
+        """Test to_dict includes valid_contexts when set"""
+        step = Step("transfer")
+        step.set_text("Transferring you now.")
+        step.set_valid_contexts(["sales", "support"])
+        result = step.to_dict()
+        assert result["valid_contexts"] == ["sales", "support"]
+
+    def test_to_dict_with_partial_reset(self):
+        """Test to_dict includes reset object with only system_prompt"""
+        step = Step("transfer")
+        step.set_text("Transferring you now.")
+        step.set_reset_system_prompt("New system prompt")
+        result = step.to_dict()
+        assert "reset" in result
+        assert result["reset"]["system_prompt"] == "New system prompt"
+        assert "user_prompt" not in result["reset"]
+        assert "consolidate" not in result["reset"]
+        assert "full_reset" not in result["reset"]
+
+    def test_to_dict_with_full_reset_object(self):
+        """Test to_dict includes reset object with all fields"""
+        step = Step("transfer")
+        step.set_text("Transferring you now.")
+        step.set_reset_system_prompt("New system prompt")
+        step.set_reset_user_prompt("User message")
+        step.set_reset_consolidate(True)
+        step.set_reset_full_reset(True)
+        result = step.to_dict()
+        assert result["reset"]["system_prompt"] == "New system prompt"
+        assert result["reset"]["user_prompt"] == "User message"
+        assert result["reset"]["consolidate"] is True
+        assert result["reset"]["full_reset"] is True
+
+    def test_to_dict_no_reset_when_defaults(self):
+        """Test to_dict omits reset when all reset fields are defaults"""
+        step = Step("greeting")
+        step.set_text("Hello!")
+        result = step.to_dict()
+        assert "reset" not in result
+
+
+class TestContextEntryParameters:
+    """Tests for Context entry parameters (system_prompt, consolidate, etc.)"""
+
+    def test_set_post_prompt(self):
+        """Test setting post prompt"""
+        context = Context("sales")
+        result = context.set_post_prompt("Summarize the conversation")
+        assert result is context
+        assert context._post_prompt == "Summarize the conversation"
+
+    def test_set_system_prompt(self):
+        """Test setting system prompt"""
+        context = Context("sales")
+        result = context.set_system_prompt("You are a sales agent.")
+        assert result is context
+        assert context._system_prompt == "You are a sales agent."
+
+    def test_set_system_prompt_conflict_with_sections(self):
+        """Test that set_system_prompt raises when sections already exist"""
+        context = Context("sales")
+        context.add_system_section("Role", "You are a sales agent.")
+        with pytest.raises(ValueError, match="Cannot use set_system_prompt"):
+            context.set_system_prompt("You are a sales agent.")
+
+    def test_set_consolidate(self):
+        """Test setting consolidate flag"""
+        context = Context("sales")
+        result = context.set_consolidate(True)
+        assert result is context
+        assert context._consolidate is True
+
+    def test_set_full_reset(self):
+        """Test setting full_reset flag"""
+        context = Context("sales")
+        result = context.set_full_reset(True)
+        assert result is context
+        assert context._full_reset is True
+
+    def test_set_user_prompt(self):
+        """Test setting user prompt"""
+        context = Context("sales")
+        result = context.set_user_prompt("I want to buy something.")
+        assert result is context
+        assert context._user_prompt == "I want to buy something."
+
+    def test_set_isolated(self):
+        """Test setting isolated flag"""
+        context = Context("sales")
+        result = context.set_isolated(True)
+        assert result is context
+        assert context._isolated is True
+
+
+class TestContextSystemPromptSections:
+    """Tests for Context system prompt POM sections"""
+
+    def test_add_system_section(self):
+        """Test adding a POM section to system prompt"""
+        context = Context("sales")
+        result = context.add_system_section("Role", "You are a sales agent.")
+        assert result is context
+        assert len(context._system_prompt_sections) == 1
+        assert context._system_prompt_sections[0]["title"] == "Role"
+        assert context._system_prompt_sections[0]["body"] == "You are a sales agent."
+
+    def test_add_system_section_conflict_with_set_system_prompt(self):
+        """Test that add_system_section raises when set_system_prompt already used"""
+        context = Context("sales")
+        context.set_system_prompt("You are a sales agent.")
+        with pytest.raises(ValueError, match="Cannot add POM sections for system prompt"):
+            context.add_system_section("Role", "You are a sales agent.")
+
+    def test_add_system_bullets(self):
+        """Test adding bullet points to system prompt"""
+        context = Context("sales")
+        result = context.add_system_bullets("Rules", ["Be polite", "Be helpful"])
+        assert result is context
+        assert len(context._system_prompt_sections) == 1
+        assert context._system_prompt_sections[0]["bullets"] == ["Be polite", "Be helpful"]
+
+    def test_add_system_bullets_conflict_with_set_system_prompt(self):
+        """Test that add_system_bullets raises when set_system_prompt already used"""
+        context = Context("sales")
+        context.set_system_prompt("You are a sales agent.")
+        with pytest.raises(ValueError, match="Cannot add POM sections for system prompt"):
+            context.add_system_bullets("Rules", ["Be polite"])
+
+    def test_render_system_prompt_with_text(self):
+        """Test _render_system_prompt returns text when set"""
+        context = Context("sales")
+        context.set_system_prompt("You are a sales agent.")
+        assert context._render_system_prompt() == "You are a sales agent."
+
+    def test_render_system_prompt_with_sections(self):
+        """Test _render_system_prompt renders POM sections"""
+        context = Context("sales")
+        context.add_system_section("Role", "You are a sales agent.")
+        context.add_system_bullets("Rules", ["Be polite", "Be helpful"])
+        rendered = context._render_system_prompt()
+        assert "## Role" in rendered
+        assert "You are a sales agent." in rendered
+        assert "## Rules" in rendered
+        assert "- Be polite" in rendered
+        assert "- Be helpful" in rendered
+
+    def test_render_system_prompt_none(self):
+        """Test _render_system_prompt returns None when nothing is set"""
+        context = Context("sales")
+        assert context._render_system_prompt() is None
+
+
+class TestContextPromptSections:
+    """Tests for Context prompt (separate from system_prompt) POM sections"""
+
+    def test_set_prompt(self):
+        """Test setting context prompt text"""
+        context = Context("sales")
+        result = context.set_prompt("Welcome to the sales department.")
+        assert result is context
+        assert context._prompt_text == "Welcome to the sales department."
+
+    def test_set_prompt_conflict_with_sections(self):
+        """Test that set_prompt raises when sections already exist"""
+        context = Context("sales")
+        context.add_section("Greeting", "Welcome!")
+        with pytest.raises(ValueError, match="Cannot use set_prompt"):
+            context.set_prompt("Welcome!")
+
+    def test_add_section(self):
+        """Test adding a section to context prompt"""
+        context = Context("sales")
+        result = context.add_section("Greeting", "Welcome to our store!")
+        assert result is context
+        assert len(context._prompt_sections) == 1
+        assert context._prompt_sections[0]["title"] == "Greeting"
+        assert context._prompt_sections[0]["body"] == "Welcome to our store!"
+
+    def test_add_section_conflict_with_set_prompt(self):
+        """Test that add_section raises when set_prompt already used"""
+        context = Context("sales")
+        context.set_prompt("Welcome!")
+        with pytest.raises(ValueError, match="Cannot add POM sections when set_prompt"):
+            context.add_section("Greeting", "Welcome!")
+
+    def test_add_bullets(self):
+        """Test adding bullet points to context prompt"""
+        context = Context("sales")
+        result = context.add_bullets("Products", ["Widget A", "Widget B"])
+        assert result is context
+        assert len(context._prompt_sections) == 1
+        assert context._prompt_sections[0]["bullets"] == ["Widget A", "Widget B"]
+
+    def test_add_bullets_conflict_with_set_prompt(self):
+        """Test that add_bullets raises when set_prompt already used"""
+        context = Context("sales")
+        context.set_prompt("Welcome!")
+        with pytest.raises(ValueError, match="Cannot add POM sections when set_prompt"):
+            context.add_bullets("Products", ["Widget A"])
+
+    def test_render_prompt_with_text(self):
+        """Test _render_prompt returns text when set"""
+        context = Context("sales")
+        context.set_prompt("Welcome to sales.")
+        assert context._render_prompt() == "Welcome to sales."
+
+    def test_render_prompt_with_sections(self):
+        """Test _render_prompt renders POM sections"""
+        context = Context("sales")
+        context.add_section("Greeting", "Hello!")
+        context.add_bullets("Items", ["Item 1", "Item 2"])
+        rendered = context._render_prompt()
+        assert "## Greeting" in rendered
+        assert "Hello!" in rendered
+        assert "## Items" in rendered
+        assert "- Item 1" in rendered
+        assert "- Item 2" in rendered
+
+    def test_render_prompt_none(self):
+        """Test _render_prompt returns None when nothing is set"""
+        context = Context("sales")
+        assert context._render_prompt() is None
+
+
+class TestContextFillers:
+    """Tests for Context enter/exit filler functionality"""
+
+    def test_set_enter_fillers(self):
+        """Test setting enter fillers"""
+        context = Context("sales")
+        fillers = {"en-US": ["Welcome!", "Hello!"], "default": ["Hi!"]}
+        result = context.set_enter_fillers(fillers)
+        assert result is context
+        assert context._enter_fillers == fillers
+
+    def test_set_enter_fillers_empty_dict(self):
+        """Test that empty dict does not set enter fillers"""
+        context = Context("sales")
+        result = context.set_enter_fillers({})
+        assert result is context
+        assert context._enter_fillers is None
+
+    def test_set_enter_fillers_non_dict(self):
+        """Test that non-dict does not set enter fillers"""
+        context = Context("sales")
+        result = context.set_enter_fillers(None)
+        assert result is context
+        assert context._enter_fillers is None
+
+    def test_set_exit_fillers(self):
+        """Test setting exit fillers"""
+        context = Context("sales")
+        fillers = {"en-US": ["Goodbye!", "Thank you!"], "default": ["Bye!"]}
+        result = context.set_exit_fillers(fillers)
+        assert result is context
+        assert context._exit_fillers == fillers
+
+    def test_set_exit_fillers_empty_dict(self):
+        """Test that empty dict does not set exit fillers"""
+        context = Context("sales")
+        result = context.set_exit_fillers({})
+        assert result is context
+        assert context._exit_fillers is None
+
+    def test_set_exit_fillers_non_dict(self):
+        """Test that non-dict does not set exit fillers"""
+        context = Context("sales")
+        result = context.set_exit_fillers(None)
+        assert result is context
+        assert context._exit_fillers is None
+
+    def test_add_enter_filler(self):
+        """Test adding enter fillers for a specific language"""
+        context = Context("sales")
+        result = context.add_enter_filler("en-US", ["Welcome!", "Hello!"])
+        assert result is context
+        assert context._enter_fillers == {"en-US": ["Welcome!", "Hello!"]}
+
+    def test_add_enter_filler_multiple_languages(self):
+        """Test adding enter fillers for multiple languages"""
+        context = Context("sales")
+        context.add_enter_filler("en-US", ["Welcome!"])
+        context.add_enter_filler("es", ["Bienvenido!"])
+        assert context._enter_fillers == {"en-US": ["Welcome!"], "es": ["Bienvenido!"]}
+
+    def test_add_enter_filler_invalid_inputs(self):
+        """Test that invalid inputs to add_enter_filler are ignored"""
+        context = Context("sales")
+        context.add_enter_filler("", ["Hello!"])
+        assert context._enter_fillers is None
+        context.add_enter_filler("en-US", [])
+        assert context._enter_fillers is None
+        context.add_enter_filler("en-US", None)
+        assert context._enter_fillers is None
+
+    def test_add_exit_filler(self):
+        """Test adding exit fillers for a specific language"""
+        context = Context("sales")
+        result = context.add_exit_filler("en-US", ["Goodbye!", "See you!"])
+        assert result is context
+        assert context._exit_fillers == {"en-US": ["Goodbye!", "See you!"]}
+
+    def test_add_exit_filler_multiple_languages(self):
+        """Test adding exit fillers for multiple languages"""
+        context = Context("sales")
+        context.add_exit_filler("en-US", ["Goodbye!"])
+        context.add_exit_filler("es", ["Adios!"])
+        assert context._exit_fillers == {"en-US": ["Goodbye!"], "es": ["Adios!"]}
+
+    def test_add_exit_filler_invalid_inputs(self):
+        """Test that invalid inputs to add_exit_filler are ignored"""
+        context = Context("sales")
+        context.add_exit_filler("", ["Bye!"])
+        assert context._exit_fillers is None
+        context.add_exit_filler("en-US", [])
+        assert context._exit_fillers is None
+        context.add_exit_filler("en-US", None)
+        assert context._exit_fillers is None
+
+
+class TestContextToDictComprehensive:
+    """Tests for Context.to_dict with various combinations of parameters"""
+
+    def test_to_dict_with_post_prompt(self):
+        """Test to_dict includes post_prompt"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_post_prompt("Summarize the conversation")
+        result = context.to_dict()
+        assert result["post_prompt"] == "Summarize the conversation"
+
+    def test_to_dict_with_system_prompt(self):
+        """Test to_dict includes system_prompt"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_system_prompt("You are a sales agent.")
+        result = context.to_dict()
+        assert result["system_prompt"] == "You are a sales agent."
+
+    def test_to_dict_with_system_sections(self):
+        """Test to_dict renders system prompt from POM sections"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.add_system_section("Role", "You are a sales agent.")
+        result = context.to_dict()
+        assert "system_prompt" in result
+        assert "## Role" in result["system_prompt"]
+
+    def test_to_dict_with_consolidate_and_full_reset(self):
+        """Test to_dict includes consolidate and full_reset"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_consolidate(True)
+        context.set_full_reset(True)
+        result = context.to_dict()
+        assert result["consolidate"] is True
+        assert result["full_reset"] is True
+
+    def test_to_dict_with_user_prompt(self):
+        """Test to_dict includes user_prompt"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_user_prompt("I want to buy something.")
+        result = context.to_dict()
+        assert result["user_prompt"] == "I want to buy something."
+
+    def test_to_dict_with_isolated(self):
+        """Test to_dict includes isolated"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_isolated(True)
+        result = context.to_dict()
+        assert result["isolated"] is True
+
+    def test_to_dict_with_prompt_text(self):
+        """Test to_dict includes prompt when set_prompt used"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_prompt("Welcome to the sales department.")
+        result = context.to_dict()
+        assert result["prompt"] == "Welcome to the sales department."
+        assert "pom" not in result
+
+    def test_to_dict_with_prompt_sections(self):
+        """Test to_dict includes pom when sections added"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.add_section("Greeting", "Welcome!")
+        context.add_bullets("Products", ["Widget A", "Widget B"])
+        result = context.to_dict()
+        assert "pom" in result
+        assert "prompt" not in result
+        assert len(result["pom"]) == 2
+
+    def test_to_dict_with_enter_and_exit_fillers(self):
+        """Test to_dict includes fillers"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        context.set_enter_fillers({"en-US": ["Welcome!"]})
+        context.set_exit_fillers({"en-US": ["Goodbye!"]})
+        result = context.to_dict()
+        assert result["enter_fillers"] == {"en-US": ["Welcome!"]}
+        assert result["exit_fillers"] == {"en-US": ["Goodbye!"]}
+
+    def test_to_dict_omits_defaults(self):
+        """Test to_dict omits fields that are at default values"""
+        context = Context("sales")
+        context.add_step("greeting").set_text("Hello!")
+        result = context.to_dict()
+        assert "post_prompt" not in result
+        assert "system_prompt" not in result
+        assert "consolidate" not in result
+        assert "full_reset" not in result
+        assert "user_prompt" not in result
+        assert "isolated" not in result
+        assert "prompt" not in result
+        assert "pom" not in result
+        assert "enter_fillers" not in result
+        assert "exit_fillers" not in result
+
+
+class TestContextBuilderValidation:
+    """Tests for ContextBuilder validation edge cases"""
+
+    def test_validate_single_context_not_named_default(self):
+        """Test validation fails when single context is not named 'default'"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        context = builder.add_context("custom_name")
+        context.add_step("greeting").set_text("Hello!")
+        with pytest.raises(ValueError, match="single context, it must be named 'default'"):
+            builder.validate()
+
+    def test_validate_invalid_step_reference(self):
+        """Test validation fails when valid_steps references unknown step"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        context = builder.add_context("default")
+        step = context.add_step("greeting")
+        step.set_text("Hello!")
+        step.set_valid_steps(["nonexistent_step"])
+        with pytest.raises(ValueError, match="references unknown step 'nonexistent_step'"):
+            builder.validate()
+
+    def test_validate_next_is_allowed_in_valid_steps(self):
+        """Test validation allows 'next' as a valid step reference"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        context = builder.add_context("default")
+        step = context.add_step("greeting")
+        step.set_text("Hello!")
+        step.set_valid_steps(["next"])
+        builder.validate()  # Should not raise
+
+    def test_validate_invalid_context_reference_at_context_level(self):
+        """Test validation fails for unknown context in context-level valid_contexts"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        ctx1 = builder.add_context("ctx1")
+        ctx1.add_step("s1").set_text("Hello!")
+        ctx1.set_valid_contexts(["nonexistent_context"])
+        ctx2 = builder.add_context("ctx2")
+        ctx2.add_step("s2").set_text("Hi!")
+        with pytest.raises(ValueError, match="Context 'ctx1' references unknown context 'nonexistent_context'"):
+            builder.validate()
+
+    def test_validate_invalid_context_reference_at_step_level(self):
+        """Test validation fails for unknown context in step-level valid_contexts"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        ctx1 = builder.add_context("ctx1")
+        step = ctx1.add_step("s1")
+        step.set_text("Hello!")
+        step.set_valid_contexts(["nonexistent_context"])
+        ctx2 = builder.add_context("ctx2")
+        ctx2.add_step("s2").set_text("Hi!")
+        with pytest.raises(ValueError, match="references unknown context 'nonexistent_context'"):
+            builder.validate()
+
+    def test_validate_valid_context_references(self):
+        """Test validation passes with valid context references at both levels"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        ctx1 = builder.add_context("ctx1")
+        step1 = ctx1.add_step("s1")
+        step1.set_text("Hello!")
+        step1.set_valid_contexts(["ctx2"])
+        ctx1.set_valid_contexts(["ctx2"])
+        ctx2 = builder.add_context("ctx2")
+        ctx2.add_step("s2").set_text("Hi!")
+        builder.validate()  # Should not raise
+
+    def test_to_dict_preserves_order(self):
+        """Test that to_dict preserves context insertion order"""
+        mock_agent = Mock()
+        builder = ContextBuilder(mock_agent)
+        ctx1 = builder.add_context("alpha")
+        ctx1.add_step("s1").set_text("A")
+        ctx2 = builder.add_context("beta")
+        ctx2.add_step("s2").set_text("B")
+        ctx3 = builder.add_context("gamma")
+        ctx3.add_step("s3").set_text("C")
+        result = builder.to_dict()
+        assert list(result.keys()) == ["alpha", "beta", "gamma"]

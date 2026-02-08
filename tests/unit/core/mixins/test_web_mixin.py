@@ -1156,3 +1156,368 @@ class TestServe:
             agent = _build_mixin(route="/")
             agent.serve()
         assert agent._app is not None
+
+
+# ===========================================================================
+# Additional coverage tests
+# ===========================================================================
+
+class TestHandleRootRequestModifications:
+    """Tests for on_swml_request modification paths in _handle_root_request."""
+
+    def test_on_swml_request_returns_truthy_modifications(self):
+        """Line 540: when on_swml_request returns truthy, modifications are passed to _render_swml."""
+        agent = _build_mixin()
+        mods = {"some_mod": True}
+        agent.on_swml_request = MagicMock(return_value=mods)
+        request = _make_request("POST", body={"call_id": "c1"})
+        _run(agent._handle_root_request(request))
+        args, kwargs = agent._render_swml.call_args
+        assert args[1] == mods
+
+    def test_on_swml_request_exception_handled(self):
+        """Line 541-542: when on_swml_request raises, error is logged and rendering continues."""
+        agent = _build_mixin()
+        agent.on_swml_request = MagicMock(side_effect=RuntimeError("swml request boom"))
+        request = _make_request("POST", body={})
+        response = _run(agent._handle_root_request(request))
+        # Should still succeed with SWML rendered with modifications=None
+        assert response.status_code == 200
+        args, _ = agent._render_swml.call_args
+        assert args[1] is None
+
+
+class TestHandleDebugRequestModifications:
+    """Tests for on_swml_request modification paths in _handle_debug_request."""
+
+    def test_on_swml_request_returns_truthy_modifications(self):
+        """Line 607: when on_swml_request returns truthy, modifications are passed to _render_swml."""
+        agent = _build_mixin()
+        mods = {"debug_mod": True}
+        agent.on_swml_request = MagicMock(return_value=mods)
+        request = _make_request("POST", body={"call_id": "d1"}, url_path="/agent/debug")
+        _run(agent._handle_debug_request(request))
+        args, _ = agent._render_swml.call_args
+        assert args[1] == mods
+
+    def test_on_swml_request_exception_handled(self):
+        """Lines 608-609: when on_swml_request raises, error is logged and rendering continues."""
+        agent = _build_mixin()
+        agent.on_swml_request = MagicMock(side_effect=ValueError("debug swml err"))
+        request = _make_request("POST", body={}, url_path="/agent/debug")
+        response = _run(agent._handle_debug_request(request))
+        assert response.status_code == 200
+        assert response.headers.get("X-Debug") == "true"
+
+
+class TestHandleSwaigRequestMalformedBody:
+    """Tests for malformed body and dynamic config errors in _handle_swaig_request."""
+
+    def test_malformed_json_body_returns_400_missing_function(self):
+        """Lines 669-671: when request.json() fails, body={} and function is missing -> 400."""
+        agent = _build_mixin()
+        resp = MagicMock()
+        resp.headers = {}
+        request = _make_request("POST", url_path="/agent/swaig")
+        request.json = AsyncMock(side_effect=json.JSONDecodeError("err", "doc", 0))
+        response = _run(agent._handle_swaig_request(request, resp))
+        assert response.status_code == 400
+
+    def test_dynamic_config_callback_error_still_calls_function(self):
+        """Lines 746-747: when dynamic config callback raises, error is logged but function still called."""
+        config_cb = MagicMock(side_effect=RuntimeError("config boom"))
+        ephemeral = MagicMock()
+        ephemeral.on_function_call = MagicMock(return_value={"response": "ok"})
+        agent = _build_mixin(_dynamic_config_callback=config_cb)
+        agent._create_ephemeral_copy = MagicMock(return_value=ephemeral)
+        resp = MagicMock()
+        resp.headers = {}
+        body = {"function": "fn1", "call_id": "c1"}
+        request = _make_request("POST", body=body, url_path="/agent/swaig")
+        result = _run(agent._handle_swaig_request(request, resp))
+        # Function should still be called on the ephemeral copy
+        ephemeral.on_function_call.assert_called_once()
+
+
+class TestHandlePostPromptRequestExtraPaths:
+    """Tests for additional branches in _handle_post_prompt_request."""
+
+    def test_body_parsing_error_extracting_call_id(self):
+        """Lines 812-813: error when extracting call_id from body."""
+        agent = _build_mixin()
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_summary = MagicMock(return_value=None)
+        # Use Mock (not AsyncMock) as base to prevent auto-attribute generation
+        # so hasattr(request, "_post_prompt_body") returns False correctly
+        request = Mock()
+        request.method = "POST"
+        request.headers = {}
+        request.url = Mock()
+        request.url.path = "/agent/post_prompt"
+        request.query_params = {}
+        request.state = Mock(spec=[])
+        # body() returns non-empty so json.loads is attempted, but it fails
+        request.body = AsyncMock(return_value=b"not-json")
+        request.json = AsyncMock(side_effect=json.JSONDecodeError("err", "doc", 0))
+        result = _run(agent._handle_post_prompt_request(request))
+        # Should still succeed with empty body parsed later
+        assert result == {"success": True}
+
+    def test_invalid_token_with_debug_token(self):
+        """Lines 834-840: invalid token triggers debug_token call."""
+        agent = _build_mixin()
+        agent._session_manager.validate_tool_token = MagicMock(return_value=False)
+        agent._session_manager.debug_token = MagicMock(return_value={"reason": "expired"})
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_summary = MagicMock(return_value=None)
+        body = {"call_id": "c1"}
+        request = _make_request(
+            "POST", body=body,
+            query_params={"__token": "bad-tok", "call_id": "c1"},
+            url_path="/agent/post_prompt",
+        )
+        result = _run(agent._handle_post_prompt_request(request))
+        agent._session_manager.debug_token.assert_called_once_with("bad-tok")
+        assert result == {"success": True}
+
+    def test_token_validation_error(self):
+        """Line 839-840: exception during token validation is caught."""
+        agent = _build_mixin()
+        agent._session_manager.validate_tool_token = MagicMock(side_effect=RuntimeError("token err"))
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_summary = MagicMock(return_value=None)
+        body = {"call_id": "c1"}
+        request = _make_request(
+            "POST", body=body,
+            query_params={"__token": "tok", "call_id": "c1"},
+            url_path="/agent/post_prompt",
+        )
+        result = _run(agent._handle_post_prompt_request(request))
+        assert result == {"success": True}
+
+    def test_body_not_pre_parsed_falls_through_to_request_json(self):
+        """Line 859: when _post_prompt_body is not set, falls through to request.json()."""
+        agent = _build_mixin()
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_summary = MagicMock(return_value=None)
+        body_data = {"call_id": "c1", "some": "data"}
+        # Use Mock (not AsyncMock) as base to prevent auto-attribute generation
+        # so hasattr(request, "_post_prompt_body") returns False correctly
+        request = Mock()
+        request.method = "POST"
+        request.headers = {}
+        request.url = Mock()
+        request.url.path = "/agent/post_prompt"
+        request.query_params = {}
+        request.state = Mock(spec=[])
+        # Make body() return empty so the call_id extraction doesn't set _post_prompt_body
+        request.body = AsyncMock(return_value=b"")
+        # But request.json() should still work for the second parse
+        request.json = AsyncMock(return_value=body_data)
+        result = _run(agent._handle_post_prompt_request(request))
+        assert result == {"success": True}
+
+    def test_post_body_parsing_error_results_in_empty_body(self):
+        """Lines 866-868: when body parsing fails completely, body defaults to {}."""
+        agent = _build_mixin()
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_summary = MagicMock(return_value=None)
+        # Use a Mock with spec to prevent auto-attribute creation
+        request = Mock(spec=["method", "headers", "url", "query_params", "state", "body", "json"])
+        request.method = "POST"
+        request.headers = {}
+        request.url = Mock()
+        request.url.path = "/agent/post_prompt"
+        request.query_params = {}
+        request.state = Mock(spec=[])
+        # body returns empty so the call_id extraction block is skipped
+        request.body = AsyncMock(return_value=b"")
+        # json() fails triggering the except on lines 866-868
+        request.json = AsyncMock(side_effect=Exception("no body"))
+        # Verify _post_prompt_body is not present
+        assert not hasattr(request, "_post_prompt_body")
+        result = _run(agent._handle_post_prompt_request(request))
+        # on_summary called with None summary and empty body
+        agent.on_summary.assert_called_once_with(None, {})
+        assert result == {"success": True}
+
+    def test_dynamic_config_callback_error_in_post_prompt(self):
+        """Lines 884-885: dynamic config callback error is caught."""
+        config_cb = MagicMock(side_effect=RuntimeError("dyn cfg err"))
+        ephemeral = MagicMock()
+        ephemeral._find_summary_in_post_data = MagicMock(return_value=None)
+        ephemeral.on_summary = MagicMock(return_value=None)
+        agent = _build_mixin(_dynamic_config_callback=config_cb)
+        agent._create_ephemeral_copy = MagicMock(return_value=ephemeral)
+        body = {"call_id": "c1"}
+        request = _make_request("POST", body=body, url_path="/agent/post_prompt")
+        result = _run(agent._handle_post_prompt_request(request))
+        # Even though config callback failed, summary should still be processed
+        ephemeral.on_summary.assert_called_once()
+        assert result == {"success": True}
+
+    def test_on_summary_exception_handled(self):
+        """Lines 900-901: exception from on_summary is caught."""
+        agent = _build_mixin()
+        agent._find_summary_in_post_data = MagicMock(return_value="some summary")
+        agent.on_summary = MagicMock(side_effect=RuntimeError("summary boom"))
+        body = {"call_id": "c1"}
+        request = _make_request("POST", body=body, url_path="/agent/post_prompt")
+        result = _run(agent._handle_post_prompt_request(request))
+        # Should still return success; the error is logged but not raised
+        assert result == {"success": True}
+
+
+class TestHandleCheckForInputExtraPaths:
+    """Tests for additional branches in _handle_check_for_input_request."""
+
+    def test_malformed_post_body_returns_400(self):
+        """Lines 950-951: when request.json() fails, conversation_id is None -> 400."""
+        agent = _build_mixin()
+        request = _make_request("POST", url_path="/agent/check_for_input")
+        request.json = AsyncMock(side_effect=json.JSONDecodeError("err", "doc", 0))
+        response = _run(agent._handle_check_for_input_request(request))
+        assert response.status_code == 400
+
+    def test_general_exception_returns_500(self):
+        """Lines 971-973: unexpected exception returns 500."""
+        agent = _build_mixin()
+        # Make _check_basic_auth raise to trigger the outer exception handler
+        agent._check_basic_auth = MagicMock(side_effect=RuntimeError("unexpected"))
+        request = _make_request("GET", query_params={"conversation_id": "c1"}, url_path="/agent/check_for_input")
+        response = _run(agent._handle_check_for_input_request(request))
+        assert response.status_code == 500
+        body = json.loads(response.body)
+        assert "unexpected" in body["error"]
+
+
+class TestGracefulShutdownHandler:
+    """Tests for the signal handler function registered by setup_graceful_shutdown."""
+
+    def test_signal_handler_calls_sys_exit(self):
+        """Lines 1123-1136: signal handler performs cleanup and calls sys.exit(0)."""
+        agent = _build_mixin()
+        # Capture the registered handler
+        handlers = {}
+        import signal as sig_module
+
+        def fake_signal(signum, handler):
+            handlers[signum] = handler
+
+        with patch.object(sig_module, "signal", side_effect=fake_signal):
+            agent.setup_graceful_shutdown()
+
+        # Invoke the SIGTERM handler
+        with pytest.raises(SystemExit) as exc_info:
+            handlers[sig_module.SIGTERM](sig_module.SIGTERM, None)
+        assert exc_info.value.code == 0
+
+    def test_signal_handler_cleanup_error(self):
+        """Lines 1133-1134: when cleanup raises, error is logged but sys.exit still called."""
+        agent = _build_mixin()
+        # Make the log.info raise during "cleanup_completed" to trigger the except branch
+        call_count = [0]
+        original_info = agent.log.info
+        def info_side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 2:  # second log.info call is "cleanup_completed"
+                raise RuntimeError("cleanup log error")
+            return original_info(*args, **kwargs)
+
+        agent.log.info = MagicMock(side_effect=info_side_effect)
+
+        handlers = {}
+        import signal as sig_module
+
+        def fake_signal(signum, handler):
+            handlers[signum] = handler
+
+        with patch.object(sig_module, "signal", side_effect=fake_signal):
+            agent.setup_graceful_shutdown()
+
+        with pytest.raises(SystemExit) as exc_info:
+            handlers[sig_module.SIGTERM](sig_module.SIGTERM, None)
+        assert exc_info.value.code == 0
+
+
+class TestGetAppEndpointsViaTestClient:
+    """Tests for the inline health/ready endpoints in get_app() using TestClient."""
+
+    def test_health_endpoint(self):
+        """Lines 54: health endpoint returns healthy status."""
+        from starlette.testclient import TestClient
+        agent = _build_mixin()
+        app = agent.get_app()
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["agent"] == "test_agent"
+
+    def test_ready_endpoint(self):
+        """Line 65: ready endpoint returns ready status."""
+        from starlette.testclient import TestClient
+        agent = _build_mixin()
+        app = agent.get_app()
+        client = TestClient(app)
+        response = client.get("/ready")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ready"
+
+
+class TestRootRequestProxyParentDetection:
+    """Tests for proxy detection fallback to parent class."""
+
+    def test_no_proxy_headers_calls_parent_detect_proxy(self):
+        """Lines 452-457: when parent has _detect_proxy_from_request, it is called."""
+        class FakeParent:
+            def __init__(self):
+                self._proxy_url_base = None
+
+            def _detect_proxy_from_request(self, request):
+                # Simulates parent detecting proxy and setting its own attribute
+                self._proxy_url_base = "https://parent-detected.example.com"
+
+        class FakeAgentWithParent(WebMixin, FakeParent):
+            def __init__(self):
+                FakeParent.__init__(self)
+
+        log = MagicMock()
+        log.bind = MagicMock(return_value=log)
+        tool_registry = MagicMock()
+        tool_registry._swaig_functions = {}
+
+        agent = FakeAgentWithParent()
+        agent._app = None
+        agent._basic_auth = ("user", "pass")
+        agent._proxy_url_base = None
+        agent._proxy_url_base_from_env = False
+        agent._proxy_detection_done = False
+        agent._current_request = None
+        agent._dynamic_config_callback = None
+        agent._is_ephemeral = False
+        agent._suppress_logs = False
+        agent._routing_callbacks = {}
+        agent._tool_registry = tool_registry
+        agent._session_manager = MagicMock()
+        agent.log = log
+        agent.name = "test_agent"
+        agent.route = "/agent"
+        agent.host = "0.0.0.0"
+        agent.port = 3000
+        agent.ssl_enabled = False
+        agent.schema_utils = MagicMock()
+        agent.get_name = MagicMock(return_value="test_agent")
+        agent._check_basic_auth = MagicMock(return_value=True)
+        agent._render_swml = MagicMock(return_value='{"sections":{}}')
+        agent.on_function_call = MagicMock(return_value=SwaigFunctionResult("ok"))
+        agent.on_summary = MagicMock(return_value=None)
+        agent._find_summary_in_post_data = MagicMock(return_value=None)
+        agent.on_swml_request = MagicMock(return_value=None)
+
+        request = _make_request("GET")
+        _run(agent._handle_root_request(request))
+        # After the call, parent's proxy URL should have been copied to self
+        assert agent._proxy_url_base == "https://parent-detected.example.com"

@@ -932,3 +932,526 @@ class TestDirectoryListingStatErrors:
         web_service_with_browsing._is_file_allowed = MagicMock(return_value=False)
         html = web_service_with_browsing._generate_directory_listing(tmp_path, "/files")
         assert "broken.txt" not in html
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: _load_config branch coverage
+# ---------------------------------------------------------------------------
+
+class TestLoadConfigBranches:
+    """Tests for _load_config to cover missing branches (lines 124, 129)."""
+
+    def test_load_config_find_returns_none(self):
+        """When find_config_file returns None and no config_file given,
+        _load_config should return early (line 124)."""
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=_make_security_mock(),
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader"
+        ) as mock_cl_cls:
+            mock_cl_cls.find_config_file.return_value = None
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(port=9999, directories={})
+        # Defaults should be set; ConfigLoader should not have been instantiated
+        # for loading (only find_config_file was called)
+        assert ws.directories == {}
+
+    def test_load_config_has_config_false(self):
+        """When ConfigLoader.has_config() is False, _load_config should
+        return early (line 129)."""
+        mock_loader = MagicMock()
+        mock_loader.has_config.return_value = False
+
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=_make_security_mock(),
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader",
+            return_value=mock_loader,
+        ) as mock_cl_cls:
+            mock_cl_cls.find_config_file.return_value = "/fake/config.yaml"
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(port=9999, directories={})
+        # get_section should never be called
+        mock_loader.get_section.assert_not_called()
+
+    def test_load_config_service_section_none(self):
+        """When get_section('service') returns None, no config is applied."""
+        mock_loader = MagicMock()
+        mock_loader.has_config.return_value = True
+        mock_loader.get_section.return_value = None
+
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=_make_security_mock(),
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader",
+            return_value=mock_loader,
+        ) as mock_cl_cls:
+            mock_cl_cls.find_config_file.return_value = "/fake/config.yaml"
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(port=9999, directories={})
+        assert ws.directories == {}
+
+    def test_load_config_directories_not_dict_ignored(self):
+        """When directories in service config is not a dict, it should be ignored."""
+        mock_loader = MagicMock()
+        mock_loader.has_config.return_value = True
+        mock_loader.get_section.return_value = {
+            "directories": "not-a-dict",  # should be ignored
+        }
+
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=_make_security_mock(),
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader",
+            return_value=mock_loader,
+        ) as mock_cl_cls:
+            mock_cl_cls.find_config_file.return_value = "/fake/config.yaml"
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(port=9999)
+        # directories should remain the default empty dict since the non-dict
+        # value was ignored by _load_config and no directories kwarg was given
+        assert ws.directories == {}
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: Route handler integration tests via TestClient
+# ---------------------------------------------------------------------------
+
+class TestRouteHandlers:
+    """Integration tests for the FastAPI route handlers using TestClient.
+    Covers lines 313, 324-357 (root and health endpoints)."""
+
+    def _make_testable_service(self, directories=None, enable_directory_browsing=False,
+                               basic_auth=None, max_file_size=100 * 1024 * 1024,
+                               blocked_extensions=None, allowed_extensions=None):
+        """Build a WebService with real FastAPI app for TestClient use."""
+        security_mock = _make_security_mock()
+
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=security_mock,
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader.find_config_file",
+            return_value=None,
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader",
+        ):
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(
+                port=9999,
+                directories=directories or {},
+                basic_auth=basic_auth or ("testuser", "testpass"),
+                enable_directory_browsing=enable_directory_browsing,
+                max_file_size=max_file_size,
+                blocked_extensions=blocked_extensions,
+                allowed_extensions=allowed_extensions,
+            )
+        ws._test_security_mock = security_mock
+        return ws
+
+    def test_health_endpoint(self):
+        """GET /health should return status and configuration info."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service()
+        client = TestClient(ws.app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "healthy"
+        assert "directories" in data
+        assert "directory_browsing" in data
+
+    def test_root_endpoint_html(self):
+        """GET / should return HTML listing available directories."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service(directories={"/docs": "/tmp"})
+        client = TestClient(ws.app)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "SignalWire Web Service" in resp.text
+        assert "/docs" in resp.text
+
+    def test_root_endpoint_no_directories(self):
+        """GET / with no directories should still return valid HTML."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service()
+        client = TestClient(ws.app)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "Available Directories" in resp.text
+
+    def _auth(self):
+        """Return basic auth tuple for TestClient requests."""
+        return ("testuser", "testpass")
+
+    def test_serve_file_success(self, tmp_path):
+        """Serving a valid file should return its contents."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "hello.txt").write_text("hello world")
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app)
+        resp = client.get("/files/hello.txt", auth=self._auth())
+        assert resp.status_code == 200
+        assert resp.text == "hello world"
+
+    def test_serve_file_not_found(self, tmp_path):
+        """Requesting a nonexistent file should return 404."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/missing.txt", auth=self._auth())
+        assert resp.status_code == 404
+
+    def test_serve_file_path_traversal_denied(self, tmp_path):
+        """Path traversal attempts should return 403."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        # Create a file outside the served dir
+        (tmp_path / "secret.txt").write_text("secret")
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/../secret.txt", auth=self._auth())
+        # The path may be normalized by the HTTP client, but the check should
+        # either 403 or 404
+        assert resp.status_code in (403, 404)
+
+    def test_serve_file_blocked_extension(self, tmp_path):
+        """Files with blocked extensions should return 403."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "secrets.env").write_text("SECRET=x")
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/secrets.env", auth=self._auth())
+        assert resp.status_code == 403
+
+    def test_serve_directory_browsing_disabled(self, tmp_path):
+        """When browsing is disabled and no index.html, return 403."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        sub = d / "subdir"
+        sub.mkdir(parents=True)
+
+        ws = self._make_testable_service(
+            directories={"/files": str(d)},
+            enable_directory_browsing=False,
+        )
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/subdir", auth=self._auth())
+        assert resp.status_code == 403
+
+    def test_serve_directory_index_html_fallback(self, tmp_path):
+        """When browsing is disabled but index.html exists, serve it."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        sub = d / "subdir"
+        sub.mkdir(parents=True)
+        (sub / "index.html").write_text("<h1>Index</h1>")
+
+        ws = self._make_testable_service(
+            directories={"/files": str(d)},
+            enable_directory_browsing=False,
+        )
+        client = TestClient(ws.app)
+        resp = client.get("/files/subdir", auth=self._auth())
+        assert resp.status_code == 200
+        assert "<h1>Index</h1>" in resp.text
+
+    def test_serve_directory_browsing_enabled(self, tmp_path):
+        """When directory browsing is enabled, return directory listing."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        sub = d / "subdir"
+        sub.mkdir(parents=True)
+        (sub / "file.txt").write_text("content")
+
+        ws = self._make_testable_service(
+            directories={"/files": str(d)},
+            enable_directory_browsing=True,
+        )
+        client = TestClient(ws.app)
+        resp = client.get("/files/subdir", auth=self._auth())
+        assert resp.status_code == 200
+        assert "Directory listing" in resp.text
+        assert "file.txt" in resp.text
+
+    def test_serve_file_mime_type_json(self, tmp_path):
+        """JSON files should be served with the correct MIME type."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "data.json").write_text('{"key": "value"}')
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app)
+        resp = client.get("/files/data.json", auth=self._auth())
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers.get("content-type", "")
+
+    def test_serve_file_cache_headers(self, tmp_path):
+        """Served files should include Cache-Control and X-Content-Type-Options."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "style.css").write_text("body {}")
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app)
+        resp = client.get("/files/style.css", auth=self._auth())
+        assert resp.status_code == 200
+        assert "nosniff" in resp.headers.get("X-Content-Type-Options", "")
+
+    def test_serve_file_too_large(self, tmp_path):
+        """Files exceeding max_file_size should be denied."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        big = d / "big.bin"
+        big.write_bytes(b"\x00" * 200)
+
+        ws = self._make_testable_service(
+            directories={"/files": str(d)},
+            max_file_size=100,
+        )
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/big.bin", auth=self._auth())
+        assert resp.status_code == 403
+
+    def test_serve_file_allowed_extension_filter(self, tmp_path):
+        """When allowed_extensions is set, only those should be served."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "page.html").write_text("<p>hi</p>")
+        (d / "data.json").write_text("{}")
+
+        ws = self._make_testable_service(
+            directories={"/files": str(d)},
+            allowed_extensions=[".html"],
+        )
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp_html = client.get("/files/page.html", auth=self._auth())
+        resp_json = client.get("/files/data.json", auth=self._auth())
+        assert resp_html.status_code == 200
+        assert resp_json.status_code == 403
+
+    def test_serve_file_wrong_auth_rejected(self, tmp_path):
+        """Requests with wrong credentials should be rejected."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "www"
+        d.mkdir()
+        (d / "hello.txt").write_text("hello")
+
+        ws = self._make_testable_service(directories={"/files": str(d)})
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/files/hello.txt", auth=("wrong", "creds"))
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: Security middleware coverage
+# ---------------------------------------------------------------------------
+
+class TestSecurityMiddleware:
+    """Tests for security middleware (lines 169-182, 187-191).
+    Uses TestClient to exercise the middleware in-process."""
+
+    def _make_testable_service(self, **kwargs):
+        security_mock = _make_security_mock()
+        with patch(
+            "signalwire_agents.web.web_service.SecurityConfig",
+            return_value=security_mock,
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader.find_config_file",
+            return_value=None,
+        ), patch(
+            "signalwire_agents.web.web_service.ConfigLoader",
+        ):
+            from signalwire_agents.web.web_service import WebService
+            ws = WebService(
+                port=9999,
+                directories=kwargs.get("directories", {}),
+                basic_auth=("testuser", "testpass"),
+                enable_directory_browsing=kwargs.get("enable_directory_browsing", False),
+            )
+        ws._test_security_mock = security_mock
+        return ws
+
+    def test_security_headers_added_to_response(self):
+        """Security headers from SecurityConfig should be added to responses."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service()
+        client = TestClient(ws.app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        # The security mock returns these headers
+        assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+        assert resp.headers.get("X-Frame-Options") == "DENY"
+
+    def test_host_validation_blocks_invalid_host(self):
+        """When should_allow_host returns False, the request should be rejected."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service()
+        # Make should_allow_host return False for invalid hosts
+        ws._test_security_mock.should_allow_host.return_value = False
+        client = TestClient(ws.app, raise_server_exceptions=False)
+        resp = client.get("/health", headers={"Host": "evil.example.com"})
+        assert resp.status_code == 400
+        assert "Invalid host" in resp.text
+
+    def test_host_validation_allows_valid_host(self):
+        """When should_allow_host returns True, the request should proceed."""
+        from starlette.testclient import TestClient
+        ws = self._make_testable_service()
+        ws._test_security_mock.should_allow_host.return_value = True
+        client = TestClient(ws.app)
+        resp = client.get("/health", headers={"Host": "good.example.com"})
+        assert resp.status_code == 200
+
+    def test_cache_headers_for_static_directory_paths(self, tmp_path):
+        """Requests to configured directory paths should get cache headers."""
+        from starlette.testclient import TestClient
+        d = tmp_path / "static"
+        d.mkdir()
+        (d / "app.js").write_text("console.log('hi')")
+
+        ws = self._make_testable_service(directories={"/static": str(d)})
+        client = TestClient(ws.app)
+        resp = client.get("/static/app.js", auth=("testuser", "testpass"))
+        assert resp.status_code == 200
+        # The middleware adds Cache-Control for paths starting with directory keys
+        assert "max-age=3600" in resp.headers.get("Cache-Control", "")
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: _mount_directories edge cases
+# ---------------------------------------------------------------------------
+
+class TestMountDirectoriesEdgeCases:
+    """Additional edge cases for _mount_directories (line 362)."""
+
+    def test_mount_no_app_returns_early(self):
+        """When self.app is None, _mount_directories should return immediately."""
+        ws = _make_web_service(fastapi_available=False)
+        ws.directories = {"/test": "/tmp"}
+        ws._mount_directories()  # should not raise
+        _stop_patches(ws)
+
+    def test_mount_with_valid_directory(self, tmp_path):
+        """Mounting a valid directory should register a route."""
+        ws = _make_web_service()
+        d = tmp_path / "web"
+        d.mkdir()
+        ws.directories = {"/web": str(d)}
+        # This should not raise
+        ws._mount_directories()
+        _stop_patches(ws)
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: start() method edge cases
+# ---------------------------------------------------------------------------
+
+class TestStartEdgeCases:
+    """Additional tests for start() covering SSL config paths."""
+
+    def test_start_ssl_from_security_config(self):
+        """When no ssl_cert/ssl_key params, use security config SSL settings."""
+        ws = _make_web_service(basic_auth=("u", "p"))
+        ws._test_security_mock.get_ssl_context_kwargs.return_value = {
+            "ssl_certfile": "/path/cert.pem",
+            "ssl_keyfile": "/path/key.pem",
+        }
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            ws.start()
+        call_kwargs = mock_uvicorn.run.call_args[1]
+        assert call_kwargs.get("ssl_certfile") == "/path/cert.pem"
+        assert call_kwargs.get("ssl_keyfile") == "/path/key.pem"
+        _stop_patches(ws)
+
+    def test_start_prints_ssl_enabled(self, capsys):
+        """When SSL is configured, 'SSL: Enabled' should be printed."""
+        ws = _make_web_service(basic_auth=("u", "p"))
+        ws._test_security_mock.get_ssl_context_kwargs.return_value = {
+            "ssl_certfile": "/path/cert.pem",
+            "ssl_keyfile": "/path/key.pem",
+        }
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            ws.start()
+        captured = capsys.readouterr()
+        assert "SSL: Enabled" in captured.out
+        _stop_patches(ws)
+
+    def test_start_prints_directory_none_when_empty(self, capsys):
+        """When no directories configured, should print 'None'."""
+        ws = _make_web_service(basic_auth=("u", "p"))
+        ws.directories = {}
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            ws.start()
+        captured = capsys.readouterr()
+        assert "None" in captured.out
+        _stop_patches(ws)
+
+    def test_start_https_scheme_in_output(self, capsys):
+        """When SSL params are given, scheme should be https."""
+        ws = _make_web_service(basic_auth=("u", "p"))
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            ws.start(ssl_cert="/c.pem", ssl_key="/k.pem")
+        captured = capsys.readouterr()
+        assert "https://" in captured.out
+        _stop_patches(ws)
+
+    def test_start_http_scheme_in_output(self, capsys):
+        """When no SSL, scheme should be http."""
+        ws = _make_web_service(basic_auth=("u", "p"))
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            ws.start()
+        captured = capsys.readouterr()
+        assert "http://" in captured.out
+        _stop_patches(ws)
+
+
+# ---------------------------------------------------------------------------
+# NEW TESTS: add_directory with app already running
+# ---------------------------------------------------------------------------
+
+class TestAddDirectoryWithApp:
+    """Tests for add_directory when app is already set."""
+
+    def test_add_directory_triggers_mount(self, tmp_path):
+        """Adding a directory when app exists should call _mount_directories."""
+        ws = _make_web_service()
+        d = tmp_path / "new_dir"
+        d.mkdir()
+        with patch.object(ws, "_mount_directories") as mock_mount:
+            ws.add_directory("/new", str(d))
+            mock_mount.assert_called_once()
+        _stop_patches(ws)
+
+    def test_add_directory_without_app_skips_mount(self, tmp_path):
+        """Adding a directory when app is None should not call _mount_directories."""
+        ws = _make_web_service(fastapi_available=False)
+        d = tmp_path / "new_dir"
+        d.mkdir()
+        ws.add_directory("/new", str(d))
+        assert "/new" in ws.directories
+        _stop_patches(ws)
