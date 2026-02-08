@@ -384,11 +384,11 @@ class AgentServer:
                             raw_data = sys.stdin.buffer.read(int(content_length))
                             try:
                                 post_data = json.loads(raw_data.decode('utf-8'))
-                            except:
+                            except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
                                 post_data = {}
                         else:
                             post_data = {}
-                        
+
                         # Execute SWAIG function
                         result = agent._execute_swaig_function("", post_data, None, None)
                         return self._format_cgi_response(result, content_type="application/json")
@@ -407,11 +407,11 @@ class AgentServer:
                             raw_data = sys.stdin.buffer.read(int(content_length))
                             try:
                                 post_data = json.loads(raw_data.decode('utf-8'))
-                            except:
+                            except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
                                 post_data = {}
                         else:
                             post_data = {}
-                            
+
                         result = agent._execute_swaig_function(function_name, post_data, None, None)
                         return self._format_cgi_response(result, content_type="application/json")
                         
@@ -479,7 +479,7 @@ class AgentServer:
                         if event and 'body' in event and event['body']:
                             try:
                                 post_data = json.loads(event['body'])
-                            except:
+                            except (json.JSONDecodeError, ValueError):
                                 pass
                         
                         result = agent._execute_swaig_function(function_name, post_data, None, None)
@@ -717,7 +717,7 @@ class AgentServer:
         # Security: prevent path traversal
         try:
             full_path = full_path.resolve()
-            if not str(full_path).startswith(str(static_dir)):
+            if not str(full_path).startswith(str(static_dir) + os.sep) and full_path != static_dir:
                 return None
         except Exception:
             return None

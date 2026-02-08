@@ -61,16 +61,19 @@ class SearchEngine:
     
     def _load_config(self) -> Dict[str, str]:
         """Load index configuration"""
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
             cursor.execute("SELECT key, value FROM config")
             config = dict(cursor.fetchall())
-            conn.close()
             return config
         except Exception as e:
             logger.error(f"Error loading config from {self.index_path}: {e}")
             return {}
+        finally:
+            if conn:
+                conn.close()
     
     def search(self, query_vector: List[float], enhanced_text: str, 
               count: int = 3, similarity_threshold: float = 0.0,
@@ -209,7 +212,8 @@ class SearchEngine:
         """Perform vector similarity search"""
         if not np or not cosine_similarity:
             return []
-            
+
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -251,19 +255,21 @@ class SearchEngine:
                 except Exception as e:
                     logger.warning(f"Error processing embedding for chunk {chunk_id}: {e}")
                     continue
-            
-            conn.close()
-            
+
             # Sort by similarity score
             results.sort(key=lambda x: x['score'], reverse=True)
             return results[:count]
-            
+
         except Exception as e:
             logger.error(f"Error in vector search: {e}")
             return []
-    
+        finally:
+            if conn:
+                conn.close()
+
     def _keyword_search(self, enhanced_text: str, count: int, original_query: Optional[str] = None) -> List[Dict[str, Any]]:
         """Perform full-text search"""
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -303,33 +309,35 @@ class SearchEngine:
                     'search_type': 'keyword'
                 })
             
-            conn.close()
-            
             # If FTS returns no results, try fallback LIKE search
             if not results:
                 logger.debug(f"FTS returned no results for '{enhanced_text}', trying fallback search")
                 return self._fallback_search(enhanced_text, count)
-                
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Error in keyword search: {e}")
             # Fallback to simple LIKE search
             return self._fallback_search(enhanced_text, count)
+        finally:
+            if conn:
+                conn.close()
     
     def _escape_fts_query(self, query: str) -> str:
         """Escape special characters for FTS5 queries"""
-        # FTS5 special characters that need escaping
-        special_chars = ['"', "'", '(', ')', '*', '-', '+', ':', '^']
-        
-        escaped = query
-        for char in special_chars:
-            escaped = escaped.replace(char, f'\\{char}')
-        
-        return escaped
+        # FTS5 uses double quotes to escape terms with special characters
+        # Remove characters that can't be quoted, then wrap each term in double quotes
+        # First remove any existing double quotes from the query
+        cleaned = query.replace('"', '')
+        # Split into terms and quote each one to neutralize special chars
+        terms = cleaned.split()
+        escaped_terms = [f'"{term}"' for term in terms if term]
+        return ' '.join(escaped_terms)
     
     def _fallback_search(self, enhanced_text: str, count: int) -> List[Dict[str, Any]]:
         """Fallback search using LIKE when FTS fails"""
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -416,16 +424,17 @@ class SearchEngine:
                     'search_type': 'fallback'
                 })
             
-            conn.close()
-            
             # Sort by score
             results.sort(key=lambda x: x['score'], reverse=True)
-            
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Error in fallback search: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
     
     def _merge_results(self, vector_results: List[Dict], keyword_results: List[Dict],
                       vector_weight: Optional[float] = None, 
@@ -499,20 +508,24 @@ class SearchEngine:
             # Boost for exact phrase match in content
             if query_lower in content_lower:
                 result['score'] *= 2.0  # Double score for exact match
-                
+                result['final_score'] = result.get('final_score', result['score']) * 2.0
+
             # Boost for matches in filenames that suggest relevance
             if any(term in filename_lower for term in ['example', 'sample', 'demo', 'tutorial', 'guide']):
                 if 'example' in query_lower or 'sample' in query_lower or 'code' in query_lower:
                     result['score'] *= 1.5
-                    
+                    result['final_score'] = result.get('final_score', result['score']) * 1.5
+
             # Boost for "getting started" type queries
             if 'getting started' in query_lower and 'start' in content_lower:
                 result['score'] *= 1.5
+                result['final_score'] = result.get('final_score', result['score']) * 1.5
                 
         return results
     
     def _filename_search(self, query: str, count: int) -> List[Dict[str, Any]]:
         """Search for query in filenames with term coverage scoring"""
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -626,18 +639,20 @@ class SearchEngine:
                         'match_coverage': term_coverage
                     })
             
-            conn.close()
-            
             # Sort by score and return top results
             results.sort(key=lambda x: x['score'], reverse=True)
             return results[:count]
-            
+
         except Exception as e:
             logger.error(f"Error in filename search: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
     
     def _metadata_search(self, query: str, count: int) -> List[Dict[str, Any]]:
         """Search in all metadata fields (tags, sections, category, product, source)"""
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -653,16 +668,18 @@ class SearchEngine:
                 cursor.execute("PRAGMA table_info(chunks)")
                 columns = [col[1] for col in cursor.fetchall()]
                 has_metadata_text = 'metadata_text' in columns
-            except:
+            except Exception:
                 has_metadata_text = False
             
             if has_metadata_text:
                 # Use the new metadata_text column for efficient searching
                 # Build conditions for each term
                 conditions = []
+                params = []
                 for term in terms:
-                    conditions.append(f"metadata_text LIKE '%{term}%'")
-                
+                    conditions.append("metadata_text LIKE ?")
+                    params.append(f"%{term}%")
+
                 if conditions:
                     query_sql = f'''
                         SELECT id, content, filename, section, tags, metadata
@@ -670,7 +687,8 @@ class SearchEngine:
                         WHERE {' AND '.join(conditions)}
                         LIMIT ?
                     '''
-                    cursor.execute(query_sql, (count * 10,))
+                    params.append(count * 10)
+                    cursor.execute(query_sql, params)
                     
                     for row in cursor.fetchall():
                         chunk_id, content, filename, section, tags_json, metadata_json = row
@@ -716,7 +734,8 @@ class SearchEngine:
             if len(results) < count:
                 # Build specific conditions for known patterns
                 specific_conditions = []
-                
+                specific_params = []
+
                 # Look for specific high-value patterns first
                 if 'code' in terms and 'examples' in terms:
                     specific_conditions.append('content LIKE \'%"category": "Code Examples"%\'')
@@ -725,11 +744,13 @@ class SearchEngine:
                 
                 # General term search in JSON content
                 for term in terms:
-                    specific_conditions.append(f"content LIKE '%\"{term}%'")
-                
+                    specific_conditions.append("content LIKE ?")
+                    specific_params.append(f'%"{term}%')
+
                 if specific_conditions:
                     # Limit conditions to avoid too broad search
                     conditions_to_use = specific_conditions[:10]
+                    params_to_use = specific_params[:10]
                     query_sql = f'''
                         SELECT id, content, filename, section, tags, metadata
                         FROM chunks
@@ -737,9 +758,12 @@ class SearchEngine:
                         AND id NOT IN ({','.join(str(id) for id in seen_ids) if seen_ids else '0'})
                         LIMIT ?
                     '''
-                    cursor.execute(query_sql, (count * 5,))
-                
-                rows = cursor.fetchall()
+                    params_to_use.append(count * 5)
+                    cursor.execute(query_sql, params_to_use)
+
+                    rows = cursor.fetchall()
+                else:
+                    rows = []
                 
                 for row in rows:
                     chunk_id, content, filename, section, tags_json, metadata_json = row
@@ -976,22 +1000,24 @@ class SearchEngine:
                     })
                     seen_ids.add(chunk_id)
             
-            conn.close()
-            
             # Sort by score and return top results
             results.sort(key=lambda x: x['score'], reverse=True)
             return results[:count]
-            
+
         except Exception as e:
             logger.error(f"Error in metadata search: {e}")
             return []
-    
+        finally:
+            if conn:
+                conn.close()
+
     def _add_vector_scores_to_candidates(self, candidates: Dict[str, Dict], query_vector: NDArray, 
                                        similarity_threshold: float):
         """Add vector similarity scores to existing candidates"""
         if not candidates or not np:
             return
-            
+
+        conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
@@ -1029,10 +1055,11 @@ class SearchEngine:
                     logger.debug(f"Error processing embedding for chunk {chunk_id}: {e}")
                     continue
             
-            conn.close()
-            
         except Exception as e:
             logger.error(f"Error in vector re-ranking: {e}")
+        finally:
+            if conn:
+                conn.close()
     
     def _calculate_combined_score(self, candidate: Dict, similarity_threshold: float) -> float:
         """Calculate final score with hybrid vector + metadata weighting

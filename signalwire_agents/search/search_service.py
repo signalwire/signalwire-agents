@@ -260,7 +260,7 @@ class SearchService:
                 "indexes": list(self.indexes.keys()),
                 "ssl_enabled": self.security.ssl_enabled,
                 "auth_required": bool(security),
-                "connection_string": self.connection_string if self.backend == 'pgvector' else None
+                "connection_string": "***" if self.backend == 'pgvector' and self.connection_string else None
             }
         
         @self.app.post("/reload_index")
@@ -470,28 +470,31 @@ class SearchService:
         
         return response
     
-    def search_direct(self, query: str, index_name: str = "default", count: int = 3, 
-                     distance: float = 0.0, tags: Optional[List[str]] = None, 
+    def search_direct(self, query: str, index_name: str = "default", count: int = 3,
+                     distance: float = 0.0, tags: Optional[List[str]] = None,
                      language: Optional[str] = None) -> Dict[str, Any]:
         """Direct search method (non-async) for programmatic use"""
         request = SearchRequest(
             query=query,
             index_name=index_name,
             count=count,
-            distance=distance,
+            similarity_threshold=distance,
             tags=tags,
             language=language
         )
-        
+
         # Use asyncio to run the async method
         import asyncio
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
+            # Already in an async context - use a thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, self._handle_search(request))
+                response = future.result()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        response = loop.run_until_complete(self._handle_search(request))
+            # No running loop - safe to use run
+            response = asyncio.run(self._handle_search(request))
         
         return {
             'results': [

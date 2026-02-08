@@ -674,7 +674,7 @@ class ContextBuilder:
                                 f"references unknown step '{valid_step}'"
                             )
         
-        # Validate context references in valid_contexts
+        # Validate context references in valid_contexts (context-level)
         for context_name, context in self._contexts.items():
             if context._valid_contexts:
                 for valid_context in context._valid_contexts:
@@ -682,6 +682,17 @@ class ContextBuilder:
                         raise ValueError(
                             f"Context '{context_name}' references unknown context '{valid_context}'"
                         )
+
+        # Validate context references in valid_contexts (step-level)
+        for context_name, context in self._contexts.items():
+            for step_name, step in context._steps.items():
+                if hasattr(step, '_valid_contexts') and step._valid_contexts:
+                    for valid_context in step._valid_contexts:
+                        if valid_context not in self._contexts:
+                            raise ValueError(
+                                f"Step '{step_name}' in context '{context_name}' "
+                                f"references unknown context '{valid_context}'"
+                            )
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert all contexts to dictionary for SWML generation"""

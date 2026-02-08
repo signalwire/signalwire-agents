@@ -275,20 +275,20 @@ class MCPGatewaySkill(SkillBase):
         # Check for mcp_call_id in global_data first, then fall back to top-level call_id
         global_data = raw_data.get('global_data', {})
         if 'mcp_call_id' in global_data:
-            self.session_id = global_data['mcp_call_id']
-            self.logger.info(f"Using session ID from global_data.mcp_call_id: {self.session_id}")
+            session_id = global_data['mcp_call_id']
+            self.logger.info(f"Using session ID from global_data.mcp_call_id: {session_id}")
         else:
-            self.session_id = raw_data.get('call_id', 'unknown')
-            self.logger.info(f"Using session ID from call_id: {self.session_id}")
+            session_id = raw_data.get('call_id', 'unknown')
+            self.logger.info(f"Using session ID from call_id: {session_id}")
         self.logger.debug(f"Raw data keys: {list(raw_data.keys())}")
         if 'global_data' in raw_data:
             self.logger.debug(f"global_data keys: {list(global_data.keys())}")
-        
+
         # Prepare request
         request_data = {
             "tool": tool_name,
             "arguments": args,
-            "session_id": self.session_id,
+            "session_id": session_id,
             "timeout": self.session_timeout,
             "metadata": {
                 "agent_id": self.agent.name,
@@ -315,8 +315,11 @@ class MCPGatewaySkill(SkillBase):
                     return SwaigFunctionResult(result_text)
                 
                 else:
-                    error_data = response.json()
-                    error_msg = error_data.get('error', f'HTTP {response.status_code}')
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('error', f'HTTP {response.status_code}')
+                    except (ValueError, requests.exceptions.JSONDecodeError):
+                        error_msg = f'HTTP {response.status_code}: {response.text[:200]}'
                     last_error = error_msg
                     
                     if response.status_code >= 500:

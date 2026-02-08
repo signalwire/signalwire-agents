@@ -277,6 +277,11 @@ class DataSphereSkill(SkillBase):
         
         return result_text + '\n'.join(formatted_results)
         
+    def cleanup(self) -> None:
+        """Clean up resources when skill is unloaded."""
+        if hasattr(self, 'session'):
+            self.session.close()
+
     def get_hints(self) -> List[str]:
         """Return speech recognition hints"""
         # Currently no hints provided, but you could add them like:

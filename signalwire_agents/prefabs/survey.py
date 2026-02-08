@@ -309,11 +309,7 @@ class SurveyAgent(AgentBase):
                 valid = False
                 message = "A response is required for this question."
                 
-        return SwaigFunctionResult({
-            "response": message,
-            "valid": valid,
-            "question_id": question_id
-        })
+        return SwaigFunctionResult(message)
     
     @AgentBase.tool(
         name="log_response",
@@ -350,11 +346,7 @@ class SurveyAgent(AgentBase):
         # For this example, we just acknowledge it
         message = f"Response to '{question_text}' has been recorded."
         
-        return SwaigFunctionResult({
-            "response": message,
-            "question_id": question_id,
-            "success": True
-        })
+        return SwaigFunctionResult(message)
     
     def on_summary(self, summary, raw_data=None):
         """

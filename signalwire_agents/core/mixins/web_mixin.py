@@ -88,8 +88,11 @@ class WebMixin:
                     self.log.debug("router_route", path=route.path)
             
             # Include the router
-            app.include_router(router, prefix=self.route)
-            
+            if self.route == "/":
+                app.include_router(router)
+            else:
+                app.include_router(router, prefix=self.route)
+
             # Register a catch-all route for debugging and troubleshooting
             @app.get("/{full_path:path}")
             @app.post("/{full_path:path}")
@@ -298,9 +301,12 @@ class WebMixin:
         mode = force_mode or get_execution_mode()
         
         try:
-            if mode in ['cgi', 'azure_function']:
+            if mode == 'cgi':
                 response = self.handle_serverless_request(event, context, mode)
                 print(response)
+                return response
+            elif mode == 'azure_function':
+                response = self.handle_serverless_request(event, context, mode)
                 return response
             elif mode in ['lambda', 'google_cloud_function']:
                 return self.handle_serverless_request(event, context, mode)
@@ -697,23 +703,28 @@ class WebMixin:
                 req_log = req_log.bind(call_id=call_id)
                 req_log.debug("call_id_identified")
             
-            # SECURITY BYPASS FOR DEBUGGING - make all functions work regardless of token
-            # We'll log the attempt but allow it through
-            token = request.query_params.get("__token") or request.query_params.get("token")  # Check __token first, fallback to token
+            # Validate security token if present
+            token = request.query_params.get("__token") or request.query_params.get("token")
             if token:
                 req_log.debug("token_found", token_length=len(token))
-                
-                # Check token validity but don't reject the request
+
+                # Check token validity
                 if hasattr(self, '_session_manager') and function_name in self._tool_registry._swaig_functions:
                     is_valid = self._session_manager.validate_tool_token(function_name, token, call_id)
                     if is_valid:
                         req_log.debug("token_valid")
                     else:
-                        # Log but continue anyway for debugging
                         req_log.warning("token_invalid")
                         if hasattr(self._session_manager, 'debug_token'):
                             debug_info = self._session_manager.debug_token(token)
                             req_log.debug("token_debug", debug=json.dumps(debug_info))
+                        # Check if the function requires a valid token
+                        func_entry = self._tool_registry._swaig_functions.get(function_name)
+                        if func_entry and func_entry.get('secure', True):
+                            return JSONResponse(
+                                status_code=401,
+                                content={"error": "Invalid security token"}
+                            )
             
             # Check if we need to use an ephemeral agent for dynamic configuration
             agent_to_use = self

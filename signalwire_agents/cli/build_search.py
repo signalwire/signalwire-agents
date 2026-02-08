@@ -441,6 +441,7 @@ Examples:
             import json
             
             builder = IndexBuilder(
+                model_name=args.model,
                 chunking_strategy=args.chunking_strategy,
                 max_sentences_per_chunk=args.max_sentences_per_chunk,
                 chunk_size=args.chunk_size,
@@ -524,7 +525,10 @@ Examples:
                 print(f"✓ Exported {len(all_chunks)} chunks to {args.output}")
             else:
                 print(f"✓ Created {len(chunk_files_created)} JSON files in {args.output_dir}")
-                total_chunks = sum(len(json.load(open(f))['chunks']) for f in chunk_files_created)
+                total_chunks = 0
+                for f in chunk_files_created:
+                    with open(f) as fh:
+                        total_chunks += len(json.load(fh)['chunks'])
                 print(f"  Total chunks: {total_chunks}")
             
             # Exit early for JSON format
@@ -756,7 +760,7 @@ def search_command():
                         try:
                             args.count = int(query.split('=')[1])
                             print(f"Result count set to: {args.count}")
-                        except:
+                        except (ValueError, IndexError):
                             print("Invalid count value")
                         continue
                         
@@ -793,7 +797,7 @@ def search_command():
                         query_vector=enhanced.get('vector'),
                         enhanced_text=enhanced.get('enhanced_text', query),
                         count=args.count,
-                        similarity_threshold=args.similarity_threshold,
+                        similarity_threshold=args.distance_threshold,
                         tags=tags,
                         keyword_weight=args.keyword_weight,
                         original_query=query
@@ -871,7 +875,7 @@ def search_command():
             query_vector=enhanced.get('vector'),
             enhanced_text=enhanced.get('enhanced_text', args.query),
             count=args.count,
-            similarity_threshold=args.similarity_threshold,
+            similarity_threshold=args.distance_threshold,
             tags=tags,
             keyword_weight=args.keyword_weight,
             original_query=args.query  # Pass original for exact match boosting
@@ -1118,7 +1122,7 @@ def remote_command():
         'query': args.query,
         'index_name': args.index_name,
         'count': args.count,
-        'similarity_threshold': args.similarity_threshold
+        'similarity_threshold': args.distance_threshold
     }
     
     if args.tags:
@@ -1184,7 +1188,7 @@ def remote_command():
             try:
                 error_detail = response.json()
                 error_msg = error_detail.get('detail', 'Index not found')
-            except:
+            except Exception:
                 error_msg = 'Index not found'
             print(f"Error: {error_msg}")
             sys.exit(1)
@@ -1192,7 +1196,7 @@ def remote_command():
             try:
                 error_detail = response.json()
                 error_msg = error_detail.get('detail', f'HTTP {response.status_code}')
-            except:
+            except Exception:
                 error_msg = f'HTTP {response.status_code}: {response.text}'
             print(f"Error: {error_msg}")
             sys.exit(1)

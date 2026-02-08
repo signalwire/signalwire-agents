@@ -214,7 +214,10 @@ class WebService:
     def _is_file_allowed(self, file_path: Path) -> bool:
         """Check if file is allowed to be served"""
         # Check file size
-        if file_path.stat().st_size > self.max_file_size:
+        try:
+            if file_path.stat().st_size > self.max_file_size:
+                return False
+        except (OSError, FileNotFoundError):
             return False
         
         # Check extension and name
@@ -251,7 +254,9 @@ class WebService:
                 continue  # Skip hidden files
                 
             if item.is_dir():
-                items.append(f'<li>📁 <a href="{item.name}/">{item.name}/</a></li>')
+                from html import escape
+                safe_name = escape(item.name, quote=True)
+                items.append(f'<li>📁 <a href="{safe_name}/">{safe_name}/</a></li>')
         
         # Then list files
         for item in sorted(directory.iterdir()):
@@ -267,13 +272,15 @@ class WebService:
                 else:
                     size_str = f"{size / (1024 * 1024):.1f} MB"
                 
-                items.append(f'<li>📄 <a href="{item.name}">{item.name}</a> ({size_str})</li>')
+                from html import escape
+                safe_name = escape(item.name, quote=True)
+                items.append(f'<li>📄 <a href="{safe_name}">{safe_name}</a> ({size_str})</li>')
         
         html = f"""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Directory listing for {url_path}</title>
+            <title>Directory listing for {__import__('html').escape(url_path)}</title>
             <style>
                 body {{ font-family: sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
@@ -284,7 +291,7 @@ class WebService:
             </style>
         </head>
         <body>
-            <h1>Directory listing for {url_path}</h1>
+            <h1>Directory listing for {__import__('html').escape(url_path)}</h1>
             <ul>
                 {''.join(items)}
             </ul>
@@ -394,8 +401,10 @@ class WebService:
                 try:
                     full_path = full_path.resolve()
                     dir_path = Path(directory).resolve()
-                    if not str(full_path).startswith(str(dir_path)):
+                    if not str(full_path).startswith(str(dir_path) + os.sep) and full_path != dir_path:
                         raise HTTPException(status_code=403, detail="Access denied")
+                except HTTPException:
+                    raise
                 except Exception:
                     raise HTTPException(status_code=403, detail="Invalid path")
                 

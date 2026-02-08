@@ -52,7 +52,7 @@ class SkillRegistry:
                 return skill_class
         
         # Search in environment variable paths
-        env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(':')
+        env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(os.pathsep)
         for path_str in env_paths:
             if path_str:
                 skill_class = self._load_skill_from_path(skill_name, Path(path_str))
@@ -307,7 +307,7 @@ class SkillRegistry:
                                 self.logger.error(f"Failed to load skill '{item.name}': {e}")
         
         # Scan environment variable paths
-        env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(':')
+        env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(os.pathsep)
         for path_str in env_paths:
             if path_str:
                 env_path = Path(path_str)

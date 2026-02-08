@@ -77,7 +77,7 @@ class SwaigFunctionResult:
             post_process: Whether to let AI take another turn before executing actions.
                          Defaults to False (execute actions immediately after response).
         """
-        self.response = response or ""
+        self.response = response if response is not None else ""
         self.action: List[Dict[str, Any]] = []
         self.post_process = post_process
     
@@ -357,17 +357,21 @@ class SwaigFunctionResult:
         """
         # Detect input type and normalize to appropriate format
         if isinstance(swml_content, str):
-            # Raw SWML string - use as-is
-            swml_data = swml_content
+            # Raw SWML string - parse to dict so we can add transfer key if needed
+            try:
+                import json
+                swml_data = json.loads(swml_content)
+            except (json.JSONDecodeError, ValueError):
+                swml_data = {"raw_swml": swml_content}
         elif hasattr(swml_content, 'to_dict'):
             # SWML SDK object - convert to dict
             swml_data = swml_content.to_dict()
         elif isinstance(swml_content, dict):
-            # Dict - use directly
-            swml_data = swml_content
+            # Dict - make a copy to avoid mutating caller's data
+            swml_data = dict(swml_content)
         else:
             raise TypeError("swml_content must be string, dict, or SWML object")
-        
+
         action = swml_data
         if transfer:
             action["transfer"] = "true"

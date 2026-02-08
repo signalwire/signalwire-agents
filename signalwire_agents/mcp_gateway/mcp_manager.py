@@ -477,21 +477,28 @@ class MCPManager:
     def get_service_tools(self, service_name: str) -> List[Dict[str, Any]]:
         """Get tools for a service by starting a temporary instance"""
         client = None
+        client_key = None
         try:
             client = self.create_client(service_name)
+            client_key = f"{service_name}_{id(client)}"
             return client.get_tools()
         finally:
             if client:
                 client.stop()
-    
+                if client_key and client_key in self.clients:
+                    del self.clients[client_key]
+
     def validate_services(self) -> Dict[str, bool]:
         """Validate that all services can be started"""
         results = {}
-        
+
         for service_name in self.services:
             try:
                 client = self.create_client(service_name)
+                client_key = f"{service_name}_{id(client)}"
                 client.stop()
+                if client_key in self.clients:
+                    del self.clients[client_key]
                 results[service_name] = True
                 logger.info(f"Service '{service_name}' validation: OK")
             except Exception as e:

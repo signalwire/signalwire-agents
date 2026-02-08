@@ -128,12 +128,12 @@ class DataMap:
             param_def["enum"] = enum
             
         self._parameters[name] = param_def
-        
+
         if required:
-            if "required" not in self._parameters:
-                self._parameters["required"] = []
-            if name not in self._parameters["required"]:
-                self._parameters["required"].append(name)
+            if "_required" not in self._parameters:
+                self._parameters["_required"] = []
+            if name not in self._parameters["_required"]:
+                self._parameters["_required"].append(name)
         
         return self
     
@@ -251,7 +251,7 @@ class DataMap:
         self._webhooks[-1]["params"] = data
         return self
     
-    def foreach(self, foreach_config: Union[str, Dict[str, Any]]) -> 'DataMap':
+    def foreach(self, foreach_config: Dict[str, Any]) -> 'DataMap':
         """
         Process an array from the webhook response using foreach mechanism
         
@@ -361,8 +361,8 @@ class DataMap:
         # Build parameter schema
         if self._parameters:
             # Extract required params without mutating original dict
-            required_params = self._parameters.get("required", [])
-            param_properties = {k: v for k, v in self._parameters.items() if k != "required"}
+            required_params = self._parameters.get("_required", [])
+            param_properties = {k: v for k, v in self._parameters.items() if k != "_required"}
             
             param_schema = {
                 "type": "object",

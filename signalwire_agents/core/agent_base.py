@@ -457,7 +457,7 @@ class AgentBase(
         """
         # Validate verb is safe for pre-answer use
         if verb_name in self._AUTO_ANSWER_VERBS:
-            if not config.get("auto_answer") is False:
+            if config.get("auto_answer") is not False:
                 self.log.warning(
                     "pre_answer_verb_will_answer",
                     verb=verb_name,
@@ -1165,8 +1165,8 @@ class AgentBase(
                 # Remove any call_id from query params
                 filtered_params = {k: v for k, v in query_params.items() if k != "call_id" and v}
                 if filtered_params:
-                    params = "&".join([f"{k}={v}" for k, v in filtered_params.items()])
-                    url = f"{url}?{params}"
+                    from urllib.parse import urlencode
+                    url = f"{url}?{urlencode(filtered_params)}"
             
             return url
         
@@ -1202,7 +1202,7 @@ class AgentBase(
                         # Try to parse JSON from raw text
                         parsed = json.loads(pdata["raw"])
                         return parsed
-                    except:
+                    except (json.JSONDecodeError, ValueError, TypeError):
                         return pdata["raw"]
                         
         return None
@@ -1339,7 +1339,7 @@ class AgentBase(
             if request.method == "POST":
                 try:
                     body = await request.json()
-                except:
+                except Exception:
                     pass
             
             # Get call_id
