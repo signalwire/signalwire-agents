@@ -14,6 +14,7 @@ Unit tests for schema_utils module
 import pytest
 import json
 import os
+import time
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, mock_open
@@ -36,13 +37,14 @@ class TestSchemaUtils:
                 assert utils.verbs == {}
     
     def test_initialization_without_schema_path(self):
-        """Test initialization without schema path uses default"""
-        with patch.object(SchemaUtils, '_get_default_schema_path', return_value="/default/schema.json"):
-            with patch.object(SchemaUtils, 'load_schema', return_value={}):
-                with patch.object(SchemaUtils, '_extract_verb_definitions', return_value={}):
-                    utils = SchemaUtils()
-                    
-                    assert utils.schema_path == "/default/schema.json"
+        """Test initialization without schema path uses remote fallback chain"""
+        with patch.object(SchemaUtils, '_load_schema_with_remote_fallback', return_value={}):
+            with patch.object(SchemaUtils, '_extract_verb_definitions', return_value={}):
+                utils = SchemaUtils()
+
+                # schema_path is None since remote fallback handles loading
+                assert utils.schema_path is None
+                assert utils.schema == {}
     
     def test_get_default_schema_path_importlib_resources_new(self):
         """Test default schema path using importlib.resources (Python 3.13+)"""
@@ -674,4 +676,297 @@ class TestSchemaUtilsIntegration:
             assert utils.get_verb_parameters("ai") == {}
             
             is_valid, errors = utils.validate_verb("ai", {})
-            assert is_valid is False 
+            assert is_valid is False
+
+
+class TestRemoteSchemaFetch:
+    """Test remote schema fetching with ETag caching"""
+
+    SAMPLE_SCHEMA = {
+        "$defs": {
+            "SWMLMethod": {
+                "anyOf": [{"$ref": "#/$defs/AIMethod"}]
+            },
+            "AIMethod": {
+                "properties": {
+                    "ai": {"type": "object"}
+                }
+            }
+        }
+    }
+
+    def _make_utils(self):
+        """Create a SchemaUtils instance without calling __init__"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.log = Mock()
+        return utils
+
+    def test_fetch_remote_schema_200_success(self):
+        """Test successful remote fetch with 200 response"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = self.SAMPLE_SCHEMA
+        mock_response.headers = {"ETag": '"abc123"'}
+        mock_response.raise_for_status = Mock()
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response):
+            with patch.object(utils, '_write_cache') as mock_write:
+                with patch.object(utils, '_read_cache_meta', return_value=None):
+                    result = utils._fetch_remote_schema()
+
+        assert result == self.SAMPLE_SCHEMA
+        mock_write.assert_called_once_with(self.SAMPLE_SCHEMA, '"abc123"')
+
+    def test_fetch_remote_schema_304_uses_cache(self):
+        """Test 304 Not Modified loads from disk cache"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 304
+
+        cached_meta = {"etag": '"abc123"'}
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response):
+            with patch.object(utils, '_read_cache_meta', return_value=cached_meta):
+                with patch.object(utils, '_load_cached_schema', return_value=self.SAMPLE_SCHEMA):
+                    result = utils._fetch_remote_schema()
+
+        assert result == self.SAMPLE_SCHEMA
+
+    def test_fetch_remote_schema_304_missing_cache(self):
+        """Test 304 with missing cache file returns None"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 304
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response):
+            with patch.object(utils, '_read_cache_meta', return_value={"etag": '"abc"'}):
+                with patch.object(utils, '_load_cached_schema', return_value=None):
+                    result = utils._fetch_remote_schema()
+
+        assert result is None
+
+    def test_fetch_remote_schema_timeout(self):
+        """Test timeout falls through gracefully"""
+        import requests as req
+        utils = self._make_utils()
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', side_effect=req.exceptions.Timeout):
+            with patch.object(utils, '_read_cache_meta', return_value=None):
+                result = utils._fetch_remote_schema()
+
+        assert result is None
+        utils.log.warning.assert_called()
+
+    def test_fetch_remote_schema_connection_error(self):
+        """Test connection error falls through gracefully"""
+        import requests as req
+        utils = self._make_utils()
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', side_effect=req.exceptions.ConnectionError):
+            with patch.object(utils, '_read_cache_meta', return_value=None):
+                result = utils._fetch_remote_schema()
+
+        assert result is None
+
+    def test_fetch_remote_schema_bad_json(self):
+        """Test invalid JSON response falls through"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = Mock()
+        mock_response.json.side_effect = json.JSONDecodeError("err", "", 0)
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response):
+            with patch.object(utils, '_read_cache_meta', return_value=None):
+                result = utils._fetch_remote_schema()
+
+        assert result is None
+
+    def test_fetch_remote_schema_non_dict_response(self):
+        """Test non-dict JSON response is rejected"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = Mock()
+        mock_response.json.return_value = [1, 2, 3]
+        mock_response.headers = {}
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response):
+            with patch.object(utils, '_read_cache_meta', return_value=None):
+                result = utils._fetch_remote_schema()
+
+        assert result is None
+
+    def test_fetch_sends_etag_header(self):
+        """Test that cached ETag is sent as If-None-Match header"""
+        utils = self._make_utils()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = self.SAMPLE_SCHEMA
+        mock_response.headers = {"ETag": '"new_etag"'}
+        mock_response.raise_for_status = Mock()
+
+        with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response) as mock_get:
+            with patch.object(utils, '_write_cache'):
+                with patch.object(utils, '_read_cache_meta', return_value={"etag": '"old_etag"'}):
+                    utils._fetch_remote_schema()
+
+        call_kwargs = mock_get.call_args
+        assert call_kwargs[1]["headers"]["If-None-Match"] == '"old_etag"'
+
+    def test_env_var_overrides_url(self):
+        """Test SWML_SCHEMA_URL environment variable overrides default URL"""
+        utils = self._make_utils()
+        custom_url = "https://example.com/custom_schema.json"
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = self.SAMPLE_SCHEMA
+        mock_response.headers = {}
+        mock_response.raise_for_status = Mock()
+
+        with patch.dict(os.environ, {"SWML_SCHEMA_URL": custom_url}):
+            with patch('signalwire_agents.utils.schema_utils.requests.get', return_value=mock_response) as mock_get:
+                with patch.object(utils, '_write_cache'):
+                    with patch.object(utils, '_read_cache_meta', return_value=None):
+                        utils._fetch_remote_schema()
+
+        mock_get.assert_called_once()
+        assert mock_get.call_args[0][0] == custom_url
+
+    def test_write_cache_creates_directory(self):
+        """Test _write_cache creates ~/.swml/ directory"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = os.path.join(tmpdir, "subdir")
+            utils._write_cache(self.SAMPLE_SCHEMA, '"etag123"')
+
+            assert os.path.isdir(utils.CACHE_DIR)
+            cache_path = os.path.join(utils.CACHE_DIR, utils.CACHE_SCHEMA_FILE)
+            meta_path = os.path.join(utils.CACHE_DIR, utils.CACHE_META_FILE)
+
+            with open(cache_path) as f:
+                assert json.load(f) == self.SAMPLE_SCHEMA
+
+            with open(meta_path) as f:
+                meta = json.load(f)
+                assert meta["etag"] == '"etag123"'
+                assert "cached_at" in meta
+
+    def test_write_cache_handles_permission_error(self):
+        """Test _write_cache handles permission errors gracefully"""
+        utils = self._make_utils()
+
+        with patch('os.makedirs', side_effect=PermissionError("denied")):
+            # Should not raise
+            utils._write_cache(self.SAMPLE_SCHEMA, '"etag"')
+
+        utils.log.warning.assert_called()
+
+    def test_load_cached_schema_success(self):
+        """Test _load_cached_schema reads cached file"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = tmpdir
+            cache_path = os.path.join(tmpdir, utils.CACHE_SCHEMA_FILE)
+            with open(cache_path, "w") as f:
+                json.dump(self.SAMPLE_SCHEMA, f)
+
+            result = utils._load_cached_schema()
+            assert result == self.SAMPLE_SCHEMA
+
+    def test_load_cached_schema_missing(self):
+        """Test _load_cached_schema returns None when no cache"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = tmpdir
+            result = utils._load_cached_schema()
+            assert result is None
+
+    def test_load_cached_schema_corrupted(self):
+        """Test _load_cached_schema handles corrupted cache"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = tmpdir
+            cache_path = os.path.join(tmpdir, utils.CACHE_SCHEMA_FILE)
+            with open(cache_path, "w") as f:
+                f.write("not valid json{{{")
+
+            result = utils._load_cached_schema()
+            assert result is None
+
+    def test_read_cache_meta_success(self):
+        """Test _read_cache_meta reads metadata"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = tmpdir
+            meta_path = os.path.join(tmpdir, utils.CACHE_META_FILE)
+            meta = {"etag": '"abc"', "cached_at": time.time()}
+            with open(meta_path, "w") as f:
+                json.dump(meta, f)
+
+            result = utils._read_cache_meta()
+            assert result["etag"] == '"abc"'
+
+    def test_read_cache_meta_missing(self):
+        """Test _read_cache_meta returns None when no meta file"""
+        utils = self._make_utils()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            utils.CACHE_DIR = tmpdir
+            result = utils._read_cache_meta()
+            assert result is None
+
+    def test_fallback_chain_remote_success(self):
+        """Test fallback chain uses remote when available"""
+        utils = self._make_utils()
+
+        with patch.object(utils, '_fetch_remote_schema', return_value=self.SAMPLE_SCHEMA):
+            result = utils._load_schema_with_remote_fallback()
+
+        assert result == self.SAMPLE_SCHEMA
+
+    def test_fallback_chain_remote_fails_uses_cache(self):
+        """Test fallback chain uses cache when remote fails"""
+        utils = self._make_utils()
+
+        with patch.object(utils, '_fetch_remote_schema', return_value=None):
+            with patch.object(utils, '_load_cached_schema', return_value=self.SAMPLE_SCHEMA):
+                result = utils._load_schema_with_remote_fallback()
+
+        assert result == self.SAMPLE_SCHEMA
+
+    def test_fallback_chain_all_fail_uses_bundled(self):
+        """Test fallback chain uses bundled schema as last resort"""
+        utils = self._make_utils()
+
+        with patch.object(utils, '_fetch_remote_schema', return_value=None):
+            with patch.object(utils, '_load_cached_schema', return_value=None):
+                with patch.object(utils, '_get_default_schema_path', return_value="/bundled/schema.json"):
+                    with patch.object(utils, 'load_schema', return_value=self.SAMPLE_SCHEMA):
+                        result = utils._load_schema_with_remote_fallback()
+
+        assert result == self.SAMPLE_SCHEMA
+        assert utils.schema_path == "/bundled/schema.json"
+
+    def test_explicit_schema_path_bypasses_remote(self):
+        """Test that providing schema_path skips remote fetch entirely"""
+        with patch.object(SchemaUtils, 'load_schema', return_value=self.SAMPLE_SCHEMA):
+            with patch.object(SchemaUtils, '_extract_verb_definitions', return_value={}):
+                with patch.object(SchemaUtils, '_fetch_remote_schema') as mock_fetch:
+                    utils = SchemaUtils(schema_path="/explicit/schema.json")
+
+        mock_fetch.assert_not_called()
+        assert utils.schema_path == "/explicit/schema.json"

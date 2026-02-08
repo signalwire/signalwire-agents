@@ -17,9 +17,11 @@ Uses jsonschema-rs for full JSON Schema validation with type checking.
 
 import os
 import json
+import time
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 
+import requests
 import jsonschema_rs
 
 try:
@@ -55,22 +57,42 @@ class SchemaUtils:
     """
     Utility class for loading and working with SWML schemas
     """
-    
+
+    # Remote schema URL (raw GitHub content)
+    REMOTE_SCHEMA_URL = (
+        "https://raw.githubusercontent.com/signalwire/docs/main/"
+        "specs/swml/tsp-output/%40typespec/json-schema/SWMLObject.json"
+    )
+
+    # Cache directory and file names
+    CACHE_DIR = os.path.expanduser("~/.swml")
+    CACHE_SCHEMA_FILE = "schema_cache.json"
+    CACHE_META_FILE = "schema_cache_meta.json"
+
+    # HTTP fetch timeout in seconds
+    REMOTE_FETCH_TIMEOUT = 5
+
     def __init__(self, schema_path: Optional[str] = None):
         """
         Initialize the schema utilities.
 
         Args:
-            schema_path: Path to the schema file
+            schema_path: Path to the schema file. If not provided, fetches
+                        from remote URL with ETag caching, falling back to
+                        disk cache, then bundled schema.
         """
         self.log = logger.bind(component="schema_utils")
 
         self.schema_path = schema_path
-        if not self.schema_path:
-            self.schema_path = self._get_default_schema_path()
-            self.log.debug("using_default_schema_path", path=self.schema_path)
 
-        self.schema = self.load_schema()
+        if self.schema_path:
+            # Explicit path provided — use it directly
+            self.log.debug("using_explicit_schema_path", path=self.schema_path)
+            self.schema = self.load_schema()
+        else:
+            # Try remote fetch with cache, then fall back to bundled
+            self.schema = self._load_schema_with_remote_fallback()
+
         self.verbs = self._extract_verb_definitions()
         self.log.debug("schema_initialized", verb_count=len(self.verbs))
         if self.verbs:
@@ -87,6 +109,139 @@ class SchemaUtils:
         self.log.info("schema_validator_initialized",
                     validator="jsonschema-rs",
                     verbs=len(self.verbs))
+
+    # ── Remote fetch + ETag caching ──────────────────────────────────────
+
+    def _get_cache_schema_path(self) -> str:
+        """Return the full path to the cached schema file."""
+        return os.path.join(self.CACHE_DIR, self.CACHE_SCHEMA_FILE)
+
+    def _get_cache_meta_path(self) -> str:
+        """Return the full path to the cached metadata file."""
+        return os.path.join(self.CACHE_DIR, self.CACHE_META_FILE)
+
+    def _read_cache_meta(self) -> Optional[Dict[str, str]]:
+        """Read cached metadata (ETag) from disk."""
+        meta_path = self._get_cache_meta_path()
+        try:
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    return json.load(f)
+        except (IOError, OSError, json.JSONDecodeError) as e:
+            self.log.debug("schema_cache_meta_read_error", error=str(e))
+        return None
+
+    def _load_cached_schema(self) -> Optional[Dict[str, Any]]:
+        """Load and parse the cached schema from disk."""
+        cache_path = self._get_cache_schema_path()
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, "r") as f:
+                    schema = json.load(f)
+                if isinstance(schema, dict):
+                    self.log.debug("schema_cache_loaded", path=cache_path)
+                    return schema
+        except (IOError, OSError, json.JSONDecodeError) as e:
+            self.log.debug("schema_cache_read_error", path=cache_path, error=str(e))
+        return None
+
+    def _write_cache(self, schema: Dict[str, Any], etag: Optional[str]) -> None:
+        """
+        Write schema and metadata to disk cache.
+
+        Creates ~/.swml/ if it doesn't exist. Silently handles write errors
+        (caching is best-effort).
+        """
+        try:
+            os.makedirs(self.CACHE_DIR, exist_ok=True)
+
+            with open(self._get_cache_schema_path(), "w") as f:
+                json.dump(schema, f)
+
+            meta = {"etag": etag, "cached_at": time.time()}
+            with open(self._get_cache_meta_path(), "w") as f:
+                json.dump(meta, f)
+
+            self.log.debug("schema_cache_written", has_etag=bool(etag))
+        except (IOError, OSError) as e:
+            self.log.warning("schema_cache_write_error", error=str(e))
+
+    def _fetch_remote_schema(self) -> Optional[Dict[str, Any]]:
+        """
+        Fetch schema from remote URL using HTTP conditional requests (ETag).
+
+        Returns the schema dict on success, or None on failure (caller
+        should fall through to the next source in the fallback chain).
+        """
+        url = os.environ.get("SWML_SCHEMA_URL", self.REMOTE_SCHEMA_URL)
+
+        headers = {}
+        meta = self._read_cache_meta()
+        if meta and meta.get("etag"):
+            headers["If-None-Match"] = meta["etag"]
+
+        try:
+            self.log.debug("schema_remote_fetch_start", url=url, has_etag=bool(headers))
+
+            response = requests.get(url, headers=headers, timeout=self.REMOTE_FETCH_TIMEOUT)
+
+            if response.status_code == 304:
+                self.log.info("schema_remote_not_modified")
+                cached = self._load_cached_schema()
+                if cached:
+                    return cached
+                self.log.warning("schema_cache_missing_despite_etag")
+                return None
+
+            response.raise_for_status()
+
+            schema = response.json()
+            if not isinstance(schema, dict):
+                self.log.warning("schema_remote_invalid_structure")
+                return None
+
+            new_etag = response.headers.get("ETag")
+            self._write_cache(schema, new_etag)
+
+            self.log.info("schema_loaded_from_remote", url=url, has_etag=bool(new_etag))
+            return schema
+
+        except requests.exceptions.Timeout:
+            self.log.warning("schema_remote_timeout", timeout=self.REMOTE_FETCH_TIMEOUT)
+            return None
+        except requests.exceptions.ConnectionError:
+            self.log.warning("schema_remote_connection_error")
+            return None
+        except requests.exceptions.RequestException as e:
+            self.log.warning("schema_remote_request_error", error=str(e))
+            return None
+        except (json.JSONDecodeError, ValueError) as e:
+            self.log.warning("schema_remote_parse_error", error=str(e))
+            return None
+
+    def _load_schema_with_remote_fallback(self) -> Dict[str, Any]:
+        """
+        Load schema using the fallback chain: remote → cache → bundled.
+        """
+        # 1. Try remote fetch (conditional GET with ETag)
+        schema = self._fetch_remote_schema()
+        if schema:
+            return schema
+
+        # 2. Try disk cache (from a previous successful fetch)
+        schema = self._load_cached_schema()
+        if schema:
+            self.log.info("schema_using_disk_cache")
+            return schema
+
+        # 3. Fall back to bundled schema.json
+        self.log.info("schema_falling_back_to_bundled")
+        self.schema_path = self._get_default_schema_path()
+        if self.schema_path:
+            self.log.debug("using_default_schema_path", path=self.schema_path)
+        return self.load_schema()
+
+    # ── End remote fetch ─────────────────────────────────────────────────
 
     @property
     def full_validation_available(self) -> bool:
