@@ -74,46 +74,48 @@ class TestSchemaUtils:
                 
                 assert result == "/old/schema.json"
     
-    def test_get_default_schema_path_pkg_resources(self):
-        """Test default schema path using pkg_resources fallback"""
-        utils = SchemaUtils.__new__(SchemaUtils)
-        
-        with patch('importlib.resources.files', side_effect=ImportError):
-            with patch('pkg_resources.resource_filename', return_value="/pkg/schema.json") as mock_pkg:
-                
-                result = utils._get_default_schema_path()
-                
-                assert result == "/pkg/schema.json"
-                mock_pkg.assert_called_once_with("signalwire_agents", "schema.json")
-    
     def test_get_default_schema_path_manual_search(self):
-        """Test default schema path using manual file search"""
+        """Test default schema path using manual file search when importlib.resources fails"""
         utils = SchemaUtils.__new__(SchemaUtils)
         utils.log = Mock()
-        
-        with patch('importlib.resources.files', side_effect=ImportError):
-            with patch('pkg_resources.resource_filename', side_effect=ImportError):
-                with patch('os.path.exists') as mock_exists:
-                    with patch('os.getcwd', return_value="/current"):
-                        # First path exists
-                        mock_exists.side_effect = lambda path: path == "/current/schema.json"
-                        
-                        result = utils._get_default_schema_path()
-                        
-                        assert result == "/current/schema.json"
-    
-    def test_get_default_schema_path_not_found(self):
-        """Test default schema path when file is not found"""
-        utils = SchemaUtils.__new__(SchemaUtils)
-        utils.log = Mock()
-        
-        with patch('importlib.resources.files', side_effect=ImportError):
-            with patch('pkg_resources.resource_filename', side_effect=ImportError):
-                with patch('os.path.exists', return_value=False):
-                    
+
+        import importlib.resources
+        original_files = importlib.resources.files
+
+        def failing_files(package):
+            if package == "signalwire_agents":
+                raise ImportError("mocked")
+            return original_files(package)
+
+        with patch('importlib.resources.files', side_effect=failing_files):
+            with patch('os.path.exists') as mock_exists:
+                with patch('os.getcwd', return_value="/current"):
+                    # First path exists
+                    mock_exists.side_effect = lambda path: path == "/current/schema.json"
+
                     result = utils._get_default_schema_path()
-                    
-                    assert result is None
+
+                    assert result == "/current/schema.json"
+
+    def test_get_default_schema_path_not_found(self):
+        """Test default schema path when file is not found anywhere"""
+        utils = SchemaUtils.__new__(SchemaUtils)
+        utils.log = Mock()
+
+        import importlib.resources
+        original_files = importlib.resources.files
+
+        def failing_files(package):
+            if package == "signalwire_agents":
+                raise ImportError("mocked")
+            return original_files(package)
+
+        with patch('importlib.resources.files', side_effect=failing_files):
+            with patch('os.path.exists', return_value=False):
+
+                result = utils._get_default_schema_path()
+
+                assert result is None
     
     def test_load_schema_success(self):
         """Test successful schema loading"""
@@ -369,10 +371,13 @@ class TestVerbProperties:
 
 class TestVerbValidation:
     """Test verb validation functionality"""
-    
+
     def setup_method(self):
         """Set up test data"""
         self.utils = SchemaUtils.__new__(SchemaUtils)
+        self.utils._validation_enabled = True
+        self.utils._full_validator = None
+        self.utils.log = Mock()
         self.utils.verbs = {
             "ai": {
                 "name": "ai",

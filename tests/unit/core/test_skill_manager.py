@@ -28,17 +28,28 @@ class MockSkill(SkillBase):
     REQUIRED_PACKAGES = []
     REQUIRED_ENV_VARS = []
     SUPPORTS_MULTIPLE_INSTANCES = False
-    
+
+    @classmethod
+    def get_parameter_schema(cls):
+        schema = super().get_parameter_schema()
+        schema["mock_param"] = {
+            "type": "string",
+            "description": "A mock parameter",
+            "default": "default_value",
+            "required": False
+        }
+        return schema
+
     def __init__(self, agent, params=None):
         super().__init__(agent, params)
         self.setup_called = False
         self.register_tools_called = False
         self.cleanup_called = False
-    
+
     def setup(self):
         self.setup_called = True
         return True
-    
+
     def register_tools(self):
         self.register_tools_called = True
         self.agent.define_tool(
@@ -55,10 +66,20 @@ class FailingMockSkill(SkillBase):
     SKILL_DESCRIPTION = "A skill that fails setup"
     SKILL_VERSION = "1.0.0"
     SUPPORTS_MULTIPLE_INSTANCES = False
-    
+
+    @classmethod
+    def get_parameter_schema(cls):
+        schema = super().get_parameter_schema()
+        schema["fail_param"] = {
+            "type": "string",
+            "description": "A fail parameter",
+            "required": False
+        }
+        return schema
+
     def setup(self):
         return False
-    
+
     def register_tools(self):
         pass
 
@@ -141,13 +162,19 @@ class TestSkillManagerLoading:
             SKILL_NAME = "broken_skill"
             SKILL_DESCRIPTION = "A broken skill"
             SUPPORTS_MULTIPLE_INSTANCES = False
-            
+
+            @classmethod
+            def get_parameter_schema(cls):
+                schema = super().get_parameter_schema()
+                schema["broken_param"] = {"type": "string", "description": "A param", "required": False}
+                return schema
+
             def __init__(self, agent, params=None):
                 raise Exception("Initialization failed")
-            
+
             def setup(self):
                 return True
-            
+
             def register_tools(self):
                 pass
         

@@ -30,7 +30,7 @@ class TestDocumentProcessorInit:
         assert processor.chunking_strategy == 'sentence'
         assert processor.max_sentences_per_chunk == 5
         assert processor.chunk_size == 50
-        assert processor.overlap_size == 10
+        assert processor.chunk_overlap == 10
         assert processor.split_newlines is None
         assert processor.chunk_overlap == 10  # Legacy support
         assert processor.semantic_threshold == 0.5
@@ -42,14 +42,14 @@ class TestDocumentProcessorInit:
             chunking_strategy='sliding',
             max_sentences_per_chunk=25,
             chunk_size=100,
-            overlap_size=20,
+            chunk_overlap=20,
             split_newlines=3
         )
         
         assert processor.chunking_strategy == 'sliding'
         assert processor.max_sentences_per_chunk == 25
         assert processor.chunk_size == 100
-        assert processor.overlap_size == 20
+        assert processor.chunk_overlap == 20
         assert processor.split_newlines == 3
         assert processor.chunk_overlap == 20
         assert processor.semantic_threshold == 0.5
@@ -80,7 +80,7 @@ class TestDocumentProcessorChunking:
     
     def test_create_chunks_sliding_strategy(self):
         """Test create_chunks with sliding window strategy"""
-        processor = DocumentProcessor(chunking_strategy='sliding', chunk_size=5, overlap_size=2)
+        processor = DocumentProcessor(chunking_strategy='sliding', chunk_size=5, chunk_overlap=2)
         
         chunks = processor.create_chunks(self.sample_text, self.filename, self.file_type)
         
@@ -168,7 +168,7 @@ class TestDocumentProcessorSlidingWindow:
     
     def test_chunk_by_sliding_window_basic(self):
         """Test basic sliding window chunking"""
-        processor = DocumentProcessor(chunk_size=3, overlap_size=1)
+        processor = DocumentProcessor(chunk_size=3, chunk_overlap=1)
         content = "one two three four five six seven eight"
         
         chunks = processor._chunk_by_sliding_window(content, "test.txt", "txt")
@@ -186,7 +186,7 @@ class TestDocumentProcessorSlidingWindow:
     
     def test_chunk_by_sliding_window_with_list_input(self):
         """Test sliding window chunking with list input"""
-        processor = DocumentProcessor(chunk_size=2, overlap_size=1)
+        processor = DocumentProcessor(chunk_size=2, chunk_overlap=1)
         content = ["line one", "line two", "line three"]
         
         chunks = processor._chunk_by_sliding_window(content, "test.txt", "txt")
@@ -196,7 +196,7 @@ class TestDocumentProcessorSlidingWindow:
     
     def test_chunk_by_sliding_window_empty_content(self):
         """Test sliding window chunking with empty content"""
-        processor = DocumentProcessor(chunk_size=3, overlap_size=1)
+        processor = DocumentProcessor(chunk_size=3, chunk_overlap=1)
         content = ""
         
         chunks = processor._chunk_by_sliding_window(content, "test.txt", "txt")
@@ -205,7 +205,7 @@ class TestDocumentProcessorSlidingWindow:
     
     def test_chunk_by_sliding_window_metadata(self):
         """Test sliding window chunking metadata"""
-        processor = DocumentProcessor(chunk_size=2, overlap_size=1)
+        processor = DocumentProcessor(chunk_size=2, chunk_overlap=1)
         content = "word1 word2 word3 word4"
         
         chunks = processor._chunk_by_sliding_window(content, "test.txt", "txt")
@@ -640,7 +640,7 @@ class TestDocumentProcessorUtilities:
     
     def test_get_overlap_lines_basic(self):
         """Test getting overlap lines"""
-        processor = DocumentProcessor(overlap_size=50)  # 50 characters - large enough to capture lines
+        processor = DocumentProcessor(chunk_overlap=50)  # 50 characters - large enough to capture lines
         lines = ["short", "medium line", "longer line here"]
         
         overlap = processor._get_overlap_lines(lines)
@@ -679,7 +679,7 @@ class TestDocumentProcessorEdgeCases:
     
     def test_sliding_window_with_small_content(self):
         """Test sliding window with content smaller than chunk size"""
-        processor = DocumentProcessor(chunking_strategy='sliding', chunk_size=10, overlap_size=2)
+        processor = DocumentProcessor(chunking_strategy='sliding', chunk_size=10, chunk_overlap=2)
         
         chunks = processor.create_chunks("small", "test.txt", "txt")
         

@@ -154,9 +154,9 @@ class TestConfigureLogging:
     def test_configure_logging_basic(self):
         """Test basic logging configuration"""
         with patch('signalwire_agents.core.logging_config._logging_configured', False):
-            with patch('logging.basicConfig') as mock_basic_config:
+            with patch('signalwire_agents.core.logging_config._configure_default_mode') as mock_default:
                 configure_logging()
-                mock_basic_config.assert_called()
+                mock_default.assert_called_once()
     
     def test_configure_logging_idempotent(self):
         """Test that configure_logging is idempotent"""
@@ -169,13 +169,9 @@ class TestConfigureLogging:
         """Test logging configuration with environment variables"""
         with patch('signalwire_agents.core.logging_config._logging_configured', False):
             with patch.dict(os.environ, {'SIGNALWIRE_LOG_MODE': 'stderr', 'SIGNALWIRE_LOG_LEVEL': 'debug'}):
-                with patch('logging.basicConfig') as mock_basic_config:
+                with patch('signalwire_agents.core.logging_config._configure_stderr_mode') as mock_stderr:
                     configure_logging()
-                    mock_basic_config.assert_called()
-                    # Should configure with stderr stream
-                    call_kwargs = mock_basic_config.call_args[1]
-                    assert call_kwargs['stream'] == sys.stderr
-                    assert call_kwargs['level'] == logging.DEBUG
+                    mock_stderr.assert_called_once_with('debug')
     
     def test_configure_logging_off_mode(self):
         """Test logging configuration in off mode"""
@@ -354,8 +350,6 @@ class TestLoggingModeConfiguration:
         """Test default mode configuration"""
         with patch('signalwire_agents.core.logging_config._logging_configured', False):
             with patch.dict(os.environ, {'SIGNALWIRE_LOG_MODE': 'default', 'SIGNALWIRE_LOG_LEVEL': 'warning'}):
-                with patch('logging.basicConfig') as mock_basic_config:
+                with patch('signalwire_agents.core.logging_config._configure_default_mode') as mock_default:
                     configure_logging()
-                    mock_basic_config.assert_called()
-                    call_kwargs = mock_basic_config.call_args[1]
-                    assert call_kwargs['level'] == logging.WARNING 
+                    mock_default.assert_called_once_with('warning') 
