@@ -37,11 +37,12 @@ def load_schema():
     """Load and index the SWML schema file."""
     global SCHEMA, METHODS, METHOD_DESCRIPTIONS
 
-    # Default to the in-tree schema.json from signalwire_agents package
+    # Default to the schema.json in the signalwire_agents package
     default_schema_path = os.path.join(
         os.path.dirname(__file__), '..', '..', 'signalwire_agents', 'schema.json'
     )
     schema_path = os.environ.get('SWML_SCHEMA_PATH', default_schema_path)
+    schema_path = os.path.normpath(schema_path)
 
     logger.info(f"Loading schema from {schema_path}")
 

@@ -254,14 +254,15 @@ def sample_contexts():
 
 @pytest.fixture
 def mock_swml_service():
-    """Create a mock SWML service for testing"""
+    """Create a mock SWML service for testing (schema validation disabled)"""
     service = SWMLService(
         name="test_service",
         route="/test",
         host="127.0.0.1",
-        port=3001
+        port=3001,
+        schema_validation=False
     )
-    
+
     return service
 
 

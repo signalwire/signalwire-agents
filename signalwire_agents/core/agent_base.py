@@ -121,10 +121,11 @@ class AgentBase(
         agent_id: Optional[str] = None,
         native_functions: Optional[List[str]] = None,
         schema_path: Optional[str] = None,
-                suppress_logs: bool = False,
+        suppress_logs: bool = False,
         enable_post_prompt_override: bool = False,
         check_for_input_override: bool = False,
-        config_file: Optional[str] = None
+        config_file: Optional[str] = None,
+        schema_validation: bool = True
     ):
         """
         Initialize a new agent
@@ -149,6 +150,8 @@ class AgentBase(
             enable_post_prompt_override: Whether to enable post-prompt override
             check_for_input_override: Whether to enable check-for-input override
             config_file: Optional path to configuration file
+            schema_validation: Enable SWML schema validation. Default True. Can also
+                              be disabled via SWML_SKIP_SCHEMA_VALIDATION=1 env var.
         """
         # Import SWMLService here to avoid circular imports
         from signalwire_agents.core.swml_service import SWMLService
@@ -174,7 +177,8 @@ class AgentBase(
             port=final_port,
             basic_auth=basic_auth,
             schema_path=schema_path,
-            config_file=config_file
+            config_file=config_file,
+            schema_validation=schema_validation
         )
         
         # Log the schema path if found and not suppressing logs

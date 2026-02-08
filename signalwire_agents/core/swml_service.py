@@ -40,7 +40,7 @@ except ImportError:
         "fastapi is required. Install it with: pip install fastapi"
     )
 
-from signalwire_agents.utils.schema_utils import SchemaUtils
+from signalwire_agents.utils.schema_utils import SchemaUtils, SchemaValidationError
 from signalwire_agents.core.swml_handler import VerbHandlerRegistry, SWMLVerbHandler
 from signalwire_agents.core.security_config import SecurityConfig
 
@@ -67,11 +67,12 @@ class SWMLService:
         port: Optional[int] = None,
         basic_auth: Optional[Tuple[str, str]] = None,
         schema_path: Optional[str] = None,
-        config_file: Optional[str] = None
+        config_file: Optional[str] = None,
+        schema_validation: bool = True
     ):
         """
         Initialize a new SWML service
-        
+
         Args:
             name: Service name/identifier
             route: HTTP route path for this service
@@ -80,7 +81,10 @@ class SWMLService:
             basic_auth: Optional (username, password) tuple for basic auth
             schema_path: Optional path to the schema file
             config_file: Optional path to configuration file
+            schema_validation: Enable schema validation. Default True. Can also be
+                              disabled via SWML_SKIP_SCHEMA_VALIDATION=1 env var.
         """
+        self._schema_validation = schema_validation
         self.name = name
         self.route = route.rstrip("/")  # Ensure no trailing slash
         self.host = host
@@ -127,8 +131,10 @@ class SWMLService:
                 self.log.warning("schema_not_found")
         
         # Initialize schema utils
-        self.schema_utils = SchemaUtils(schema_path)
-        
+        self.schema_utils = SchemaUtils(schema_path, schema_validation=self._schema_validation)
+        if self.schema_utils.full_validation_available:
+            self.log.debug("schema_validation_enabled", engine="jsonschema-rs")
+
         # Initialize verb handler registry
         self.verb_registry = VerbHandlerRegistry()
         
@@ -327,7 +333,17 @@ class SWMLService:
         msg = f"'{self.__class__.__name__}' object has no attribute '{name}'"
         self.log.debug("getattr_invalid_attribute", attribute=name, error=msg)
         raise AttributeError(msg)
-    
+
+    @property
+    def full_validation_enabled(self) -> bool:
+        """
+        Check if full JSON Schema validation is enabled.
+
+        Returns:
+            True if schema validator is initialized
+        """
+        return self.schema_utils.full_validation_available if self.schema_utils else False
+
     def _find_schema_path(self) -> Optional[str]:
         """
         Find the schema.json file location
@@ -438,15 +454,13 @@ class SWMLService:
             is_valid, errors = self.schema_utils.validate_verb(verb_name, config)
         
         if not is_valid:
-            # Log validation errors
-            self.log.warning(f"verb_validation_error", verb=verb_name, errors=errors)
-            return False
-        
+            raise SchemaValidationError(verb_name, errors)
+
         # Add the verb to the main section
         verb_obj = {verb_name: config}
         self._current_document["sections"]["main"].append(verb_obj)
         return True
-    
+
     def add_section(self, section_name: str) -> bool:
         """
         Add a new section to the document
@@ -501,15 +515,13 @@ class SWMLService:
             is_valid, errors = self.schema_utils.validate_verb(verb_name, config)
         
         if not is_valid:
-            # Log validation errors
-            self.log.warning(f"verb_validation_error", verb=verb_name, section=section_name, errors=errors)
-            return False
-        
+            raise SchemaValidationError(verb_name, errors)
+
         # Add the verb to the section
         verb_obj = {verb_name: config}
         self._current_document["sections"][section_name].append(verb_obj)
         return True
-    
+
     def get_document(self) -> Dict[str, Any]:
         """
         Get the current SWML document

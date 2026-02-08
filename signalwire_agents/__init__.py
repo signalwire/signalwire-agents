@@ -30,6 +30,7 @@ from signalwire_agents.core.swml_builder import SWMLBuilder
 from signalwire_agents.core.function_result import SwaigFunctionResult
 from signalwire_agents.core.swaig_function import SWAIGFunction
 from signalwire_agents.agents.bedrock import BedrockAgent
+from signalwire_agents.utils.schema_utils import SchemaValidationError
 
 # Import WebService for static file serving
 from signalwire_agents.web import WebService
