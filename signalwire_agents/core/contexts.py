@@ -291,13 +291,25 @@ class Context:
         self._step_order.append(name)
         return step
     
+    def get_step(self, name: str) -> Optional['Step']:
+        """
+        Get an existing step by name for inspection or modification.
+
+        Args:
+            name: Step name
+
+        Returns:
+            Step object if found, None otherwise
+        """
+        return self._steps.get(name)
+
     def set_valid_contexts(self, contexts: List[str]) -> 'Context':
         """
         Set which contexts can be navigated to from this context
-        
+
         Args:
             contexts: List of valid context names
-            
+
         Returns:
             Self for method chaining
         """
@@ -647,6 +659,18 @@ class ContextBuilder:
         self._context_order.append(name)
         return context
     
+    def get_context(self, name: str) -> Optional[Context]:
+        """
+        Get an existing context by name for inspection or modification.
+
+        Args:
+            name: Context name
+
+        Returns:
+            Context object if found, None otherwise
+        """
+        return self._contexts.get(name)
+
     def validate(self) -> None:
         """Validate the contexts configuration"""
         if not self._contexts:

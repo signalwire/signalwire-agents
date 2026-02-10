@@ -1255,9 +1255,13 @@ class AgentBase(
         if hasattr(self, '_internal_fillers'):
             ephemeral_agent._internal_fillers = copy.deepcopy(self._internal_fillers)
         
-        # Don't deep copy _contexts_builder - it has a circular reference to the agent
-        # The contexts are already copied via _prompt_manager._contexts (below)
-        # Just copy the flag indicating contexts are defined
+        # Deep copy _contexts_builder so per-call modifications (e.g. removing
+        # tools from a step) don't leak into the shared original.  The builder
+        # holds a reference to self._agent but we only read contexts/steps from
+        # it, so a straightforward deep copy with the agent memo'd out works.
+        if hasattr(self, '_contexts_builder') and self._contexts_builder:
+            memo = {id(self): ephemeral_agent}          # redirect agent refs
+            ephemeral_agent._contexts_builder = copy.deepcopy(self._contexts_builder, memo)
         if hasattr(self, '_contexts_defined'):
             ephemeral_agent._contexts_defined = self._contexts_defined
         
