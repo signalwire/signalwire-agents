@@ -13,6 +13,7 @@ import logging
 
 if TYPE_CHECKING:
     from signalwire_agents.core.agent_base import AgentBase
+    from signalwire_agents.core.function_result import SwaigFunctionResult
 
 class SkillBase(ABC):
     """Abstract base class for all agent skills"""
@@ -135,7 +136,56 @@ class SkillBase(ABC):
         # For multi-instance skills, create key from skill name + tool name
         tool_name = self.params.get('tool_name', self.SKILL_NAME)
         return f"{self.SKILL_NAME}_{tool_name}"
-    
+
+    def _get_skill_namespace(self) -> str:
+        """
+        Get the namespaced key for this skill instance's global_data.
+
+        Uses the 'prefix' param if available, otherwise falls back to
+        the instance key. This ensures multiple skill instances can
+        store state in global_data without collisions.
+
+        Returns:
+            str: Namespace key like "skill:<prefix>" or "skill:<instance_key>"
+        """
+        prefix = self.params.get('prefix')
+        if prefix:
+            return f"skill:{prefix}"
+        return f"skill:{self.get_instance_key()}"
+
+    def get_skill_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Read this skill instance's namespaced data from raw_data global_data.
+
+        Args:
+            raw_data: The raw_data dict passed to SWAIG function handlers,
+                     expected to contain a 'global_data' key.
+
+        Returns:
+            dict: The skill's namespaced state, or empty dict if not found.
+        """
+        namespace = self._get_skill_namespace()
+        global_data = raw_data.get("global_data", {})
+        return global_data.get(namespace, {})
+
+    def update_skill_data(self, result: 'SwaigFunctionResult', data: Dict[str, Any]) -> 'SwaigFunctionResult':
+        """
+        Write this skill instance's namespaced data into a SwaigFunctionResult.
+
+        Wraps the data under the skill's namespace key and calls
+        result.update_global_data().
+
+        Args:
+            result: The SwaigFunctionResult to add the global_data update to.
+            data: The skill state dict to store under the namespace.
+
+        Returns:
+            SwaigFunctionResult: The result, for method chaining.
+        """
+        namespace = self._get_skill_namespace()
+        result.update_global_data({namespace: data})
+        return result
+
     @classmethod
     def get_parameter_schema(cls) -> Dict[str, Dict[str, Any]]:
         """
