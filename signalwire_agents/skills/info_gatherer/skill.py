@@ -48,6 +48,7 @@ class InfoGathererSkill(SkillBase):
                         "key_name": {"type": "string"},
                         "question_text": {"type": "string"},
                         "confirm": {"type": "boolean"},
+                        "prompt_add": {"type": "string"},
                     },
                 },
             },
@@ -142,9 +143,11 @@ class InfoGathererSkill(SkillBase):
             {
                 "title": f"Info Gatherer ({self.get_instance_key()})",
                 "body": (
-                    f"Your role includes gathering answers to a series of questions. "
-                    f"When the user is ready, call the {self.start_tool_name} function "
-                    f"to begin. After each answer, call {self.submit_tool_name} with "
+                    f"You need to gather answers to a series of questions. "
+                    f"Start by introducing yourself and asking the user if they are ready "
+                    f"to answer some questions. Once the user confirms they are ready, "
+                    f"call the {self.start_tool_name} function to get the first question. "
+                    f"After each answer, call {self.submit_tool_name} with "
                     f"the user's response."
                 ),
             }
@@ -169,7 +172,11 @@ class InfoGathererSkill(SkillBase):
                 "answer": {
                     "type": "string",
                     "description": "The user's answer to the current question",
-                }
+                },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": "Set to true only after you have read the answer back to the user and they have explicitly confirmed it is correct. Required for questions that need confirmation.",
+                },
             },
             handler=self._handle_submit_answer,
         )
@@ -191,11 +198,13 @@ class InfoGathererSkill(SkillBase):
             question_text=current.get("question_text", ""),
             needs_confirmation=current.get("confirm", False),
             is_first_question=True,
+            prompt_add=current.get("prompt_add", ""),
         )
         return SwaigFunctionResult(instruction)
 
     def _handle_submit_answer(self, args, raw_data):
         answer = args.get("answer", "")
+        confirmed = args.get("confirmed", False)
         state = self.get_skill_data(raw_data)
 
         questions = state.get("questions", [])
@@ -208,6 +217,15 @@ class InfoGathererSkill(SkillBase):
         current = questions[question_index]
         key_name = current.get("key_name", "")
 
+        # Enforce confirmation: reject the submission if the question requires
+        # confirmation but the confirmed flag was not set to true.
+        if current.get("confirm", False) and not confirmed:
+            return SwaigFunctionResult(
+                f"Before submitting, you must read the answer \"{answer}\" back to the user "
+                f"and ask them to confirm it is correct. Then call this function again with "
+                f"confirmed set to true. If the user says it is wrong, ask the question again."
+            )
+
         new_answers = answers + [{"key_name": key_name, "answer": answer}]
         new_index = question_index + 1
 
@@ -217,6 +235,7 @@ class InfoGathererSkill(SkillBase):
                 question_text=next_q.get("question_text", ""),
                 needs_confirmation=next_q.get("confirm", False),
                 is_first_question=False,
+                prompt_add=next_q.get("prompt_add", ""),
             )
             result = SwaigFunctionResult(instruction)
         else:
@@ -239,6 +258,7 @@ class InfoGathererSkill(SkillBase):
         question_text: str,
         needs_confirmation: bool,
         is_first_question: bool = False,
+        prompt_add: str = "",
     ) -> str:
         if is_first_question:
             instruction = f"Ask the user to answer the following question: {question_text}\n\n"
@@ -248,15 +268,21 @@ class InfoGathererSkill(SkillBase):
                 f"following question: {question_text}\n\n"
             )
 
+        if prompt_add:
+            instruction += f"Additional instructions: {prompt_add}\n\n"
+
         instruction += (
             "Make sure the answer fits the scope and context of the question "
-            "before submitting it. "
+            "before submitting it. If the user gives an incomplete or partial answer, "
+            "ask follow-up questions until you have a complete answer. Do not submit "
+            "until you have all the information the question asks for. "
         )
 
         if needs_confirmation:
             instruction += (
-                "Insist that the user confirms the answer as many times as "
-                "needed until they say it is correct."
+                "IMPORTANT: Before submitting this answer, you MUST read the answer back to the user "
+                "and explicitly ask them to confirm it is correct. Do NOT call submit until the user "
+                "has clearly confirmed. If they say it is wrong, ask the question again."
             )
         else:
             instruction += "You don't need the user to confirm the answer to this question."

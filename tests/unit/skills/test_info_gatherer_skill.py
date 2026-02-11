@@ -392,7 +392,7 @@ class TestSubmitAnswer:
         raw = self._raw_data("intake", SAMPLE_QUESTIONS, index=0)
         result = skill._handle_submit_answer({"answer": "John"}, raw)
         text = result.to_dict()["response"]
-        assert "confirms the answer" in text
+        assert "MUST read the answer back" in text
 
 
 # ===========================================================================
@@ -484,10 +484,24 @@ class TestQuestionInstruction:
         text = InfoGathererSkill._generate_question_instruction(
             "SSN?", needs_confirmation=True, is_first_question=True,
         )
-        assert "confirms the answer" in text
+        assert "MUST read the answer back" in text
 
     def test_no_confirmation(self):
         text = InfoGathererSkill._generate_question_instruction(
             "Color?", needs_confirmation=False, is_first_question=True,
         )
         assert "don't need the user to confirm" in text
+
+    def test_prompt_add_included(self):
+        text = InfoGathererSkill._generate_question_instruction(
+            "DOB?", needs_confirmation=False, is_first_question=True,
+            prompt_add="Format in YYYY-MM-DD",
+        )
+        assert "Additional instructions: Format in YYYY-MM-DD" in text
+
+    def test_prompt_add_empty(self):
+        text = InfoGathererSkill._generate_question_instruction(
+            "DOB?", needs_confirmation=False, is_first_question=True,
+            prompt_add="",
+        )
+        assert "Additional instructions" not in text
