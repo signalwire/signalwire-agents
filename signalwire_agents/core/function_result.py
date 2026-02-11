@@ -470,6 +470,47 @@ class SwaigFunctionResult:
         """
         return self.add_action("stop_playback_bg", True)
 
+    def add_dynamic_hints(self, hints: List[Union[str, Dict[str, Any]]]) -> 'SwaigFunctionResult':
+        """
+        Add dynamic speech recognition hints during a call.
+
+        Hints improve speech recognition accuracy for domain-specific terms.
+        Each hint can be a simple string or a pronunciation pattern object.
+
+        Args:
+            hints: List of hints, where each entry is either:
+                - A string: Simple hint word/phrase (e.g., "Cabby")
+                - A dict with pronunciation pattern:
+                    - "pattern": Regex pattern to match in recognized speech
+                    - "replace": Replacement text when pattern matches
+                    - "ignore_case": Optional bool for case-insensitive matching
+
+        Returns:
+            self for method chaining
+
+        Example:
+            result = (
+                SwaigFunctionResult("I'll listen for that name")
+                .add_dynamic_hints([
+                    "Cabby",
+                    {"pattern": "cab bee", "replace": "Cabby", "ignore_case": True}
+                ])
+            )
+        """
+        return self.add_action("add_dynamic_hints", hints)
+
+    def clear_dynamic_hints(self) -> 'SwaigFunctionResult':
+        """
+        Clear all dynamic speech recognition hints.
+
+        Removes all hints previously added via add_dynamic_hints().
+
+        Returns:
+            self for method chaining
+        """
+        self.action.append({"clear_dynamic_hints": {}})
+        return self
+
     def set_end_of_speech_timeout(self, milliseconds: int) -> 'SwaigFunctionResult':
         """
         Adjust end of speech timeout - milliseconds of silence after speaking 
