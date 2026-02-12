@@ -231,16 +231,19 @@ class AIConfigMixin:
 
     def set_global_data(self, data: Dict[str, Any]) -> 'AgentBase':
         """
-        Set the global data available to the AI throughout the conversation
-        
+        Merge data into the global data available to the AI throughout the conversation.
+
+        This merges (not replaces) so that skills and other callers can each
+        contribute keys without clobbering each other.
+
         Args:
-            data: Dictionary of global data
-            
+            data: Dictionary of global data to merge
+
         Returns:
             Self for method chaining
         """
         if data and isinstance(data, dict):
-            self._global_data = data
+            self._global_data.update(data)
         return self
 
     def update_global_data(self, data: Dict[str, Any]) -> 'AgentBase':
