@@ -240,6 +240,10 @@ class InfoGathererSkill(SkillBase):
             result = SwaigFunctionResult(instruction)
         else:
             result = SwaigFunctionResult(self.completion_message)
+            result.toggle_functions([
+                {"function": self.start_tool_name, "active": False},
+                {"function": self.submit_tool_name, "active": False},
+            ])
 
         new_state = {
             "questions": questions,
