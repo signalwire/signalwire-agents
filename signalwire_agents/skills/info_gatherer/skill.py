@@ -138,7 +138,7 @@ class InfoGathererSkill(SkillBase):
     # Prompt sections
     # ------------------------------------------------------------------ #
 
-    def get_prompt_sections(self) -> List[Dict[str, Any]]:
+    def _get_prompt_sections(self) -> List[Dict[str, Any]]:
         return [
             {
                 "title": f"Info Gatherer ({self.get_instance_key()})",

@@ -85,7 +85,14 @@ class SkillBase(ABC):
         return {}
         
     def get_prompt_sections(self) -> List[Dict[str, Any]]:
-        """Return prompt sections to add to agent"""
+        """Return prompt sections to add to agent.
+        Returns empty list if skip_prompt is set to True in params."""
+        if self.params.get("skip_prompt", False):
+            return []
+        return self._get_prompt_sections()
+
+    def _get_prompt_sections(self) -> List[Dict[str, Any]]:
+        """Override this in subclasses to provide prompt sections."""
         return []
         
     def cleanup(self) -> None:
@@ -235,6 +242,14 @@ class SkillBase(ABC):
             "type": "object",
             "description": "Additional SWAIG function metadata to merge into tool definitions",
             "default": {},
+            "required": False
+        }
+
+        # Add skip_prompt flag (available to all skills)
+        schema["skip_prompt"] = {
+            "type": "boolean",
+            "description": "If true, the skill will not inject its default prompt section into the POM",
+            "default": False,
             "required": False
         }
         
