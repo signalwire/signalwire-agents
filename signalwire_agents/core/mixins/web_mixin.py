@@ -690,7 +690,7 @@ class WebMixin:
                 if "parsed" in body["argument"] and isinstance(body["argument"]["parsed"], list) and body["argument"]["parsed"]:
                     args = body["argument"]["parsed"][0]
                     req_log.debug("parsed_arguments", args=json.dumps(args))
-                elif "raw" in body["argument"]:
+                elif "raw" in body["argument"] and body["argument"]["raw"]:
                     try:
                         args = json.loads(body["argument"]["raw"])
                         req_log.debug("raw_arguments_parsed", args=json.dumps(args))
