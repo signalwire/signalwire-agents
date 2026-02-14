@@ -240,6 +240,8 @@ class InfoGathererSkill(SkillBase):
                 is_first_question=False,
                 prompt_add=next_q.get("prompt_add", ""),
                 submit_tool_name=self.submit_tool_name,
+                previous_question=current.get("question_text", ""),
+                previous_answer=answer,
             )
             result = SwaigFunctionResult(instruction)
         else:
@@ -268,18 +270,23 @@ class InfoGathererSkill(SkillBase):
         is_first_question: bool = False,
         prompt_add: str = "",
         submit_tool_name: str = "submit_answer",
+        previous_question: str = "",
+        previous_answer: str = "",
     ) -> str:
         if is_first_question:
-            instruction = f"Say this question to the user: \"{question_text}\"\n\n"
+            instruction = f"Ask the user: \"{question_text}\"\n\n"
         else:
-            instruction = f"Say the next question to the user: \"{question_text}\"\n\n"
+            instruction = (
+                f"Answer recorded for \"{previous_question}\": \"{previous_answer}\". "
+                f"Now ask the user: \"{question_text}\"\n\n"
+            )
 
         if prompt_add:
             instruction += f"Additional instructions: {prompt_add}\n\n"
 
         instruction += (
-            f"After the user answers, make sure the answer fits the scope and context "
-            f"of the question. If the answer is incomplete, ask for more detail. "
+            f"Make sure the answer fits the scope and context of the question. "
+            f"If the answer is incomplete, ask for more detail. "
             f"Then call {submit_tool_name} with the user's answer."
         )
 
