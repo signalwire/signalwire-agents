@@ -270,21 +270,17 @@ class InfoGathererSkill(SkillBase):
         submit_tool_name: str = "submit_answer",
     ) -> str:
         if is_first_question:
-            instruction = f"Ask the user the following question: {question_text}\n\n"
+            instruction = f"Say this question to the user: \"{question_text}\"\n\n"
         else:
-            instruction = (
-                f"Previous answer recorded. Now ask the user the following question: "
-                f"{question_text}\n\n"
-            )
+            instruction = f"Say the next question to the user: \"{question_text}\"\n\n"
 
         if prompt_add:
             instruction += f"Additional instructions: {prompt_add}\n\n"
 
         instruction += (
-            f"Make sure the answer fits the scope and context of the question. "
-            f"If the user gives an incomplete or partial answer, "
-            f"ask follow-up questions until you have a complete answer. "
-            f"Once you have the answer, call {submit_tool_name} with it."
+            f"After the user answers, make sure the answer fits the scope and context "
+            f"of the question. If the answer is incomplete, ask for more detail. "
+            f"Then call {submit_tool_name} with the user's answer."
         )
 
         if needs_confirmation:
