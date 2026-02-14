@@ -285,6 +285,8 @@ class InfoGathererSkill(SkillBase):
             instruction += f"Additional instructions: {prompt_add}\n\n"
 
         instruction += (
+            f"Focus only on this question. Ask the user directly and do not "
+            f"submit an answer unless the user provided it. "
             f"Make sure the answer fits the scope and context of the question. "
             f"If the answer is incomplete, ask for more detail. "
             f"Then call {submit_tool_name} with the user's answer."
