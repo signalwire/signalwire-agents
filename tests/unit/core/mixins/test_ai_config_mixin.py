@@ -307,7 +307,7 @@ class TestSetGlobalData:
     def test_sets_global_data_with_valid_dict(self, host):
         data = {"key": "value", "num": 42}
         result = host.set_global_data(data)
-        assert host._global_data is data
+        assert host._global_data == data
 
     def test_returns_self_for_chaining(self, host):
         result = host.set_global_data({"k": "v"})

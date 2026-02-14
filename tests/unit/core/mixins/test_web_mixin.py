@@ -558,13 +558,10 @@ class TestHandleSwaigRequest:
         # Function should still be called
         agent.on_function_call.assert_called()
 
-    def test_token_validation_invalid_secure_function_rejects(self):
-        """When a secure function has an invalid token the handler tries to
-        return a JSONResponse(401).  However, JSONResponse is not imported
-        in web_mixin.py, so a NameError is raised and caught by the outer
-        exception handler which returns a 500 Response.  We test the actual
-        observable behaviour here (500) and separately verify that if
-        JSONResponse is available the intent is a 401."""
+    def test_token_validation_invalid_secure_function_returns_swaig_error(self):
+        """When a secure function has an invalid token, the handler returns a
+        SWAIG-format dict with a 'response' key describing the error, so the
+        AI can relay the message to the user."""
         agent = _build_mixin()
         agent._session_manager.validate_tool_token = MagicMock(return_value=False)
         agent._session_manager.debug_token = MagicMock(return_value={})
@@ -577,45 +574,13 @@ class TestHandleSwaigRequest:
             query_params={"token": "bad-token"},
             url_path="/agent/swaig"
         )
-        # Without JSONResponse imported, the outer handler catches the NameError
         result = _run(agent._handle_swaig_request(request, resp))
-        assert hasattr(result, "status_code") and result.status_code == 500
-
-    def test_token_validation_invalid_secure_function_401_with_jsonresponse(self):
-        """When JSONResponse IS available in the module namespace the handler
-        correctly returns a 401 for an invalid token on a secure function."""
-        from fastapi.responses import JSONResponse as RealJSONResponse
-        agent = _build_mixin()
-        agent._session_manager.validate_tool_token = MagicMock(return_value=False)
-        agent._session_manager.debug_token = MagicMock(return_value={})
-        agent._tool_registry._swaig_functions = {"secure_fn": {"secure": True}}
-        resp = MagicMock()
-        resp.headers = {}
-        body = {"function": "secure_fn", "call_id": "c1"}
-        request = _make_request(
-            "POST", body=body,
-            query_params={"token": "bad-token"},
-            url_path="/agent/swaig"
-        )
-        # Inject JSONResponse into the module globals so the handler can use it
-        import signalwire_agents.core.mixins.web_mixin as wm_module
-        original = getattr(wm_module, "JSONResponse", None)
-        wm_module.JSONResponse = RealJSONResponse
-        try:
-            # Also need to inject into the builtins/globals accessible by the method
-            # The simplest way: temporarily add it to the WebMixin class namespace
-            WebMixin.JSONResponse = RealJSONResponse
-            # Patch the global in the module where the function runs
-            with patch.dict(wm_module.__dict__, {"JSONResponse": RealJSONResponse}):
-                result = _run(agent._handle_swaig_request(request, resp))
-            assert hasattr(result, "status_code") and result.status_code == 401
-        finally:
-            if original is None:
-                wm_module.__dict__.pop("JSONResponse", None)
-            else:
-                wm_module.JSONResponse = original
-            if hasattr(WebMixin, "JSONResponse"):
-                delattr(WebMixin, "JSONResponse")
+        # Should be a plain dict (not an HTTP Response object)
+        assert isinstance(result, dict)
+        assert "response" in result
+        assert "token" in result["response"].lower() or "invalid" in result["response"].lower()
+        # Function should NOT have been called
+        agent.on_function_call.assert_not_called()
 
     def test_token_validation_invalid_nonsecure_function_continues(self):
         agent = _build_mixin()

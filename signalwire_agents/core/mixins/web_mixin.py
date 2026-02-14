@@ -721,10 +721,9 @@ class WebMixin:
                         # Check if the function requires a valid token
                         func_entry = self._tool_registry._swaig_functions.get(function_name)
                         if func_entry and func_entry.get('secure', True):
-                            return JSONResponse(
-                                status_code=401,
-                                content={"error": "Invalid security token"}
-                            )
+                            return SwaigFunctionResult(
+                                response="I'm sorry, the security token for this function is invalid or expired. I cannot execute this action."
+                            ).to_dict()
             
             # Check if we need to use an ephemeral agent for dynamic configuration
             agent_to_use = self

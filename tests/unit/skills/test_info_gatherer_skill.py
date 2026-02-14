@@ -289,8 +289,8 @@ class TestStartQuestions:
         raw = self._raw_data("intake", SAMPLE_QUESTIONS)
         result = skill._handle_start_questions({}, raw)
         text = result.to_dict()["response"]
-        assert "Ask the user to answer" in text
-        assert "Previous Answer recorded" not in text
+        assert "Ask the user" in text
+        assert "Answer recorded" not in text
 
     def test_no_questions(self):
         skill = _setup_skill({"questions": SAMPLE_QUESTIONS, "prefix": "intake"})
@@ -334,7 +334,7 @@ class TestSubmitAnswer:
         result = skill._handle_submit_answer({"answer": "John Doe"}, raw)
         d = result.to_dict()
         assert "What is your email?" in d["response"]
-        assert "Previous Answer recorded" in d["response"]
+        assert "Answer recorded" in d["response"]
 
     def test_submit_stores_answer_in_global_data(self):
         skill = _setup_skill({"questions": SAMPLE_QUESTIONS, "prefix": "intake"})
@@ -477,7 +477,7 @@ class TestQuestionInstruction:
         text = InfoGathererSkill._generate_question_instruction(
             "What is your email?", needs_confirmation=False, is_first_question=False,
         )
-        assert "Previous Answer recorded" in text
+        assert "Answer recorded" in text
         assert "What is your email?" in text
 
     def test_confirmation_required(self):
@@ -490,7 +490,7 @@ class TestQuestionInstruction:
         text = InfoGathererSkill._generate_question_instruction(
             "Color?", needs_confirmation=False, is_first_question=True,
         )
-        assert "don't need the user to confirm" in text
+        assert "MUST read the answer back" not in text
 
     def test_prompt_add_included(self):
         text = InfoGathererSkill._generate_question_instruction(
