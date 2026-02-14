@@ -202,6 +202,8 @@ class InfoGathererSkill(SkillBase):
             is_first_question=True,
             prompt_add=current.get("prompt_add", ""),
             submit_tool_name=self.submit_tool_name,
+            question_number=question_index + 1,
+            total_questions=len(questions),
         )
         return SwaigFunctionResult(instruction)
 
@@ -240,8 +242,8 @@ class InfoGathererSkill(SkillBase):
                 is_first_question=False,
                 prompt_add=next_q.get("prompt_add", ""),
                 submit_tool_name=self.submit_tool_name,
-                previous_question=current.get("question_text", ""),
-                previous_answer=answer,
+                question_number=new_index + 1,
+                total_questions=len(questions),
             )
             result = SwaigFunctionResult(instruction)
         else:
@@ -270,26 +272,27 @@ class InfoGathererSkill(SkillBase):
         is_first_question: bool = False,
         prompt_add: str = "",
         submit_tool_name: str = "submit_answer",
-        previous_question: str = "",
-        previous_answer: str = "",
+        question_number: int = 1,
+        total_questions: int = 1,
     ) -> str:
         if is_first_question:
-            instruction = f"Ask the user: \"{question_text}\"\n\n"
+            instruction = f"[Question {question_number} of {total_questions}] Ask the user: \"{question_text}\"\n\n"
         else:
             instruction = (
-                f"Answer recorded for \"{previous_question}\": \"{previous_answer}\". "
-                f"Now ask the user: \"{question_text}\"\n\n"
+                f"Previous answer saved. "
+                f"[Question {question_number} of {total_questions}] Ask the user: \"{question_text}\"\n\n"
             )
 
         if prompt_add:
             instruction += f"Additional instructions: {prompt_add}\n\n"
 
         instruction += (
-            f"Focus only on this question. Ask the user directly and do not "
-            f"submit an answer unless the user provided it. "
+            f"You do not have the answer to this question yet. "
+            f"You MUST ask the user directly and wait for their response. "
+            f"Do not reuse any previous answer. "
             f"Make sure the answer fits the scope and context of the question. "
             f"If the answer is incomplete, ask for more detail. "
-            f"Then call {submit_tool_name} with the user's answer."
+            f"Only after the user responds, call {submit_tool_name} with their answer."
         )
 
         if needs_confirmation:
