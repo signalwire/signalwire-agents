@@ -175,9 +175,9 @@ class InfoGathererSkill(SkillBase):
                     "type": "string",
                     "description": "The user's answer to the current question",
                 },
-                "confirmed": {
+                "confirmed_by_user": {
                     "type": "boolean",
-                    "description": "Set to true only after you have read the answer back to the user and they have explicitly confirmed it is correct. Required for questions that need confirmation.",
+                    "description": "Only set to true when the user has explicitly said 'yes' or confirmed the answer is correct in their own words in their most recent response. Never set this to true on your own.",
                 },
             },
             handler=self._handle_submit_answer,
@@ -207,7 +207,7 @@ class InfoGathererSkill(SkillBase):
 
     def _handle_submit_answer(self, args, raw_data):
         answer = args.get("answer", "")
-        confirmed = args.get("confirmed", False)
+        confirmed = args.get("confirmed_by_user", False)
         state = self.get_skill_data(raw_data)
 
         questions = state.get("questions", [])
