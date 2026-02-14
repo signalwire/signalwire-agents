@@ -143,12 +143,14 @@ class InfoGathererSkill(SkillBase):
             {
                 "title": f"Info Gatherer ({self.get_instance_key()})",
                 "body": (
-                    f"You need to gather answers to a series of questions. "
+                    f"You need to gather answers to a series of questions from the user. "
                     f"Start by introducing yourself and asking the user if they are ready "
                     f"to answer some questions. Once the user confirms they are ready, "
                     f"call the {self.start_tool_name} function to get the first question. "
-                    f"After each answer, call {self.submit_tool_name} with "
-                    f"the user's response."
+                    f"Ask the user that question, wait for their response, then call "
+                    f"{self.submit_tool_name} with the answer they gave you. "
+                    f"Each call to {self.submit_tool_name} will return the next question "
+                    f"to ask. Repeat this process until all questions are complete."
                 ),
             }
         ]
@@ -199,6 +201,7 @@ class InfoGathererSkill(SkillBase):
             needs_confirmation=current.get("confirm", False),
             is_first_question=True,
             prompt_add=current.get("prompt_add", ""),
+            submit_tool_name=self.submit_tool_name,
         )
         return SwaigFunctionResult(instruction)
 
@@ -236,6 +239,7 @@ class InfoGathererSkill(SkillBase):
                 needs_confirmation=next_q.get("confirm", False),
                 is_first_question=False,
                 prompt_add=next_q.get("prompt_add", ""),
+                submit_tool_name=self.submit_tool_name,
             )
             result = SwaigFunctionResult(instruction)
         else:
@@ -263,33 +267,33 @@ class InfoGathererSkill(SkillBase):
         needs_confirmation: bool,
         is_first_question: bool = False,
         prompt_add: str = "",
+        submit_tool_name: str = "submit_answer",
     ) -> str:
         if is_first_question:
-            instruction = f"Ask the user to answer the following question: {question_text}\n\n"
+            instruction = f"Ask the user the following question: {question_text}\n\n"
         else:
             instruction = (
-                f"Previous Answer recorded. Now ask the user to answer the "
-                f"following question: {question_text}\n\n"
+                f"Previous answer recorded. Now ask the user the following question: "
+                f"{question_text}\n\n"
             )
 
         if prompt_add:
             instruction += f"Additional instructions: {prompt_add}\n\n"
 
         instruction += (
-            "Make sure the answer fits the scope and context of the question "
-            "before submitting it. If the user gives an incomplete or partial answer, "
-            "ask follow-up questions until you have a complete answer. Do not submit "
-            "until you have all the information the question asks for. "
+            f"Make sure the answer fits the scope and context of the question. "
+            f"If the user gives an incomplete or partial answer, "
+            f"ask follow-up questions until you have a complete answer. "
+            f"Once you have the answer, call {submit_tool_name} with it."
         )
 
         if needs_confirmation:
             instruction += (
-                "IMPORTANT: Before submitting this answer, you MUST read the answer back to the user "
-                "and explicitly ask them to confirm it is correct. Do NOT call submit until the user "
-                "has clearly confirmed. If they say it is wrong, ask the question again."
+                f" IMPORTANT: Before calling {submit_tool_name}, you MUST read the answer "
+                f"back to the user and ask them to confirm it is correct. "
+                f"Do NOT call {submit_tool_name} until the user has confirmed. "
+                f"If they say it is wrong, ask the question again."
             )
-        else:
-            instruction += "You don't need the user to confirm the answer to this question."
 
         return instruction
 
