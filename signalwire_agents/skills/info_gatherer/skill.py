@@ -276,30 +276,21 @@ class InfoGathererSkill(SkillBase):
         total_questions: int = 1,
     ) -> str:
         if is_first_question:
-            instruction = f"[Question {question_number} of {total_questions}] Ask the user: \"{question_text}\"\n\n"
-        else:
             instruction = (
-                f"Previous answer saved. "
-                f"[Question {question_number} of {total_questions}] Ask the user: \"{question_text}\"\n\n"
+                f"Ask each question one at a time, wait for the user's answer, "
+                f"then call {submit_tool_name} with their answer. Do not reuse previous answers.\n\n"
+                f"[Question {question_number} of {total_questions}]: \"{question_text}\""
             )
+        else:
+            instruction = f"Previous answer saved. [Question {question_number} of {total_questions}]: \"{question_text}\""
 
         if prompt_add:
-            instruction += f"Additional instructions: {prompt_add}\n\n"
-
-        instruction += (
-            f"You do not have the answer to this question yet. "
-            f"You MUST ask the user directly and wait for their response. "
-            f"Do not reuse any previous answer. "
-            f"Make sure the answer fits the scope and context of the question. "
-            f"If the answer is incomplete, ask for more detail. "
-            f"Only after the user responds, call {submit_tool_name} with their answer."
-        )
+            instruction += f"\nNote: {prompt_add}"
 
         if needs_confirmation:
             instruction += (
-                f" IMPORTANT: Before calling {submit_tool_name}, you MUST read the answer "
-                f"back to the user and ask them to confirm it is correct. "
-                f"Do NOT call {submit_tool_name} until the user has confirmed. "
+                f"\nThis question requires confirmation. Read the answer back to the user "
+                f"and ask them to confirm it is correct before calling {submit_tool_name}. "
                 f"If they say it is wrong, ask the question again."
             )
 
