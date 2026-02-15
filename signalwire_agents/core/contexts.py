@@ -18,6 +18,86 @@ contains its own prompt, completion criteria, and function restrictions.
 from typing import Dict, List, Optional, Union, Any
 
 
+class GatherQuestion:
+    """Represents a single question in a gather_info configuration"""
+
+    def __init__(self, key: str, question: str, type: str = "string",
+                 confirm: bool = False, prompt: Optional[str] = None,
+                 functions: Optional[List[str]] = None):
+        self.key = key
+        self.question = question
+        self.type = type
+        self.confirm = confirm
+        self.prompt = prompt
+        self.functions = functions
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert question to dictionary for SWML generation"""
+        d: Dict[str, Any] = {"key": self.key, "question": self.question}
+        if self.type != "string":
+            d["type"] = self.type
+        if self.confirm:
+            d["confirm"] = True
+        if self.prompt:
+            d["prompt"] = self.prompt
+        if self.functions:
+            d["functions"] = self.functions
+        return d
+
+
+class GatherInfo:
+    """Configuration for gathering information in a step via the C-side gather_info system.
+
+    This produces zero tool_call/tool_result entries in LLM-visible history,
+    instead using dynamic step instruction re-injection to present one question
+    at a time.
+    """
+
+    def __init__(self, output_key: Optional[str] = None,
+                 completion_action: Optional[str] = None,
+                 prompt: Optional[str] = None):
+        self._questions: List[GatherQuestion] = []
+        self._output_key = output_key
+        self._completion_action = completion_action
+        self._prompt = prompt
+
+    def add_question(self, key: str, question: str, **kwargs) -> 'GatherInfo':
+        """
+        Add a question to gather.
+
+        Args:
+            key: Key name for storing the answer in global_data
+            question: The question text to ask
+            **kwargs: Optional fields - type, confirm, prompt, functions
+
+        Returns:
+            Self for method chaining
+        """
+        q = GatherQuestion(
+            key=key,
+            question=question,
+            type=kwargs.get('type', 'string'),
+            confirm=kwargs.get('confirm', False),
+            prompt=kwargs.get('prompt'),
+            functions=kwargs.get('functions')
+        )
+        self._questions.append(q)
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for SWML generation"""
+        if not self._questions:
+            raise ValueError("gather_info must have at least one question")
+        d: Dict[str, Any] = {"questions": [q.to_dict() for q in self._questions]}
+        if self._prompt:
+            d["prompt"] = self._prompt
+        if self._output_key:
+            d["output_key"] = self._output_key
+        if self._completion_action:
+            d["completion_action"] = self._completion_action
+        return d
+
+
 class Step:
     """Represents a single step within a context"""
     
@@ -32,6 +112,9 @@ class Step:
         # POM-style sections for rich prompts
         self._sections: List[Dict[str, Any]] = []
         
+        # Gather info configuration
+        self._gather_info: Optional[GatherInfo] = None
+
         # Reset object for context switching from steps
         self._reset_system_prompt: Optional[str] = None
         self._reset_user_prompt: Optional[str] = None
@@ -137,13 +220,62 @@ class Step:
         self._valid_contexts = contexts
         return self
     
+    def set_gather_info(self, output_key: Optional[str] = None,
+                        completion_action: Optional[str] = None,
+                        prompt: Optional[str] = None) -> 'Step':
+        """
+        Enable info gathering for this step. Questions are presented one at a time
+        via dynamic step instruction re-injection, producing zero tool_call/tool_result
+        entries in LLM-visible history.
+
+        After calling this, use add_gather_question() to define questions.
+
+        Args:
+            output_key: Key in global_data to store answers under (default: top-level)
+            completion_action: "next_step" to auto-advance when all questions are answered
+            prompt: Preamble text injected once when entering the gather step, giving
+                the model personality/context for why it is asking these questions
+
+        Returns:
+            Self for method chaining
+        """
+        self._gather_info = GatherInfo(output_key=output_key,
+                                       completion_action=completion_action,
+                                       prompt=prompt)
+        return self
+
+    def add_gather_question(self, key: str, question: str, type: str = "string",
+                            confirm: bool = False, prompt: Optional[str] = None,
+                            functions: Optional[List[str]] = None) -> 'Step':
+        """
+        Add a question to this step's gather_info configuration.
+        set_gather_info() must be called before this method.
+
+        Args:
+            key: Key name for storing the answer in global_data
+            question: The question text to ask the user
+            type: JSON schema type for the answer param (default: "string")
+            confirm: If True, model must confirm answer with user before submitting
+            prompt: Extra instruction text appended for this question
+            functions: Additional function names to make visible for this question
+
+        Returns:
+            Self for method chaining
+        """
+        if self._gather_info is None:
+            raise ValueError("Must call set_gather_info() before add_gather_question()")
+        self._gather_info.add_question(key=key, question=question, type=type,
+                                       confirm=confirm, prompt=prompt,
+                                       functions=functions)
+        return self
+
     def set_reset_system_prompt(self, system_prompt: str) -> 'Step':
         """
         Set system prompt for context switching when this step navigates to a context
-        
+
         Args:
             system_prompt: New system prompt for context switching
-            
+
         Returns:
             Self for method chaining
         """
@@ -243,7 +375,10 @@ class Step:
             
         if reset_obj:
             step_dict["reset"] = reset_obj
-            
+
+        if self._gather_info is not None:
+            step_dict["gather_info"] = self._gather_info.to_dict()
+
         return step_dict
 
 
@@ -717,7 +852,25 @@ class ContextBuilder:
                                 f"Step '{step_name}' in context '{context_name}' "
                                 f"references unknown context '{valid_context}'"
                             )
-    
+
+        # Validate gather_info configurations
+        for context_name, context in self._contexts.items():
+            for step_name, step in context._steps.items():
+                if step._gather_info is not None:
+                    if not step._gather_info._questions:
+                        raise ValueError(
+                            f"Step '{step_name}' in context '{context_name}' "
+                            f"has gather_info with no questions"
+                        )
+                    keys_seen = set()
+                    for q in step._gather_info._questions:
+                        if q.key in keys_seen:
+                            raise ValueError(
+                                f"Step '{step_name}' in context '{context_name}' "
+                                f"has duplicate gather_info question key '{q.key}'"
+                            )
+                        keys_seen.add(q.key)
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert all contexts to dictionary for SWML generation"""
         self.validate()
