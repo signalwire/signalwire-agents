@@ -289,7 +289,9 @@ class InfoGathererAgent(AgentBase):
         )
         
         # Return a prompt to ask the question
-        return SwaigFunctionResult(instruction)
+        result = SwaigFunctionResult(instruction)
+        result.replace_in_history("Welcome! Let me ask you a few questions.")
+        return result
     
     @AgentBase.tool(
         name="submit_answer",
@@ -355,25 +357,27 @@ class InfoGathererAgent(AgentBase):
             
             # Create response with the global data update and next question
             result = SwaigFunctionResult(instruction)
-            
+            result.replace_in_history()
+
             # Use the helper method to update global data
             result.update_global_data({
                 "answers": new_answers,
                 "question_index": new_question_index
             })
-            
+
             return result
         else:
             # No more questions - create response with global data update and completion message
             result = SwaigFunctionResult(
                 "Thank you! All questions have been answered. You can now summarize the information collected or ask if there's anything else the user would like to discuss."
             )
-            
+            result.replace_in_history()
+
             # Use the helper method to update global data
             result.update_global_data({
                 "answers": new_answers,
                 "question_index": new_question_index
             })
-            
+
             return result
 

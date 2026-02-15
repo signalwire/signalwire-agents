@@ -599,16 +599,29 @@ class SwaigFunctionResult:
 
     def enable_extensive_data(self, enabled: bool = True) -> 'SwaigFunctionResult':
         """
-        Send full data to LLM for this turn only, then use smaller replacement 
+        Send full data to LLM for this turn only, then use smaller replacement
         in subsequent turns.
-        
+
         Args:
             enabled: Whether to send extensive data this turn only
-            
+
         Returns:
             self for method chaining
         """
         return self.add_action("extensive_data", enabled)
+
+    def replace_in_history(self, text: Union[str, bool] = True) -> 'SwaigFunctionResult':
+        """
+        After first send, replace tool_call+result pair in conversation history.
+
+        Args:
+            text: String = replace tool_call with an assistant message containing this text.
+                  True = remove the tool_call+result pair from history entirely.
+
+        Returns:
+            self for method chaining
+        """
+        return self.add_action("replace_in_history", text)
 
     def update_settings(self, settings: Dict[str, Any]) -> 'SwaigFunctionResult':
         """

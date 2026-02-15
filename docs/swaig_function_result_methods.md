@@ -615,6 +615,36 @@ result.enable_extensive_data(True)   # Send extensive data this turn
 result.enable_extensive_data(False)  # Use normal data
 ```
 
+#### `replace_in_history(text=True)`
+Remove or replace the tool_call + tool_result pair from the LLM's conversation history after the first send. This is useful when a function call is an implementation detail that would confuse the model if it remained visible in context.
+
+When called with a string, the tool_call/tool_result pair is replaced with an assistant message containing that text. When called with `True`, the pair is removed entirely — the LLM will never see that the function was called.
+
+```python
+# Remove entirely — LLM won't see this function was called
+result = SwaigFunctionResult("Done.")
+result.replace_in_history()
+
+# Replace with a friendly assistant message instead of tool artifacts
+result = SwaigFunctionResult("Profile saved.")
+result.replace_in_history("I've saved your profile information.")
+
+# Practical example: data collection function that shouldn't clutter history
+@agent.tool(name="save_answer", description="Save the user's answer")
+def save_answer(args, raw_data):
+    answer = args.get("answer")
+    result = SwaigFunctionResult(f"Answer recorded: {answer}")
+    result.replace_in_history()  # Keep history clean
+    return result
+```
+
+**When to use:**
+- Functions that are implementation details (saving data, logging, internal state changes)
+- Functions called frequently that would bloat conversation history
+- Situations where tool artifacts confuse the model's reasoning (especially with reasoning models at low effort settings)
+
+**Note:** For structured data collection, consider using [gather_info mode](steps_guide.md#gather-info-mode) instead, which produces zero tool artifacts by design and doesn't require `replace_in_history`.
+
 ---
 
 ### Agent Settings & Configuration
