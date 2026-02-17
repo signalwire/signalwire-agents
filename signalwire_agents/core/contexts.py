@@ -420,22 +420,58 @@ class Context:
         self._enter_fillers: Optional[Dict[str, List[str]]] = None
         self._exit_fillers: Optional[Dict[str, List[str]]] = None
     
-    def add_step(self, name: str) -> Step:
+    def add_step(
+        self,
+        name: str,
+        *,
+        task: Optional[str] = None,
+        bullets: Optional[List[str]] = None,
+        criteria: Optional[str] = None,
+        functions: Optional[Union[str, List[str]]] = None,
+        valid_steps: Optional[List[str]] = None,
+    ) -> Step:
         """
-        Add a new step to this context
-        
+        Add a new step to this context.
+
+        When called with only ``name`` the returned Step can be configured
+        with the usual method-chaining API.  When the optional keyword
+        arguments are supplied the step is fully configured in one call:
+
         Args:
-            name: Step name
-            
+            name: Step name (must be unique within the context).
+            task: Text for the "Task" section (equivalent to
+                ``step.add_section("Task", task)``).
+            bullets: List of bullet strings for the "Process" section
+                (equivalent to ``step.add_bullets("Process", bullets)``).
+                Requires *task* to also be set.
+            criteria: Step-completion criteria (equivalent to
+                ``step.set_step_criteria(criteria)``).
+            functions: Tool names the step may call, or ``"none"``
+                (equivalent to ``step.set_functions(functions)``).
+            valid_steps: Names of steps the agent may transition to
+                (equivalent to ``step.set_valid_steps(valid_steps)``).
+
         Returns:
-            Step object for method chaining
+            The configured Step object for optional further chaining.
         """
         if name in self._steps:
             raise ValueError(f"Step '{name}' already exists in context '{self.name}'")
-        
+
         step = Step(name)
         self._steps[name] = step
         self._step_order.append(name)
+
+        if task is not None:
+            step.add_section("Task", task)
+        if bullets is not None:
+            step.add_bullets("Process", bullets)
+        if criteria is not None:
+            step.set_step_criteria(criteria)
+        if functions is not None:
+            step.set_functions(functions)
+        if valid_steps is not None:
+            step.set_valid_steps(valid_steps)
+
         return step
     
     def get_step(self, name: str) -> Optional['Step']:
