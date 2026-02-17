@@ -269,6 +269,18 @@ class Step:
                                        functions=functions)
         return self
 
+    def clear_sections(self) -> 'Step':
+        """
+        Remove all POM sections and direct text from this step, allowing it
+        to be repopulated with new content.
+
+        Returns:
+            Self for method chaining
+        """
+        self._sections = []
+        self._text = None
+        return self
+
     def set_reset_system_prompt(self, system_prompt: str) -> 'Step':
         """
         Set system prompt for context switching when this step navigates to a context
@@ -437,6 +449,38 @@ class Context:
             Step object if found, None otherwise
         """
         return self._steps.get(name)
+
+    def remove_step(self, name: str) -> 'Context':
+        """
+        Remove a step from this context entirely.
+
+        Args:
+            name: Step name to remove
+
+        Returns:
+            Self for method chaining
+        """
+        if name in self._steps:
+            del self._steps[name]
+            self._step_order = [s for s in self._step_order if s != name]
+        return self
+
+    def move_step(self, name: str, position: int) -> 'Context':
+        """
+        Move an existing step to a specific position in the step order.
+
+        Args:
+            name: Step name to move
+            position: Target index in the step order (0 = first)
+
+        Returns:
+            Self for method chaining
+        """
+        if name not in self._steps:
+            raise ValueError(f"Step '{name}' not found in context '{self.name}'")
+        self._step_order.remove(name)
+        self._step_order.insert(position, name)
+        return self
 
     def set_valid_contexts(self, contexts: List[str]) -> 'Context':
         """
