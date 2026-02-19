@@ -89,6 +89,7 @@ class TestDefineTool:
             fillers=None,
             webhook_url=None,
             required=None,
+            is_typed_handler=False,
         )
 
     def test_returns_self_for_chaining(self, host):
@@ -135,6 +136,21 @@ class TestDefineTool:
             .define_tool(name="b", description="B", parameters={}, handler=Mock())
         )
         assert result is host
+
+    def test_passes_is_typed_handler(self, host, mock_registry):
+        host.define_tool(
+            name="f", description="d", parameters={}, handler=Mock(),
+            is_typed_handler=True
+        )
+        call_kwargs = mock_registry.define_tool.call_args[1]
+        assert call_kwargs["is_typed_handler"] is True
+
+    def test_is_typed_handler_defaults_false(self, host, mock_registry):
+        host.define_tool(
+            name="f", description="d", parameters={}, handler=Mock()
+        )
+        call_kwargs = mock_registry.define_tool.call_args[1]
+        assert call_kwargs["is_typed_handler"] is False
 
 
 # ===========================================================================

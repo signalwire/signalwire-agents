@@ -514,13 +514,14 @@ agent.update_global_data({
 
 ```python
 def define_tool(
-    name: str, 
-    description: str, 
-    parameters: Dict[str, Any], 
-    handler: Callable, 
-    secure: bool = True, 
-    fillers: Optional[Dict[str, List[str]]] = None, 
-    webhook_url: Optional[str] = None, 
+    name: str,
+    description: str,
+    parameters: Dict[str, Any],
+    handler: Callable,
+    secure: bool = True,
+    fillers: Optional[Dict[str, List[str]]] = None,
+    webhook_url: Optional[str] = None,
+    is_typed_handler: bool = False,
     **swaig_fields
 ) -> AgentBase
 ```
@@ -529,7 +530,7 @@ Define a custom SWAIG function/tool.
 **Parameters:**
 - `name` (str): Function name
 - `description` (str): Function description for AI
-- `parameters` (Dict[str, Any]): JSON schema for function parameters
+- `parameters` (Dict[str, Any]): JSON schema for function parameters. If omitted when using the decorator and the handler has type-hinted parameters, the schema is inferred automatically from the type hints.
 - `handler` (Callable): Function to execute when called
 - `secure` (bool): Require security token (default: True)
 - `fillers` (Optional[Dict[str, List[str]]]): Language-specific filler phrases
@@ -567,7 +568,9 @@ Decorator for defining tools as class methods.
 - `name` (Optional[str]): Function name (defaults to method name)
 - `**kwargs`: Same parameters as `define_tool()`
 
-**Usage:**
+When `parameters` is omitted and the handler has type-hinted parameters (beyond `self`), the schema is inferred automatically from the type hints. The description is extracted from the docstring's first line, and per-parameter descriptions come from the `Args:` block.
+
+**Usage (explicit schema):**
 ```python
 class MyAgent(AgentBase):
     @AgentBase.tool(
@@ -577,6 +580,20 @@ class MyAgent(AgentBase):
     def get_time(self, args, raw_data):
         import datetime
         return SwaigFunctionResult(f"Current time: {datetime.datetime.now()}")
+```
+
+**Usage (type-hinted, schema inferred):**
+```python
+class MyAgent(AgentBase):
+    @AgentBase.tool(name="get_weather")
+    def get_weather(self, city: str, units: str = "celsius"):
+        """Get the weather forecast.
+
+        Args:
+            city: Name of the city
+            units: Temperature units
+        """
+        return SwaigFunctionResult(f"Weather in {city}")
 ```
 
 ##### `register_swaig_function`

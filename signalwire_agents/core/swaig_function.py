@@ -23,9 +23,9 @@ class SWAIGFunction:
     Represents a SWAIG function for AI integration
     """
     def __init__(
-        self, 
-        name: str, 
-        handler: Callable, 
+        self,
+        name: str,
+        handler: Callable,
         description: str,
         parameters: Dict[str, Dict] = None,
         secure: bool = False,
@@ -34,11 +34,12 @@ class SWAIGFunction:
         wait_file_loops: Optional[int] = None,
         webhook_url: Optional[str] = None,
         required: Optional[List[str]] = None,
+        is_typed_handler: bool = False,
         **extra_swaig_fields
     ):
         """
         Initialize a new SWAIG function
-        
+
         Args:
             name: Name of the function to appear in SWML
             handler: Function to call when this SWAIG function is invoked
@@ -50,6 +51,7 @@ class SWAIGFunction:
             wait_file_loops: Optional number of times to loop the wait_file
             webhook_url: Optional external webhook URL to use instead of local handling
             required: Optional list of required parameter names
+            is_typed_handler: Whether the handler uses type-hinted parameters (auto-wrapped)
             **extra_swaig_fields: Additional SWAIG fields to include in function definition
         """
         self.name = name
@@ -62,6 +64,7 @@ class SWAIGFunction:
         self.wait_file_loops = wait_file_loops
         self.webhook_url = webhook_url
         self.required = required or []
+        self.is_typed_handler = is_typed_handler
         self.extra_swaig_fields = extra_swaig_fields
         
         # Mark as external if webhook_url is provided

@@ -11,5 +11,6 @@ See LICENSE file in the project root for full license information.
 
 from .registry import ToolRegistry
 from .decorator import ToolDecorator
+from .type_inference import infer_schema, create_typed_handler_wrapper
 
-__all__ = ['ToolRegistry', 'ToolDecorator']
+__all__ = ['ToolRegistry', 'ToolDecorator', 'infer_schema', 'create_typed_handler_wrapper']

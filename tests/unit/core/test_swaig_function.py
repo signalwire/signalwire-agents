@@ -68,18 +68,43 @@ class TestSWAIGFunctionInitialization:
         """Test initialization with default values"""
         def test_handler():
             return {"result": "success"}
-        
+
         func = SWAIGFunction(
             name="default_function",
             handler=test_handler,
             description="Default test function"
         )
-        
+
         # Check default values
         assert func.secure is False  # Default should be non-secure
         assert func.fillers is None
         assert func.webhook_url is None
         assert func.is_external is False
+
+    def test_is_typed_handler_defaults_false(self):
+        """Test that is_typed_handler defaults to False"""
+        def test_handler():
+            return {"result": "success"}
+
+        func = SWAIGFunction(
+            name="test_function",
+            handler=test_handler,
+            description="Test function"
+        )
+        assert func.is_typed_handler is False
+
+    def test_is_typed_handler_set_true(self):
+        """Test that is_typed_handler can be set to True"""
+        def test_handler():
+            return {"result": "success"}
+
+        func = SWAIGFunction(
+            name="typed_function",
+            handler=test_handler,
+            description="Typed function",
+            is_typed_handler=True
+        )
+        assert func.is_typed_handler is True
 
 
 class TestSWAIGFunctionExecution:

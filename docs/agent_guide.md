@@ -388,6 +388,60 @@ swaig-test examples/my_agent.py --list-tools
 
 The CLI tool will automatically detect external webhook functions and make HTTP requests to the external services, simulating what SignalWire does in production.
 
+### 3. Type-Hinted Functions
+
+Instead of writing JSON Schema by hand, you can use Python type hints and the SDK will infer the schema automatically:
+
+```python
+from typing import Optional, Literal
+
+@AgentBase.tool(name="get_weather")
+def get_weather(self, city: str, units: Literal["celsius", "fahrenheit"] = "celsius"):
+    """Get the weather forecast.
+
+    Args:
+        city: Name of the city to look up
+        units: Temperature units to use
+    """
+    return SwaigFunctionResult(f"It's sunny in {city} (showing {units})")
+```
+
+The SDK automatically:
+- Infers parameter types from type hints (`str` → `"string"`, `int` → `"integer"`, etc.)
+- Marks parameters without defaults as required
+- Extracts the tool description from the docstring's first line
+- Extracts per-parameter descriptions from the `Args:` block
+- Handles `Optional[X]` as a non-required parameter
+- Converts `Literal["a", "b"]` to `enum` values
+
+**Supported types:**
+
+| Python Type | JSON Schema Type |
+|---|---|
+| `str` | `"string"` |
+| `int` | `"integer"` |
+| `float` | `"number"` |
+| `bool` | `"boolean"` |
+| `list` / `List[X]` | `"array"` (with `items` if parameterized) |
+| `dict` | `"object"` |
+| `Literal["a", "b"]` | `"string"` with `enum` |
+| `Optional[X]` | type of `X`, not required |
+
+**Rules:**
+- If `parameters=` is provided explicitly, it always takes precedence over inference
+- The `raw_data` parameter is special: if included in the signature, it receives the raw request data but is excluded from the schema
+- Old-style `(self, args, raw_data)` handlers continue to work exactly as before
+
+**Accessing raw_data in typed handlers:**
+
+```python
+@AgentBase.tool(name="check_call")
+def check_call(self, query: str, raw_data: dict = None):
+    """Check the current call."""
+    call_id = raw_data.get("call_id", "unknown") if raw_data else "unknown"
+    return SwaigFunctionResult(f"Call {call_id}: query={query}")
+```
+
 ### Function Parameters
 
 The parameters for a SWAIG function are defined using JSON Schema:

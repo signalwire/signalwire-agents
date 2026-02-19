@@ -21,20 +21,21 @@ class ToolMixin:
     """
     
     def define_tool(
-        self, 
-        name: str, 
-        description: str, 
-        parameters: Dict[str, Any], 
+        self,
+        name: str,
+        description: str,
+        parameters: Dict[str, Any],
         handler: Callable,
         secure: bool = True,
         fillers: Optional[Dict[str, List[str]]] = None,
         webhook_url: Optional[str] = None,
         required: Optional[List[str]] = None,
+        is_typed_handler: bool = False,
         **swaig_fields
     ) -> 'AgentBase':
         """
         Define a SWAIG function that the AI can call
-        
+
         Args:
             name: Function name (must be unique)
             description: Function description for the AI
@@ -44,8 +45,9 @@ class ToolMixin:
             fillers: Optional dict mapping language codes to arrays of filler phrases
             webhook_url: Optional external webhook URL to use instead of local handling
             required: Optional list of required parameter names
+            is_typed_handler: Whether the handler uses type-hinted parameters
             **swaig_fields: Additional SWAIG fields to include in function definition
-            
+
         Returns:
             Self for method chaining
         """
@@ -58,6 +60,7 @@ class ToolMixin:
             fillers=fillers,
             webhook_url=webhook_url,
             required=required,
+            is_typed_handler=is_typed_handler,
             **swaig_fields
         )
         return self
