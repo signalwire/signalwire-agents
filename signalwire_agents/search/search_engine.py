@@ -9,8 +9,9 @@ See LICENSE file in the project root for full license information.
 
 import sqlite3
 import json
-import logging
 from typing import List, Dict, Any, Optional, Union
+
+from signalwire_agents.core.logging_config import get_logger
 
 try:
     import numpy as np
@@ -21,7 +22,7 @@ except ImportError:
     cosine_similarity = None
     NDArray = Any  # Fallback type for when numpy is not available
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class SearchEngine:
     """Hybrid search engine for vector and keyword search"""

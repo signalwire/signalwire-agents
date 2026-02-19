@@ -80,7 +80,7 @@ class TestDateTimeSkillInit:
     def test_logger_created(self):
         skill = DateTimeSkill(agent=Mock())
         assert skill.logger is not None
-        assert skill.logger.name == "skill.datetime"
+        assert skill.logger.name == "signalwire_agents.skills.datetime"
 
     def test_swaig_fields_extracted_from_params(self):
         params = {"swaig_fields": {"meta_data": {"x": 1}}}

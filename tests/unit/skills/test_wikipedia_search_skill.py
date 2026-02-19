@@ -130,7 +130,7 @@ class TestWikipediaSearchSkillInit:
 
     def test_init_logger_name(self):
         skill = _make_skill()
-        assert skill.logger.name == "skill.wikipedia_search"
+        assert skill.logger.name == "signalwire_agents.skills.wikipedia_search"
 
 
 # ===========================================================================

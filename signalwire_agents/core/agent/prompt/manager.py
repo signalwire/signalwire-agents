@@ -11,9 +11,10 @@ See LICENSE file in the project root for full license information.
 
 from typing import Dict, Any, Optional, List, Union
 import inspect
-import logging
 
-logger = logging.getLogger(__name__)
+from signalwire_agents.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class PromptManager:

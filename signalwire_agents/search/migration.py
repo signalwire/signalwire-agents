@@ -9,8 +9,9 @@ See LICENSE file in the project root for full license information.
 
 import sqlite3
 import json
-import logging
 from typing import Dict, Any, Optional, List
+
+from signalwire_agents.core.logging_config import get_logger
 from pathlib import Path
 from datetime import datetime
 
@@ -19,7 +20,7 @@ try:
 except ImportError:
     np = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchIndexMigrator:

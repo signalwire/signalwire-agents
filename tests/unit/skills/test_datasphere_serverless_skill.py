@@ -245,7 +245,7 @@ class TestDataSphereServerlessSkillInit:
         """Test that init creates a logger with the skill name"""
         skill, _ = _create_skill()
         assert skill.logger is not None
-        assert skill.logger.name == "skill.datasphere_serverless"
+        assert skill.logger.name == "signalwire_agents.skills.datasphere_serverless"
 
     def test_init_extracts_swaig_fields(self):
         """Test that swaig_fields are extracted and removed from params"""

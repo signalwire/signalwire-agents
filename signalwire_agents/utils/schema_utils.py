@@ -17,10 +17,11 @@ Uses jsonschema-rs for full JSON Schema validation with type checking.
 
 import os
 import json
-import logging
 from typing import Dict, Any, List, Optional, Tuple
 
 import jsonschema_rs
+
+from signalwire_agents.core.logging_config import get_logger
 
 
 class SchemaValidationError(Exception):
@@ -33,34 +34,8 @@ class SchemaValidationError(Exception):
         super().__init__(message)
 
 
-try:
-    import structlog
-    # Ensure structlog is configured
-    if not structlog.is_configured():
-        structlog.configure(
-            processors=[
-                structlog.stdlib.filter_by_level,
-                structlog.stdlib.add_logger_name,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-                structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-                structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
-                structlog.processors.UnicodeDecoder(),
-                structlog.dev.ConsoleRenderer()
-            ],
-            context_class=dict,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            wrapper_class=structlog.stdlib.BoundLogger,
-            cache_logger_on_first_use=True,
-        )
-except ImportError:
-    raise ImportError(
-        "structlog is required. Install it with: pip install structlog"
-    )
-
 # Create a logger
-logger = structlog.get_logger("schema_utils")
+logger = get_logger("signalwire_agents.utils.schema_utils")
 
 class SchemaUtils:
     """

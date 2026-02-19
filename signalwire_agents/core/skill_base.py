@@ -9,7 +9,8 @@ See LICENSE file in the project root for full license information.
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, TYPE_CHECKING, Optional
-import logging
+
+from signalwire_agents.core.logging_config import get_logger
 
 if TYPE_CHECKING:
     from signalwire_agents.core.agent_base import AgentBase
@@ -36,7 +37,7 @@ class SkillBase(ABC):
             
         self.agent = agent
         self.params = params or {}
-        self.logger = logging.getLogger(f"skill.{self.SKILL_NAME}")
+        self.logger = get_logger(f"signalwire_agents.skills.{self.SKILL_NAME}")
         
         # Extract swaig_fields from params for merging into tool definitions
         self.swaig_fields = self.params.pop('swaig_fields', {})

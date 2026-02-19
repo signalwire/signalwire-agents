@@ -86,7 +86,7 @@ class TestJokeSkillInit:
     def test_logger_created(self):
         skill = JokeSkill(agent=Mock())
         assert skill.logger is not None
-        assert skill.logger.name == "skill.joke"
+        assert skill.logger.name == "signalwire_agents.skills.joke"
 
     def test_swaig_fields_extracted_from_params(self):
         params = {"swaig_fields": {"meta_data": {"x": 1}}, "api_key": "k"}

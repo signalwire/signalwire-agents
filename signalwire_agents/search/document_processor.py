@@ -10,7 +10,6 @@ See LICENSE file in the project root for full license information.
 import re
 import hashlib
 import json
-import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -68,8 +67,9 @@ except ImportError:
     magic = None
 
 from .query_processor import preprocess_document_content
+from signalwire_agents.core.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class DocumentProcessor:
     """Enhanced document processor with smart chunking capabilities"""

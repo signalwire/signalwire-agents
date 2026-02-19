@@ -20,46 +20,17 @@ This uses the refactored AgentBase class that internally uses SWMLService.
 
 from datetime import datetime
 import os
-import logging
 import sys
 import json
 import argparse
 import fastapi
 
-# Import structlog for proper structured logging
-import structlog
-
 from signalwire_agents import AgentBase
 from signalwire_agents.core.function_result import SwaigFunctionResult
+from signalwire_agents.core.logging_config import get_logger
 
-# Configure structlog
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
-# Set up the root logger with structlog
-logging.basicConfig(
-    format="%(message)s",
-    stream=sys.stdout,
-    level=logging.INFO,
-)
-
-# Create structured logger
-logger = structlog.get_logger("simple_agent")
+# Create structured logger using the SDK's centralized logging
+logger = get_logger("signalwire_agents.examples.simple_agent")
 
 class SimpleAgent(AgentBase):
     """

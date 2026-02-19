@@ -9,14 +9,14 @@ See LICENSE file in the project root for full license information.
 
 import json
 import requests
-import logging
 from typing import List, Dict, Any, Optional
 from requests.auth import HTTPBasicAuth
 
 from signalwire_agents.core.skill_base import SkillBase
 from signalwire_agents.core.function_result import SwaigFunctionResult
+from signalwire_agents.core.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MCPGatewaySkill(SkillBase):

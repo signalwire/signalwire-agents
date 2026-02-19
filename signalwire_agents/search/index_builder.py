@@ -11,7 +11,6 @@ import os
 import sqlite3
 import json
 import hashlib
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -29,8 +28,9 @@ except ImportError:
 
 from .document_processor import DocumentProcessor
 from .query_processor import preprocess_document_content
+from signalwire_agents.core.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class IndexBuilder:
     """Build searchable indexes from document directories"""

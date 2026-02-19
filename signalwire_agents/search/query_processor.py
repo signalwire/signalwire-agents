@@ -13,10 +13,10 @@ import re
 from typing import Dict, Any, List, Optional
 from nltk.corpus import wordnet as wn
 from nltk.stem import PorterStemmer
-import logging
 
-# Configure logging
-logger = logging.getLogger(__name__)
+from signalwire_agents.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Global flag to track if we've already warned about spaCy
 _spacy_warning_shown = False

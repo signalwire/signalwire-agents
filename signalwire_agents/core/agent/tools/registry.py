@@ -11,11 +11,11 @@ See LICENSE file in the project root for full license information.
 
 from typing import Dict, Any, Optional, List, Callable, Union
 import inspect
-import logging
 
 from signalwire_agents.core.swaig_function import SWAIGFunction
+from signalwire_agents.core.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ToolRegistry:

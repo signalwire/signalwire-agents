@@ -97,7 +97,7 @@ class TestWeatherApiSkillInit:
     def test_logger_created(self):
         skill = _make_skill()
         assert skill.logger is not None
-        assert skill.logger.name == "skill.weather_api"
+        assert skill.logger.name == "signalwire_agents.skills.weather_api"
 
     def test_swaig_fields_extracted_from_params(self):
         params = {"swaig_fields": {"meta_data": {"x": 1}}, "api_key": "key"}

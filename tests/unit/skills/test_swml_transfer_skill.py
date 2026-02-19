@@ -101,7 +101,7 @@ class TestSWMLTransferSkillInit:
     def test_logger_created(self):
         skill = SWMLTransferSkill(agent=Mock())
         assert skill.logger is not None
-        assert skill.logger.name == "skill.swml_transfer"
+        assert skill.logger.name == "signalwire_agents.skills.swml_transfer"
 
     def test_swaig_fields_extracted_from_params(self):
         params = {"swaig_fields": {"meta_data": {"x": 1}}, "transfers": {}}

@@ -111,7 +111,7 @@ class TestPlayBackgroundFileSkillInit:
     def test_logger_created(self):
         skill = _make_skill()
         assert skill.logger is not None
-        assert skill.logger.name == "skill.play_background_file"
+        assert skill.logger.name == "signalwire_agents.skills.play_background_file"
 
     def test_swaig_fields_extracted_from_params(self):
         skill = _make_skill({"swaig_fields": {"meta_data": {"x": 1}}})

@@ -8,8 +8,9 @@ See LICENSE file in the project root for full license information.
 """
 
 import json
-import logging
 from typing import List, Dict, Any, Optional
+
+from signalwire_agents.core.logging_config import get_logger
 from datetime import datetime
 
 try:
@@ -27,7 +28,7 @@ try:
 except ImportError:
     np = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PgVectorBackend:

@@ -90,7 +90,7 @@ class TestWebSearchSkillInit:
     def test_logger_created(self):
         skill = WebSearchSkill(agent=Mock())
         assert skill.logger is not None
-        assert skill.logger.name == "skill.web_search"
+        assert skill.logger.name == "signalwire_agents.skills.web_search"
 
     def test_swaig_fields_extracted_from_params(self):
         params = {"swaig_fields": {"meta_data": {"x": 1}}, "api_key": "k"}

@@ -121,6 +121,17 @@ class TestPgVectorBackendInit:
 class TestPgVectorBackendConnect:
     """Test PgVectorBackend _connect method"""
 
+    @pytest.fixture(autouse=True)
+    def _enable_propagation(self):
+        """Ensure logging is configured and propagation is on so caplog works."""
+        from signalwire_agents.core.logging_config import reset_logging_configuration, configure_logging
+        reset_logging_configuration()
+        configure_logging()
+        sw = logging.getLogger("signalwire_agents")
+        sw.propagate = True
+        yield
+        sw.propagate = False
+
     @patch('signalwire_agents.search.pgvector_backend.PGVECTOR_AVAILABLE', True)
     @patch('signalwire_agents.search.pgvector_backend.psycopg2')
     @patch('signalwire_agents.search.pgvector_backend.register_vector')

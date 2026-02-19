@@ -14,15 +14,15 @@ Skill layer:   GoogleMapsSkill  (plug-and-play SWAIG tools)
 """
 
 import json
-import logging
 from typing import List, Dict, Any
 
 import requests
 
 from signalwire_agents.core.skill_base import SkillBase
 from signalwire_agents.core.function_result import SwaigFunctionResult
+from signalwire_agents.core.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Library layer — moved verbatim from taxibooking/google_api.py
