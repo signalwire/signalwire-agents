@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.0.19] - 2026-02-19
+
+### New Features
+- Add full JSON Schema validation with `jsonschema-rs`
+  - `SchemaValidationError` exception on validation failures
+  - Option to disable schema validation
+- Add RPC action methods for cross-call communication
+- Add gather steps for structured data collection in contexts
+- Add `replace` action for step history manipulation
+- Add `add_dynamic_hints()` and `clear_dynamic_hints()` to `SwaigFunctionResult`
+- Add `Context.get_step()` and `ContextBuilder.get_context()`, deep-copy contexts per call
+- Add `remove_step()`, `move_step()`, and `clear_sections()` to Context/Step
+- Add inline content kwargs to `Context.add_step()`
+- Add `skip_prompt` flag to `SkillBase` for suppressing default POM injection
+- Add namespaced `global_data` helpers to `SkillBase`
+- Auto-hide SWAIG functions once gather questions are completed
+
+### New Skills
+- Add `google_maps` skill for address validation and route computation
+- Add `info_gatherer` skill for structured information collection
+- Add `claude_skills` skill for loading Claude Code SKILL.md files
+
+### Bug Fixes
+- Fix ~60 bugs found in comprehensive security and code audit
+- Fix bug with invalid token handling
+- Fix spurious error log when SWAIG function is called with empty raw arguments
+- Fix `set_global_data` to merge without clobbering existing keys
+- Remove deprecated `pkg_resources` usage
+
+### Testing
+- Expand test coverage from 52% to 78% with 1,820 new tests
+- Fix all 145 pre-existing test failures
+
 ## [1.0.18] - 2026-01-26
 
 - Fix `record_call()` default timeouts causing silent recording failures
