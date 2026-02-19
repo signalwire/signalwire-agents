@@ -221,7 +221,9 @@ class WebMixin:
                     return await self._handle_post_prompt_request(request)
                 elif clean_path == "check_for_input":
                     return await self._handle_check_for_input_request(request)
-                
+                elif clean_path == "debug_events":
+                    return await self._handle_debug_events_request(request)
+
                 # Check for custom routing callbacks
                 if hasattr(self, '_routing_callbacks'):
                     for callback_path, callback_fn in self._routing_callbacks.items():
@@ -230,22 +232,22 @@ class WebMixin:
                             # Found a matching callback
                             request.state.callback_path = callback_path
                             return await self._handle_root_request(request)
-                
+
                 # Default: 404
                 return {"error": "Path not found"}
-            
+
             # Include router with prefix (handle root route special case)
             if self.route == "/":
                 app.include_router(router)
             else:
                 app.include_router(router, prefix=self.route)
-            
+
             # Log all app routes for debugging
             self.log.debug("app_routes_registered")
             for route in app.routes:
                 if hasattr(route, "path"):
                     self.log.debug("app_route", path=route.path)
-            
+
             self._app = app
         
         host = host or self.host
@@ -380,6 +382,15 @@ class WebMixin:
             """Handle GET/POST requests to the check_for_input endpoint"""
             return await self._handle_check_for_input_request(request)
         
+        # Debug events endpoint - Both versions
+        @router.get("/debug_events")
+        @router.get("/debug_events/")
+        @router.post("/debug_events")
+        @router.post("/debug_events/")
+        async def handle_debug_events(request: Request):
+            """Handle POST requests delivering debug webhook events"""
+            return await self._handle_debug_events_request(request)
+
         # Register callback routes for routing callbacks if available
         if hasattr(self, '_routing_callbacks') and self._routing_callbacks:
             for callback_path, callback_fn in self._routing_callbacks.items():
@@ -975,6 +986,69 @@ class WebMixin:
                 media_type="application/json"
             )
     
+    async def _handle_debug_events_request(self, request: Request):
+        """Handle POST requests delivering debug webhook events from the AI module"""
+        req_log = self.log.bind(
+            endpoint="debug_events",
+            method=request.method,
+            path=request.url.path
+        )
+
+        req_log.debug("endpoint_called")
+
+        try:
+            # Check auth
+            if not self._check_basic_auth(request):
+                req_log.warning("unauthorized_access_attempt")
+                return Response(
+                    content=json.dumps({"error": "Unauthorized"}),
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Basic"},
+                    media_type="application/json"
+                )
+
+            if request.method != "POST":
+                return Response(
+                    content=json.dumps({"error": "POST required"}),
+                    status_code=405,
+                    media_type="application/json"
+                )
+
+            try:
+                body = await request.json()
+            except Exception as e:
+                req_log.error("error_parsing_request_body", error=str(e))
+                return {"status": "error", "message": "invalid JSON"}
+
+            event_type = body.get("label", "unknown")
+            call_id = body.get("call_id")
+
+            if call_id:
+                req_log = req_log.bind(call_id=call_id)
+
+            # Default behaviour: structured log
+            req_log.info("debug_event", event_type=event_type, data=body)
+
+            # User callback if registered
+            import asyncio
+            handler = getattr(self, '_debug_event_handler', None)
+            if handler:
+                try:
+                    result = handler(event_type, body)
+                    if asyncio.iscoroutine(result):
+                        await result
+                except Exception as e:
+                    req_log.error("debug_event_handler_error", error=str(e))
+
+            return {"status": "ok"}
+        except Exception as e:
+            req_log.error("request_failed", error=str(e))
+            return Response(
+                content=json.dumps({"error": str(e)}),
+                status_code=500,
+                media_type="application/json"
+            )
+
     def on_request(self, request_data: Optional[dict] = None, callback_path: Optional[str] = None) -> Optional[dict]:
         """
         Called when SWML is requested, with request data when available

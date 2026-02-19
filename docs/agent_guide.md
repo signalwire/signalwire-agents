@@ -1809,6 +1809,62 @@ Dynamic agent configuration is a powerful feature that enables sophisticated, mu
 
 ## Advanced Features
 
+### Debug Events
+
+The debug events system provides real-time visibility into what the AI module is doing during a call. When enabled, the module POSTs structured JSON events to your agent throughout the call lifecycle — session start/end, barge interruptions, LLM errors, step changes, and more.
+
+#### Basic Setup
+
+```python
+agent = AgentBase("my_agent")
+agent.enable_debug_events()  # That's it — events are auto-logged
+agent.serve()
+```
+
+With just `enable_debug_events()`, every debug event is logged through the agent's structured logger. No other configuration is needed — the SDK automatically:
+- Registers a `/debug_events` endpoint on the agent
+- Sets `debug_webhook_url` and `debug_webhook_level` in the SWML params
+- Logs each incoming event with its type and payload
+
+#### Custom Event Handler
+
+To act on specific events (alerting, metrics, custom logging), register a handler:
+
+```python
+agent = AgentBase("my_agent")
+agent.enable_debug_events()
+
+@agent.on_debug_event
+def handle(event_type, data):
+    call_id = data.get("call_id")
+
+    if event_type == "barge":
+        print(f"[{call_id}] Caller interrupted after {data.get('barge_elapsed_ms')}ms")
+
+    elif event_type == "llm_error":
+        print(f"[{call_id}] LLM error: {data.get('event')}")
+        alert_ops_team(data)
+
+    elif event_type == "session_end":
+        duration = data.get("duration_ms", 0) / 1000
+        print(f"[{call_id}] Call ended after {duration:.1f}s — reason: {data.get('reason')}")
+
+agent.serve()
+```
+
+The handler is called for every event in addition to the default structured logging.
+
+#### Verbosity Levels
+
+- **Level 1** (default): High-level events — session start/end, barge, errors, step changes, hold, filler, gather flow, action processing
+- **Level 2+**: Adds high-volume events — every LLM request/response, conversation history additions
+
+```python
+agent.enable_debug_events(level=2)  # Include LLM request/response events
+```
+
+For the complete list of event types and their payloads, see the [API Reference](signalwire_agents_api_reference.md#debug-events).
+
 ### Session Lifecycle Hooks
 
 SignalWire provides special SWAIG functions that are automatically called at specific points during a voice session's lifecycle. These hooks enable you to perform initialization tasks when a call starts and cleanup tasks when a call ends.
@@ -2613,6 +2669,7 @@ The SDK provides several endpoints for different purposes:
 - Post-prompt endpoint (`/post_prompt`): Processes conversation summaries
 - Check-for-input endpoint (`/check_for_input`): Supports checking for new input from external systems
 - Debug endpoint (`/debug`): Serves the SWML document with debug headers
+- Debug events endpoint (`/debug_events`): Receives real-time debug events from the AI module (see [Debug Events](#debug-events))
 - SIP routing endpoint (configurable, default `/sip`): Handles SIP routing requests
 
 ## Testing

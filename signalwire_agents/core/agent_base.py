@@ -272,6 +272,11 @@ class AgentBase(
         # Initialize SWAIG query params for dynamic config
         self._swaig_query_params = {}
 
+        # Debug events
+        self._debug_events_enabled = False
+        self._debug_events_level = 1
+        self._debug_event_handler = None
+
         # Initialize verb insertion points for call flow customization
         self._pre_answer_verbs = []    # Verbs to run before answer (e.g., ringback, screening)
         self._answer_config = {}        # Configuration for the answer verb
@@ -425,6 +430,34 @@ class AgentBase(
         """
         # Default implementation does nothing
         pass
+
+    def on_debug_event(self, handler: Callable) -> Callable:
+        """
+        Register a handler for debug webhook events.
+
+        Use as a decorator to receive real-time debug events from the AI module
+        during calls. Requires enable_debug_events() to be called first.
+
+        The handler receives:
+            event_type (str): The event label (e.g. "barge", "llm_error", "session_start")
+            data (dict): The full event payload including call_id, label, and event-specific fields
+
+        The handler may be sync or async.
+
+        Args:
+            handler: Callback function with signature (event_type: str, data: dict)
+
+        Returns:
+            The handler function (unchanged), for use as a decorator
+
+        Example:
+            @agent.on_debug_event
+            def handle(event_type, data):
+                if event_type == "barge":
+                    print(f"Barge detected: {data.get('barge_elapsed_ms')}ms")
+        """
+        self._debug_event_handler = handler
+        return handler
 
     # ==================== Call Flow Verb Insertion Methods ====================
 
@@ -1017,6 +1050,12 @@ class AgentBase(
                 if agent_to_use._pronounce:
                     ai_config["pronounce"] = agent_to_use._pronounce
                 
+                # Auto-wire debug webhook URL into params if enabled
+                if getattr(agent_to_use, '_debug_events_enabled', False):
+                    debug_query_params = agent_to_use._swaig_query_params.copy() if agent_to_use._swaig_query_params else {}
+                    agent_to_use._params["debug_webhook_url"] = agent_to_use._build_webhook_url("debug_events", debug_query_params)
+                    agent_to_use._params["debug_webhook_level"] = getattr(agent_to_use, '_debug_events_level', 1)
+
                 # Add params if any
                 if agent_to_use._params:
                     ai_config["params"] = agent_to_use._params
@@ -1240,6 +1279,11 @@ class AgentBase(
         ephemeral_agent._pronounce = copy.deepcopy(self._pronounce)
         ephemeral_agent._global_data = copy.deepcopy(self._global_data)
         ephemeral_agent._function_includes = copy.deepcopy(self._function_includes)
+
+        # Copy debug events settings
+        ephemeral_agent._debug_events_enabled = self._debug_events_enabled
+        ephemeral_agent._debug_events_level = self._debug_events_level
+        ephemeral_agent._debug_event_handler = self._debug_event_handler
 
         # Deep copy verb insertion points for call flow customization
         ephemeral_agent._pre_answer_verbs = copy.deepcopy(self._pre_answer_verbs)

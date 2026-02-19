@@ -936,6 +936,56 @@ Clear all SWAIG query parameters.
 agent.clear_swaig_query_params()
 ```
 
+### Debug Events
+
+##### `enable_debug_events`
+
+```python
+def enable_debug_events(level: int = 1) -> AgentBase
+```
+Enable the debug event webhook for this agent. When enabled, the AI module will POST real-time debug events to a `/debug_events` endpoint on this agent during calls. Events are automatically logged via the agent's structured logger and can optionally be handled with a custom callback via `on_debug_event()`.
+
+**Parameters:**
+- `level` (int): Debug event verbosity level. `1` = high-level events (barge, errors, session start/end, step changes). `2+` = adds high-volume events (every LLM request/response, conversation_add). Default: `1`
+
+**Usage:**
+```python
+agent.enable_debug_events()        # level 1 (default)
+agent.enable_debug_events(level=2) # include high-volume events
+```
+
+**How it works:**
+- Registers a `/debug_events` POST endpoint on the agent's HTTP server
+- Auto-sets `debug_webhook_url` and `debug_webhook_level` in the SWML `params` during rendering
+- The URL is built automatically using the same auth/proxy logic as other webhook URLs
+- No manual URL configuration needed
+
+**Event types at level 1:**
+
+| Event label | Description |
+|-------------|-------------|
+| `session_start` | AI session started (model, TTS engine, voice, language) |
+| `session_end` | AI session ended (reason, duration, token counts) |
+| `barge` | User interrupted AI speech (barge type, elapsed ms) |
+| `step_change` | Conversation step changed |
+| `context_change` | Conversation context changed |
+| `llm_error` | LLM error (fatal, retry, max_retries) |
+| `voice_error` | TTS voice configuration or runtime error |
+| `hold` | Call placed on hold or taken off hold |
+| `filler` | Filler phrase spoken (thinking or function filler) |
+| `consolidation` | Token consolidation triggered |
+| `process_action` | Webhook action being processed |
+| `gather_start` | Gather flow started |
+| `gather_complete` | Gather flow completed |
+
+**Additional events at level 2+:**
+
+| Event label | Description |
+|-------------|-------------|
+| `llm_request` | LLM API request initiated (input tokens) |
+| `llm_response` | LLM API response received (duration, output tokens) |
+| `conversation_add` | Entry added to conversation history |
+
 ### Call Flow Verb Insertion
 
 These methods allow you to customize the SWML call flow by inserting verbs at different stages of the call lifecycle.
@@ -1200,12 +1250,56 @@ class MyAgent(AgentBase):
             print(f"Raw summary: {raw_text}")
 ```
 
+##### `on_debug_event`
+
+```python
+def on_debug_event(handler: Callable) -> Callable
+```
+Register a handler for debug webhook events. Use as a decorator. Requires `enable_debug_events()` to be called first.
+
+The handler receives:
+- `event_type` (str): The event label (e.g. `"barge"`, `"llm_error"`, `"session_start"`)
+- `data` (dict): The full event payload including `call_id`, `label`, and event-specific fields
+
+The handler may be sync or async.
+
+**Usage (decorator style):**
+```python
+agent = AgentBase("my_agent")
+agent.enable_debug_events()
+
+@agent.on_debug_event
+def handle_debug(event_type, data):
+    call_id = data.get("call_id")
+    if event_type == "llm_error":
+        print(f"LLM error on call {call_id}: {data.get('event')}")
+    elif event_type == "barge":
+        print(f"Barge after {data.get('barge_elapsed_ms')}ms")
+    elif event_type == "session_end":
+        print(f"Call ended: {data.get('reason')}, duration: {data.get('duration_ms')}ms")
+```
+
+**Usage (subclass style):**
+```python
+class MyAgent(AgentBase):
+    def __init__(self):
+        super().__init__(name="debug-agent", route="/agent")
+        self.enable_debug_events(level=2)
+        self.on_debug_event(self.handle_debug)
+
+    def handle_debug(self, event_type, data):
+        if event_type == "llm_error":
+            self.alert_ops_team(data)
+```
+
+> **Note:** Even without registering a handler, all debug events are automatically logged via the agent's structured logger when `enable_debug_events()` is called.
+
 ##### `on_function_call`
 
 ```python
 def on_function_call(
-    name: str, 
-    args: Dict[str, Any], 
+    name: str,
+    args: Dict[str, Any],
     raw_data: Optional[Dict[str, Any]] = None
 ) -> Any
 ```

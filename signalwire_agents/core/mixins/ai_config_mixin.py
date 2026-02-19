@@ -331,6 +331,36 @@ class AIConfigMixin:
             self._internal_fillers[function_name][language_code] = fillers
         return self
 
+    def enable_debug_events(self, level: int = 1) -> 'AgentBase':
+        """
+        Enable debug event webhook for this agent.
+
+        When enabled, the AI module will POST real-time debug events to a
+        /debug_events endpoint on this agent during calls. Events are
+        automatically logged via the agent's structured logger, and can
+        optionally be handled with a custom callback via on_debug_event().
+
+        Args:
+            level: Debug event verbosity level.
+                   1 = high-level events (barge, errors, session start/end, step changes)
+                   2+ = adds high-volume events (every LLM request/response, conversation_add)
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            agent = AgentBase("my_agent")
+            agent.enable_debug_events(level=1)
+
+            @agent.on_debug_event
+            def handle_debug(event_type, data):
+                if event_type == "llm_error":
+                    alert_ops_team(data)
+        """
+        self._debug_events_enabled = True
+        self._debug_events_level = level
+        return self
+
     def add_function_include(self, url: str, functions: List[str], meta_data: Optional[Dict[str, Any]] = None) -> 'AgentBase':
         """
         Add a remote function include to the SWAIG configuration
