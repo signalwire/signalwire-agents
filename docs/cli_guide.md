@@ -1,6 +1,6 @@
-# SWAIG CLI Testing Tool Guide
+# CLI Guide
 
-A comprehensive command-line tool for testing SignalWire AI Agents SWAIG functions and SWML generation locally with complete environment simulation and real API execution.
+This guide covers the command-line tools included with the SignalWire Agents SDK.
 
 ## Overview
 
@@ -2136,14 +2136,112 @@ This demonstrates both:
 5. **Clear environment variables** between platform tests to avoid conflicts
 6. **Use `--verbose`** to debug environment setup and URL generation
 
-## Conclusion
+---
 
-The `swaig-test` tool provides a comprehensive testing experience with:
+## sw-search - Build and Query Search Indexes
 
-- **Automatic agent discovery** and selection
-- **Intuitive `--exec` CLI syntax** for easier function testing
-- **Complete DataMap simulation** with real API execution
-- **Multi-agent support** with simple selection
-- **Comprehensive SWML testing** with realistic fake data
+Build local search indexes from document collections for use with the native vector search skill.
 
-The tool provides flexible interfaces for development and testing of SignalWire AI Agents.
+```bash
+sw-search <source_dir> [options]
+```
+
+### Building Indexes
+
+**Arguments:**
+- `source_dir` - Directory containing documents to index
+
+**Options:**
+- `--output FILE` - Output .swsearch file (default: `<source_dir>.swsearch`)
+- `--chunk-size SIZE` - Chunk size in words (default: 50)
+- `--chunk-overlap SIZE` - Overlap between chunks in words (default: 10)
+- `--file-types TYPES` - Comma-separated file extensions (default: md,txt,rst)
+- `--exclude PATTERNS` - Comma-separated glob patterns to exclude
+- `--model MODEL` - Embedding model name (default: sentence-transformers/all-mpnet-base-v2)
+- `--tags TAGS` - Comma-separated tags to add to all chunks
+- `--verbose` - Show detailed progress information
+- `--validate` - Validate the created index after building
+- `--chunking-strategy STRATEGY` - Chunking strategy: sentence, sliding, paragraph, page, semantic, topic, qa (default: sentence)
+- `--max-sentences-per-chunk NUM` - Maximum sentences per chunk (default: 3)
+- `--semantic-threshold FLOAT` - Threshold for semantic chunking (default: 0.5)
+- `--topic-threshold FLOAT` - Threshold for topic-based chunking (default: 0.3)
+- `--index-nlp-backend BACKEND` - NLP backend for processing (default: basic)
+- `--split-newlines` - Split on newlines in addition to sentence boundaries
+- `--languages LANGS` - Comma-separated language codes (default: en)
+
+### Validating Indexes
+
+```bash
+sw-search validate <index_file> [--verbose]
+```
+
+### Searching Indexes
+
+```bash
+sw-search search <index_file> <query> [options]
+```
+
+**Options:**
+- `--count COUNT` - Number of results to return (default: 5)
+- `--distance-threshold FLOAT` - Minimum similarity score (default: 0.0)
+- `--tags TAGS` - Comma-separated tags to filter by
+- `--verbose` - Show detailed information
+- `--json` - Output results as JSON
+- `--no-content` - Hide content in results (show only metadata)
+- `--query-nlp-backend BACKEND` - NLP backend for query processing
+
+### Remote Search
+
+```bash
+sw-search remote <endpoint> <query> [options]
+```
+
+**Options:**
+- `--index-name NAME` - Name of the index to search (required)
+- `--count COUNT` - Number of results to return (default: 5)
+- `--distance-threshold FLOAT` - Minimum similarity score (default: 0.0)
+- `--tags TAGS` - Comma-separated tags to filter by
+- `--json` - Output results as JSON
+- `--timeout SECONDS` - Request timeout in seconds (default: 30)
+
+### Examples
+
+```bash
+# Build from a directory
+sw-search docs --output docs.swsearch
+
+# Build from multiple sources
+sw-search docs examples README.md --output comprehensive.swsearch
+
+# Validate an index
+sw-search validate docs.swsearch
+
+# Search within an index
+sw-search search docs.swsearch "how to create an agent"
+sw-search search docs.swsearch "API reference" --count 3 --verbose
+
+# Search remote index via API
+sw-search remote http://localhost:8001/search "query" --index-name docs
+```
+
+For complete documentation on the search system, see [Search Overview](search_overview.md).
+
+---
+
+## Installation
+
+All CLI tools are included when you install the SignalWire Agents SDK:
+
+```bash
+pip install signalwire-agents
+
+# For search functionality
+pip install signalwire-agents[search]
+```
+
+## Getting Help
+
+```bash
+sw-search --help
+swaig-test --help
+```

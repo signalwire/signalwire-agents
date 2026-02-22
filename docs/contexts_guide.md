@@ -526,6 +526,258 @@ authenticated.add_step("full_access") \
     # No set_functions() call = all functions available
 ```
 
+## Step Modes
+
+Steps can operate in two modes:
+
+- **Normal Mode**: The step's text is injected as instructions. The AI follows those instructions, and the step completes based on criteria you define or by navigating to the next step.
+- **Gather Info Mode**: The step collects structured information from the caller one question at a time, with zero tool artifacts in the LLM conversation history. Once all questions are answered, the step either auto-advances or returns to normal mode.
+
+### Normal Mode
+
+In normal mode, the step's text is injected as a system message with this structure:
+
+```
+[context prompt if any]
+
+## Instructions to complete the Current Step
+[your step text]
+
+Do not mention to the user that you are following steps, or the names of the steps.
+Do not ask the user any questions not explicitly related to these instructions.
+Do not end the conversation when this step is complete.
+[step criteria if any]
+```
+
+The step text supports `${variable}` expansion from `global_data` and prompt variables.
+
+Step criteria tell the AI when a step is done. The AI evaluates the criteria and calls `next_step` when they're met:
+
+```python
+ctx.add_step("verify") \
+    .set_text("Verify the caller's identity.") \
+    .set_step_criteria(
+        "The caller has provided their account number "
+        "AND confirmed their date of birth."
+    ) \
+    .set_valid_steps(["handle_request"])
+```
+
+### Gather Info Mode
+
+When an AI agent needs to collect structured information (name, address, account number, etc.), the traditional approach uses SWAIG functions -- the AI calls a function for each piece of data, which creates `tool_call` and `tool_result` entries in the conversation history. These tool artifacts confuse some models (especially reasoning models at low effort settings), waste tokens, and can cause the model to lose track of where it is in the collection flow.
+
+Gather info mode solves this by using **dynamic step instruction re-injection**. Questions are presented one at a time by swapping out the system instruction, and answers are recorded via an internal function that routes through the system-log path -- producing **zero** tool_call/tool_result entries in the LLM-visible conversation history.
+
+#### How It Works Internally
+
+1. **Step entry**: When the AI enters a step with `gather_info`, the system switches to gather questioning mode.
+2. **Preamble injection** (first question only): If the gather has a `prompt`, it's injected as a **persistent** system message for the entire gather sequence.
+3. **Question injection**: A minimal system instruction is injected as a **clearable** message containing the question text, type hint, confirmation instructions, and any per-question prompt text.
+4. **Tool lockdown**: During gather mode, **all normal functions are hidden** -- only `gather_submit` (an internal function) and any per-question `functions` are visible.
+5. **Answer submission**: When the AI calls `gather_submit`, the answer is written to `global_data` and the next question's instruction is re-injected. The `gather_submit` call routes through the system-log path, so the LLM never sees tool_call/tool_result for it.
+6. **Completion**: When all questions are answered, either:
+   - The step auto-advances to the next step (`completion_action="next_step"`)
+   - The step returns to normal mode with the regular step text, plus a note that gathered data is available
+
+Here's what the LLM conversation history looks like during gather mode:
+
+```
+[system] You are a travel assistant. You need to collect some details.    <- persistent preamble
+[system] Ask the user: "What is your first name?"                        <- clearable, changes per question
+         When you have the answer, call the gather_submit function.
+         Do not ask the user any other questions.
+
+[assistant] Hi there! I'm your travel assistant. What's your first name?
+[user] Tony.
+                                                        <- gather_submit recorded via system-log (invisible)
+[system] Ask the user: "What is your last name?"        <- previous question instruction replaced
+         ...
+
+[assistant] Great, Tony! And your last name?
+[user] Smith.
+```
+
+No tool_call/tool_result entries anywhere. Clean conversation history.
+
+#### Basic Gather Example
+
+```python
+ctx.add_step("collect_info") \
+    .set_text("Help the caller with their request.") \
+    .set_gather_info(output_key="caller_info") \
+    .add_gather_question("first_name", "What is your first name?") \
+    .add_gather_question("last_name", "What is your last name?") \
+    .add_gather_question("email", "What is your email address?")
+```
+
+This collects three pieces of information, stores them under `caller_info` in global_data, then returns to normal step mode with the step text "Help the caller with their request."
+
+#### The Gather Prompt (Preamble)
+
+The gather `prompt` is injected once as a persistent message when the first question begins:
+
+```python
+ctx.add_step("collect_profile") \
+    .set_text("Use the profile to recommend products.") \
+    .set_gather_info(
+        output_key="profile",
+        prompt="Welcome the caller and introduce yourself as a product specialist. "
+               "Explain that you need to ask a few quick questions to find the "
+               "best products for them. Be friendly and conversational."
+    ) \
+    .add_gather_question("name", "What is your name?") \
+    .add_gather_question("budget", "What is your budget?", type="number")
+```
+
+Without a gather `prompt`, the AI jumps straight into asking the first question with no introduction.
+
+#### Question Types
+
+Each question has a `type` that controls the JSON schema of the `answer` parameter in `gather_submit`:
+
+```python
+# String (default) - free text
+.add_gather_question("name", "What is your name?", type="string")
+
+# Integer - whole numbers
+.add_gather_question("age", "How old are you?", type="integer")
+
+# Number - decimal values
+.add_gather_question("budget", "What is your budget in dollars?", type="number")
+
+# Boolean - yes/no questions
+.add_gather_question("has_passport", "Do you have a valid passport?", type="boolean")
+```
+
+#### Confirmation Flow
+
+When `confirm=True`, the AI must read the answer back to the caller and get explicit confirmation before submitting:
+
+```python
+.add_gather_question(
+    "last_name",
+    "What is your last name?",
+    type="string",
+    confirm=True
+)
+```
+
+How it works:
+
+1. The question instruction includes: "You MUST confirm the answer with the user before submitting."
+2. The `gather_submit` function schema includes a required `confirmed_by_user` enum parameter.
+3. If the AI calls `gather_submit` with `confirmed_by_user` set to `"false"`, the function rejects the submission and tells the AI to confirm with the user first.
+4. The AI must read back the answer, get the user's "yes", then call `gather_submit` again with `confirmed_by_user: "true"`.
+
+#### Per-Question Instructions and Functions
+
+Each question can have additional instructions and specific functions made available:
+
+```python
+.add_gather_question(
+    "home_airport",
+    "What is your home airport or nearest major city for departure?",
+    type="string",
+    confirm=True,
+    prompt="Use the resolve_airport function to validate the airport code "
+           "before submitting. If the airport is ambiguous, clarify with the user.",
+    functions=["resolve_airport"]
+)
+```
+
+The `resolve_airport` function must already be registered on the agent. The `functions` array activates those functions for this question only, alongside `gather_submit`. When the next question begins, they're deactivated again.
+
+#### Output Storage
+
+Answers are stored in `global_data`, which is available in prompt variable expansion via `${key}`:
+
+```python
+# Store under a namespace
+.set_gather_info(output_key="profile")
+# Results in: global_data.profile.first_name, global_data.profile.last_name, etc.
+# Accessible in prompts as: ${profile}
+
+# Store at top level (no output_key)
+.set_gather_info()
+# Results in: global_data.first_name, global_data.last_name, etc.
+```
+
+After gathering, `global_data` is refreshed so subsequent step prompts can reference the collected values:
+
+```python
+ctx.add_step("plan_trip") \
+    .set_text(
+        "The caller's travel profile is: ${profile}. "
+        "Use their name, budget, and preferences to suggest destinations."
+    )
+```
+
+#### Auto-Advancing After Gather
+
+With `completion_action="next_step"`, the step automatically advances when the last question is answered:
+
+```python
+ctx.add_step("collect_profile") \
+    .set_text("Collect the caller's profile.") \
+    .set_gather_info(
+        output_key="profile",
+        completion_action="next_step",
+        prompt="Welcome the caller. You need to collect a few details."
+    ) \
+    .add_gather_question("name", "What is your name?") \
+    .add_gather_question("email", "What is your email?")
+
+# This step runs immediately after the last question is answered
+ctx.add_step("process") \
+    .set_text("You have the caller's profile in ${profile}. Help them with their request.")
+```
+
+#### Combining Gather with Normal Step Mode
+
+Without `completion_action="next_step"`, the step returns to normal mode after all questions are answered:
+
+```python
+ctx.add_step("intake") \
+    .set_text(
+        "Review the caller's information in ${intake_data}. "
+        "Confirm everything looks correct, then proceed to scheduling."
+    ) \
+    .set_gather_info(output_key="intake_data") \
+    .add_gather_question("name", "What is your name?") \
+    .add_gather_question("dob", "What is your date of birth?") \
+    .add_gather_question("reason", "What is the reason for your visit?") \
+    .set_valid_steps(["schedule"])
+```
+
+Flow:
+1. Gather mode: Questions are asked one at a time
+2. All questions answered -> step switches to normal mode
+3. Step text is injected with `valid_steps` and `step_criteria` restored
+4. The AI follows the normal step instructions using the gathered data
+5. Navigation to `schedule` becomes available
+
+#### Gather Info API Reference
+
+**`set_gather_info()` Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `output_key` | str | None | Key in global_data to store answers under. If None, answers stored at top level. |
+| `completion_action` | str | None | Set to `"next_step"` to auto-advance when all questions are answered. |
+| `prompt` | str | None | Preamble text injected once as a persistent message when entering the gather step. |
+
+**`add_gather_question()` Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `key` | str | required | Key name for storing the answer in global_data |
+| `question` | str | required | The question text presented to the AI |
+| `type` | str | `"string"` | JSON schema type: `"string"`, `"integer"`, `"number"`, `"boolean"` |
+| `confirm` | bool | `False` | If True, AI must confirm answer with user before submitting |
+| `prompt` | str | None | Additional instruction text for this question |
+| `functions` | list | None | Function names to make visible for this question only |
+
 ## Real-World Examples
 
 ### Example 1: Technical Support Troubleshooting
@@ -1095,10 +1347,104 @@ For a complete example of multi-context agents with different personas, see `exa
 
 ---
 
+### Example 4: Travel Profile Agent (Gather Info Mode)
+
+Collects a travel profile with typed questions and confirmation, then recommends destinations:
+
+```python
+from signalwire_agents import AgentBase
+
+class TravelAgent(AgentBase):
+    def __init__(self):
+        super().__init__(name="Travel Agent", route="/travel")
+
+        self.prompt_add_section("Role", "You are a friendly travel booking assistant.")
+
+        contexts = self.define_contexts()
+        ctx = contexts.add_context("default")
+
+        # Step 1: Collect profile (gather mode, auto-advance)
+        ctx.add_step("collect_profile") \
+            .set_text("Collect the caller's travel profile.") \
+            .set_gather_info(
+                output_key="profile",
+                completion_action="next_step",
+                prompt="Welcome the caller and introduce yourself as a travel "
+                       "booking assistant. You need to collect a few details "
+                       "to build their travel profile. Be warm and conversational."
+            ) \
+            .add_gather_question("first_name", "What is your first name?") \
+            .add_gather_question("last_name", "What is your last name?", confirm=True) \
+            .add_gather_question("party_size", "How many people are traveling?", type="integer") \
+            .add_gather_question("budget_per_person", "What is your budget per person?", type="number") \
+            .add_gather_question("has_passport", "Do you have a valid passport?", type="boolean") \
+            .add_gather_question("home_airport", "What is your home airport?", confirm=True)
+
+        # Step 2: Recommend destinations (normal mode)
+        ctx.add_step("plan_trip") \
+            .set_text(
+                "You now have the caller's travel profile in ${profile}. "
+                "Use their name, party size, budget, passport status, and "
+                "home airport to suggest three vacation destinations. "
+                "If they don't have a passport, only suggest domestic destinations."
+            )
+
+        self.add_language(name="English", code="en-US", voice="rime.spore")
+```
+
+### Example 5: Support Ticket Agent (Gather + Triage)
+
+Gathers issue details, then routes to the right team using normal mode navigation:
+
+```python
+from signalwire_agents import AgentBase
+
+class SupportAgent(AgentBase):
+    def __init__(self):
+        super().__init__(name="Support Agent", route="/support")
+
+        self.prompt_add_section("Role", "You are a technical support agent.")
+
+        contexts = self.define_contexts()
+        ctx = contexts.add_context("default")
+
+        # Collect ticket info, then return to normal mode for triage
+        ctx.add_step("intake") \
+            .set_text(
+                "You have the caller's issue details in ${ticket}. "
+                "Based on the category and description, route them to "
+                "the appropriate team."
+            ) \
+            .set_gather_info(
+                output_key="ticket",
+                prompt="Thank the caller for contacting support. "
+                       "You need to collect some details about their issue."
+            ) \
+            .add_gather_question("name", "What is your name?") \
+            .add_gather_question("account_id", "What is your account ID?", confirm=True) \
+            .add_gather_question("category", "Is this about billing, a technical issue, or something else?") \
+            .add_gather_question("description", "Please describe the issue in detail.") \
+            .set_valid_steps(["billing_support", "tech_support", "general_support"])
+
+        ctx.add_step("billing_support") \
+            .set_text("Help the caller with their billing issue. Details: ${ticket}.")
+
+        ctx.add_step("tech_support") \
+            .set_text("Help the caller with their technical issue. Details: ${ticket}.") \
+            .set_functions(["run_diagnostics", "check_service_status"])
+
+        ctx.add_step("general_support") \
+            .set_text("Help the caller with their general inquiry. Details: ${ticket}.")
+
+        self.add_language(name="English", code="en-US", voice="rime.spore")
+```
+
+Note: This example uses gather **without** `completion_action`. After all questions are answered, the step returns to normal mode with `valid_steps` restored. The AI uses the gathered data to decide which support step to route to.
+
 ## Related Documentation
 
-- **[API Reference](signalwire_agents_api_reference.md)** - Complete AgentBase class reference
-- **[SWAIG Function Result Methods](swaig_function_result_methods.md)** - All available result methods including `swml_change_context()` and `swml_change_step()`
+- **[API Reference](api_reference.md)** - Complete AgentBase class reference
+- **[SWAIG Reference](swaig_reference.md)** - All available result methods including `swml_change_context()` and `swml_change_step()`
 - **[Agent Guide](agent_guide.md)** - General agent development guide
 - **[DataMap Guide](datamap_guide.md)** - Serverless function integration
 
@@ -1106,4 +1452,4 @@ For a complete example of multi-context agents with different personas, see `exa
 
 - `examples/contexts_demo.py` - Multi-context agent with personas (Franklin, Rachael, Dwight)
 - `examples/survey_agent_example.py` - Survey workflow with steps
-- `examples/info_gatherer_example.py` - Information gathering workflow 
+- `examples/info_gatherer_example.py` - Information gathering workflow

@@ -855,7 +855,7 @@ python -m signalwire_agents.cli.build_search ./knowledge \
     --verbose
 ```
 
-For complete documentation on the search system, see [Local Search System](search-system.md).
+For complete documentation on the search system, see [Search Overview](search_overview.md).
 
 ### Skill Management
 
@@ -1863,7 +1863,7 @@ The handler is called for every event in addition to the default structured logg
 agent.enable_debug_events(level=2)  # Include LLM request/response events
 ```
 
-For the complete list of event types and their payloads, see the [API Reference](signalwire_agents_api_reference.md#debug-events).
+For the complete list of event types and their payloads, see the [API Reference](api_reference.md#debug-events).
 
 ### Session Lifecycle Hooks
 
@@ -2845,7 +2845,7 @@ swaig-test multi_agent_file.py --agent-class AgentA --simulate-serverless lambda
 swaig-test multi_agent_file.py --agent-class AgentB --simulate-serverless cgi --cgi-host example.com --exec function2
 ```
 
-For more detailed testing documentation, see the [CLI Testing Guide](cli_testing_guide.md).
+For more detailed testing documentation, see the [CLI Guide](cli_guide.md).
 
 ## Examples
 
@@ -3011,10 +3011,10 @@ These examples demonstrate the progression from static to dynamic configuration 
 For more examples, see the `examples` directory in the SignalWire AI Agent SDK repository. 
 
 # Build index from the comprehensive concepts guide
-sw-search docs/signalwire_agents_concepts_guide.md --output concepts.swsearch
+sw-search docs/agent_guide.md --output concepts.swsearch
 
 # Build from multiple sources
-sw-search docs/signalwire_agents_concepts_guide.md examples README.md --output comprehensive.swsearch
+sw-search docs/agent_guide.md examples README.md --output comprehensive.swsearch
 
 # Traditional directory approach with custom settings
 sw-search ./knowledge \

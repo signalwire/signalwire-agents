@@ -529,3 +529,5 @@ from signalwire_agents import AgentBase
 agent = AgentBase(name="my-agent")
 agent.add_skill("weather", {"api_key": "..."})
 agent.add_skill("translate", {"api_key": "..."})
+agent.run()
+```

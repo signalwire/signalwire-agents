@@ -152,7 +152,7 @@ agent.add_skill("native_vector_search", {
 })
 ```
 
-For complete documentation, see [Local Search System](search-system.md).
+For complete documentation, see [Search Overview](search_overview.md).
 
 ### SWML Transfer (`swml_transfer`)
 Transfer calls between agents using pattern matching.

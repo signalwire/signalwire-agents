@@ -643,7 +643,7 @@ def save_answer(args, raw_data):
 - Functions called frequently that would bloat conversation history
 - Situations where tool artifacts confuse the model's reasoning (especially with reasoning models at low effort settings)
 
-**Note:** For structured data collection, consider using [gather_info mode](steps_guide.md#gather-info-mode) instead, which produces zero tool artifacts by design and doesn't require `replace_in_history`.
+**Note:** For structured data collection, consider using [gather_info mode](contexts_guide.md#gather-info-mode) instead, which produces zero tool artifacts by design and doesn't require `replace_in_history`.
 
 ---
 
@@ -782,10 +782,97 @@ The framework now includes **10 virtual helpers total**:
 
 ---
 
+## Post Data Reference
+
+The `post_data` object is the JSON payload sent to SWAIG function handlers. Its structure differs between webhook functions and DataMap functions.
+
+### Base Keys (All Functions)
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `app_name` | string | Name of the AI application |
+| `function` | string | Name of the SWAIG function being called |
+| `call_id` | string | Unique UUID of the current call session |
+| `ai_session_id` | string | Unique UUID of the AI session |
+| `caller_id_name` | string | Caller ID name (if available) |
+| `caller_id_num` | string | Caller ID number (if available) |
+| `channel_active` | boolean | Whether the channel is currently up |
+| `channel_offhook` | boolean | Whether the channel is off-hook |
+| `channel_ready` | boolean | Whether the AI session is ready |
+| `argument` | object | Parsed function arguments |
+| `argument_desc` | object | Function argument schema/description |
+| `purpose` | string | Description of what the function does |
+| `content_type` | string | Always `"text/swaig"` |
+| `version` | string | SWAIG protocol version |
+| `global_data` | object | Application-level global data (when set) |
+| `conversation_id` | string | Conversation identifier (when tracking enabled) |
+| `project_id` | string | SignalWire project ID |
+| `space_id` | string | SignalWire space ID |
+
+### Webhook-Only Keys
+
+These keys are only present for traditional webhook SWAIG functions:
+
+| Key | Type | Description | Present When |
+|-----|------|-------------|--------------|
+| `meta_data_token` | string | Token for metadata access | Function has metadata token |
+| `meta_data` | object | Function-level metadata | Function has metadata token |
+| `SWMLVars` | object | SWML variables | `swaig_post_swml_vars` parameter set |
+| `SWMLCall` | object | SWML call state | `swaig_post_swml_vars` parameter set |
+| `call_log` | array | Processed conversation history | `swaig_post_conversation` is true |
+| `raw_call_log` | array | Raw conversation history | `swaig_post_conversation` is true |
+
+**Metadata scoping**: Functions sharing the same `meta_data_token` share access to the same metadata. If no token is specified, scope defaults to function name/URL.
+
+**Conversation history**: `call_log` may shrink after conversation resets (consolidation), while `raw_call_log` preserves full history. Both include timing data (latency, utterance_latency, audio_latency).
+
+### DataMap-Specific Keys
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `prompt_vars` | object | Template variables built from call context, SWML vars, and global_data |
+| `args` | object | First parsed argument object for easy template access |
+| `input` | object | Copy of entire post_data for variable expansion |
+
+### prompt_vars Contents
+
+| Key | Source | Description |
+|-----|--------|-------------|
+| `call_direction` | Call direction | `"inbound"` or `"outbound"` |
+| `caller_id_name` | Channel variable | Caller's name |
+| `caller_id_number` | Channel variable | Caller's number |
+| `local_date` | System time | Current date in local timezone |
+| `local_time` | System time | Current time with timezone |
+| `time_of_day` | Derived from hour | `"morning"`, `"afternoon"`, or `"evening"` |
+| `supported_languages` | App config | Available languages |
+| `default_language` | App config | Primary language |
+
+All keys from `global_data` are also merged into `prompt_vars`, with global_data taking precedence.
+
+### SWML Parameters Controlling post_data
+
+| Parameter | Type | Default | Purpose |
+|-----------|------|---------|---------|
+| `swaig_allow_swml` | boolean | true | Allow functions to execute SWML actions |
+| `swaig_allow_settings` | boolean | true | Allow functions to modify AI settings |
+| `swaig_post_conversation` | boolean | false | Include conversation history in post_data |
+| `swaig_set_global_data` | boolean | true | Allow functions to modify global_data |
+| `swaig_post_swml_vars` | boolean/array | false | Include SWML variables in post_data |
+
+### Variable Expansion in DataMap
+
+DataMap processing supports template expansion with access to:
+
+- Nested object access via dot notation: `${user.name}`
+- Array access: `${items[0].value}`
+- Encoding functions: `${enc:url:variable}`
+- Built-in functions: `@{strftime %Y-%m-%d}`, `@{expr 2+2}`
+
+---
+
 ## Related Documentation
 
-- **[API Reference](signalwire_agents_api_reference.md)** - Complete AgentBase and SwaigFunctionResult API reference
-- **[SWAIG Actions Reference](swaig_actions_reference.md)** - Low-level JSON action structures
+- **[API Reference](api_reference.md)** - Complete AgentBase and SwaigFunctionResult API reference
 - **[Contexts Guide](contexts_guide.md)** - Using `swml_change_context()` and `swml_change_step()`
 - **[DataMap Guide](datamap_guide.md)** - Using SwaigFunctionResult with DataMap outputs
 - **[Agent Guide](agent_guide.md)** - General agent development guide
@@ -795,4 +882,4 @@ The framework now includes **10 virtual helpers total**:
 - `examples/simple_agent.py` - Basic SWAIG function usage
 - `examples/swaig_features_agent.py` - Advanced SWAIG features with fillers
 - `examples/record_call_example.py` - Recording and tapping calls
-- `examples/room_and_sip_example.py` - Room joining and SIP transfer 
+- `examples/room_and_sip_example.py` - Room joining and SIP transfer

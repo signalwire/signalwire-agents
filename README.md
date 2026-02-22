@@ -874,20 +874,53 @@ swaig-test examples/my_agent.py --simulate-serverless cgi --cgi-host example.com
 - **Environment Files**: Reusable configurations for different stages
 - **Multi-Platform**: Test Lambda, CGI, Cloud Functions, and Azure Functions
 
-For detailed testing documentation, see the [CLI Testing Guide](docs/cli_testing_guide.md).
+For detailed testing documentation, see the [CLI Guide](docs/cli_guide.md).
 
 ### Documentation
 
 The package includes comprehensive documentation in the `docs/` directory:
 
-- [Agent Guide](docs/agent_guide.md) - Detailed guide to creating and customizing agents, including dynamic configuration
-- [Architecture](docs/architecture.md) - Overview of the SDK architecture and core concepts
-- [SWML Service Guide](docs/swml_service_guide.md) - Guide to the underlying SWML service
-- [Local Search System](docs/search-system.md) - Complete guide to the local search system with vector similarity and keyword search
-- [Skills System](docs/skills_system.md) - Detailed documentation on the modular skills system
-- [CLI Tools](docs/cli.md) - Command-line interface tools for development and testing
+#### Getting Started
+- [Agent Guide](docs/agent_guide.md) - Creating and customizing agents, dynamic configuration
+- [Architecture](docs/architecture.md) - SDK architecture and core concepts
+- [SDK Features](docs/sdk_features.md) - SDK vs raw SWML comparison, feature overview
 
-These documents provide in-depth explanations of the features, APIs, and usage patterns.
+#### Core Features
+- [Contexts and Steps Guide](docs/contexts_guide.md) - Structured workflows, navigation, gather mode
+- [SWAIG Reference](docs/swaig_reference.md) - Function results, actions, and post_data lifecycle
+- [DataMap Guide](docs/datamap_guide.md) - Serverless API integration without webhooks
+- [SWML Service Guide](docs/swml_service_guide.md) - Underlying SWML service details
+- [Web Service](docs/web_service.md) - HTTP server and endpoint configuration
+
+#### Skills and Configuration
+- [Skills System](docs/skills_system.md) - Modular skills framework
+- [Third-Party Skills](docs/third_party_skills.md) - Creating and publishing custom skills
+- [LLM Parameters](docs/llm_parameters.md) - Temperature, top_p, and model tuning
+- [API Reference](docs/api_reference.md) - Complete class and method reference
+- [Configuration](docs/configuration.md) - Agent configuration options
+- [Security](docs/security.md) - Authentication and security considerations
+- [Skills Parameter Schema](docs/skills_parameter_schema.md) - Skill parameter definitions
+
+#### Search System
+- [Search Overview](docs/search_overview.md) - Architecture, installation, and quick start
+- [Search Indexing](docs/search_indexing.md) - Building indexes, chunking, embeddings
+- [Search Integration](docs/search_integration.md) - Agent integration, skills, and API
+- [Search Deployment](docs/search_deployment.md) - Production deployment, pgvector, scaling
+- [Search Troubleshooting](docs/search_troubleshooting.md) - Common issues and solutions
+
+#### Deployment and CLI
+- [CLI Guide](docs/cli_guide.md) - swaig-test and sw-search command reference
+- [Cloud Functions](docs/cloud_functions_guide.md) - Lambda, Cloud Functions, Azure deployment
+- [MCP Gateway](docs/mcp_gateway_reference.md) - MCP gateway integration reference
+- [Bedrock Agent](docs/bedrock_agent.md) - AWS Bedrock agent integration
+
+#### Competitive Analysis
+- [Livekit Comparison](docs/livekit_comparison.md) - SignalWire vs Livekit
+- [Pipecat Comparison](docs/pipecat_comparison.md) - SignalWire vs Pipecat
+
+#### Tutorials
+- [Multi-Agent Tutorial](tutorial/multi_agents/README.md) - 5-lesson guide: first agent, knowledge bases, multi-agent systems, advanced features
+- [Fred Bot Tutorial](tutorial/fred/tutorial/README.md) - Build a Wikipedia AI assistant step-by-step (6 lessons + Docker deployment)
 
 </details
 
