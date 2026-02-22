@@ -37,6 +37,6 @@ test_agent = agent
 
 if __name__ == "__main__":
     print(f"BedrockAgent created: {agent}")
-    print(f"Voice: {agent._voice_id}")
-    print(f"Temperature: {agent._temperature}")
+    print(f"Name: {agent.get_name()}")
+    print(f"Route: {agent.route}")
     print(f"Functions registered: 1 (get_weather)")

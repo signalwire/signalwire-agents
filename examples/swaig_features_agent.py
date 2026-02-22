@@ -15,6 +15,35 @@ This example demonstrates the enhanced SWAIG features of the SignalWire AI Agent
 - Default webhook URL for all functions (using defaults object)
 - Properly structured parameters (with type:object and properties)
 - Speech fillers for functions (to provide feedback during processing)
+- Two valid tool signature styles (see below)
+
+## Tool Signature Styles
+
+The SDK supports two ways to define SWAIG tool functions:
+
+1. **Typed parameters** (modern style) — Define parameters as Python function args
+   with type hints. The SDK's type inference system auto-generates the JSON Schema
+   from the function signature. See `get_weather(self, location)` and
+   `get_forecast(self, location, units="fahrenheit")` below.
+
+2. **Traditional style** — Define parameters explicitly in the decorator's
+   `parameters={}` dict. The function receives `(self, args, raw_data)` and
+   extracts values from `args`. Both styles are fully supported.
+
+When using typed parameters, the function's docstring is used for the parameter
+descriptions if not otherwise specified. Default values become optional parameters.
+
+## Default Webhook URL
+
+Setting `default_webhook_url` in the constructor creates a `defaults` object in
+the SWAIG array. All functions inherit this URL unless they override it. This is
+useful when functions are hosted on a different server than the agent.
+
+## Speech Fillers
+
+Fillers are spoken to the caller while a function is processing. They prevent
+dead air during API calls. Specify per-language fillers in the `fillers` dict
+on the `@AgentBase.tool()` decorator.
 
 The resulting SWAIG array in SWML will have the following structure:
 [

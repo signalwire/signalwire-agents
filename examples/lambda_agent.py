@@ -19,7 +19,7 @@ Requirements:
 
 Usage:
     1. Deploy this file to AWS Lambda
-    2. Configure API Gateway to route all requests to this function  
+    2. Configure API Gateway to route all requests to this function
     3. Set environment variables:
        - SWML_BASIC_AUTH_USER (optional, defaults to 'dev')
        - SWML_BASIC_AUTH_PASSWORD (optional, defaults to 'w00t')
@@ -34,12 +34,14 @@ Features:
 
 import os
 import sys
+from datetime import datetime
 
 # Add the signalwire_agents module to the path if needed
 # (not needed if installed via pip)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from signalwire_agents import AgentBase
+from signalwire_agents.core.function_result import SwaigFunctionResult
 
 # Import Mangum for Lambda/API Gateway integration
 try:
@@ -52,58 +54,43 @@ except ImportError:
 class HealthCheckAgent(AgentBase):
     """
     Example agent for Lambda deployment
-    
+
     This agent demonstrates all the standard AgentBase features:
-    - SWAIG functions
-    - Basic auth
-    - Health endpoints
-    - Structured logging
+    - SWAIG functions with SwaigFunctionResult
+    - Prompt configuration via prompt_add_section
+    - Voice configuration via add_language
+    - Basic auth and health endpoints
     """
-    
+
     def __init__(self, name="lambda-agent", route="/", **kwargs):
         super().__init__(name=name, route=route, **kwargs)
-        self.initialize()
-    
-    def initialize(self):
-        # SWAIG functions are registered using decorators below
-        pass
-        
-    def get_prompt(self):
-        return """You are a helpful AI assistant running in AWS Lambda.
-        
-You have access to these functions:
-- greet_user: Greet a user by name
-- get_time: Get the current time
-- health_status: Check the system health
 
-Always be friendly and helpful!"""
-    
+        # Configure voice
+        self.add_language(name="English", code="en-US", voice="inworld.Mark")
+
+        # Configure prompt using prompt_add_section (the public API)
+        self.prompt_add_section(
+            "Role",
+            body="You are a helpful AI assistant running in AWS Lambda."
+        )
+        self.prompt_add_section(
+            "Instructions",
+            bullets=[
+                "Greet users warmly and offer help",
+                "Use the greet_user function when asked to greet someone",
+                "Use the get_time function when asked about the current time",
+            ]
+        )
+
     @AgentBase.tool("Greet a user by name")
-    def greet_user(self, args, raw_data):
-        """
-        Greet a user by name
-        
-        Args:
-            name: Name of the user to greet
-        """
-        name = args.get("name", "friend")
-        return f"Hello {name}! I'm running in AWS Lambda!"
-    
+    def greet_user(self, name: str = "friend"):
+        """Greet a user by name"""
+        return SwaigFunctionResult(f"Hello {name}! I'm running in AWS Lambda!")
+
     @AgentBase.tool("Get the current time")
-    def get_time(self, args, raw_data):
+    def get_time(self):
         """Get the current time"""
-        import datetime
-        return f"Current time: {datetime.datetime.now().isoformat()}"
-    
-    @AgentBase.tool("Check the health status of the Lambda function")
-    def health_status(self, args, raw_data):
-        """Check the health status of the Lambda function"""
-        return {
-            "status": "healthy",
-            "platform": "AWS Lambda",
-            "agent": self.name,
-            "functions": len(self._tool_registry._swaig_functions)
-        }
+        return SwaigFunctionResult(f"Current time: {datetime.now().isoformat()}")
 
 
 # Create the agent instance
@@ -123,15 +110,15 @@ handler = Mangum(app)
 def lambda_handler(event, context):
     """
     AWS Lambda entry point
-    
+
     This function receives API Gateway events and returns responses.
     Mangum handles all the translation between Lambda/API Gateway format
     and FastAPI's expected format.
-    
+
     Args:
         event: API Gateway event
         context: Lambda context
-        
+
     Returns:
         dict: API Gateway response format
     """
@@ -145,4 +132,4 @@ def main():
     agent.run()
 
 if __name__ == "__main__":
-    main() 
+    main()

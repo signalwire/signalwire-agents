@@ -16,6 +16,35 @@ This agent demonstrates the complete contexts system including:
 - Context prompts (structured POM format)
 - Step-to-context navigation with context switching
 - Multi-persona experience (Franklin, Rachael, Dwight)
+
+## What are Contexts?
+
+Contexts are separate conversation flows within a single agent. Each context can
+have its own persona, prompt sections, and available tools. The AI can switch
+between contexts using the built-in `change_context` tool. Think of contexts as
+different "departments" or "modes" the agent can operate in.
+
+Key context features:
+- `set_isolated(True)` — context has its own prompt, independent of other contexts
+- `add_section()` — add POM prompt sections specific to this context
+- `add_enter_filler()` — spoken phrases when transitioning into this context
+
+## What are Steps?
+
+Steps are sequential stages within a context. Each step has:
+- Prompt sections describing what the AI should do at this stage
+- `set_step_criteria()` — condition that must be met before advancing
+- `set_valid_steps()` — which steps the AI can navigate to from here
+- `set_valid_contexts()` — which contexts the AI can switch to from here
+- `set_functions()` — restrict which tools are available at this step
+
+The AI automatically gets `next_step` and `change_context` tools to navigate.
+
+## Navigation Control
+
+- `set_valid_steps(["step_name"])` — allow forward navigation to specific steps
+- `set_valid_contexts(["context_name"])` — allow switching to specific contexts
+- Omitting these means no navigation from that step/context is allowed
 """
 
 from signalwire_agents import AgentBase
@@ -34,7 +63,7 @@ class AdvancedContextsDemoAgent(AgentBase):
 
         self.prompt_add_section(
             "Instructions",
-            "Follow the structured sales workflow to guide customers through their computer purchase decision. Follow the newest role as defined.8",
+            "Follow the structured sales workflow to guide customers through their computer purchase decision. Follow the newest role as defined.",
             bullets=[
                 "Complete each step's specific criteria before advancing",
                 "Ask focused questions to gather the exact information needed",
@@ -42,10 +71,12 @@ class AdvancedContextsDemoAgent(AgentBase):
             ]
         )
         
-        # Define contexts and steps AFTER setting base prompt
+        # define_contexts() returns a ContextBuilder that lets you create
+        # contexts and steps using a fluent API. Must be called after super().__init__().
         contexts = self.define_contexts()
-        
-        # Context 1: Sales workflow (workflow container with context prompts)
+
+        # --- Context 1: Sales workflow ---
+        # An isolated context with its own persona (Franklin) and a 3-step workflow.
         sales_context = contexts.add_context("sales") \
             .set_isolated(True) \
             .add_section("Role", "You are Franklin, a helpful computer sales agent. Introduce yourself by name and welcome customers to help them find the perfect computer through your systematic approach.") \
@@ -56,6 +87,9 @@ class AdvancedContextsDemoAgent(AgentBase):
                 "Customer frustrated/confused - change_context to 'manager'"
             ])
         
+        # Steps within a context form a guided workflow. The AI can only advance
+        # to steps listed in set_valid_steps(), and only after set_step_criteria() is met.
+
         # Step 1: Determine use case
         sales_context.add_step("determine_use_case") \
             .add_section("Current Task", "Identify the customer's primary computer use case") \
@@ -94,7 +128,9 @@ class AdvancedContextsDemoAgent(AgentBase):
             .set_step_criteria("Customer has received a specific recommendation with explanation and pricing guidance") \
             .set_valid_contexts(["tech_support", "manager"])
         
-        # Context 2: Technical Support (context switch with entry parameters)
+        # --- Context 2: Technical Support ---
+        # When the user asks a technical question, the AI switches to this context.
+        # set_valid_contexts() on the sales steps above allows switching here.
         tech_context = contexts.add_context("tech_support") \
             .set_isolated(True)
         
@@ -122,7 +158,9 @@ class AdvancedContextsDemoAgent(AgentBase):
             .set_step_criteria("Customer's technical question has been answered satisfactorily") \
             .set_valid_contexts(["sales", "manager"])
         
-        # Context 3: Manager Escalation (full context reset)
+        # --- Context 3: Manager Escalation ---
+        # This context uses enter fillers — phrases spoken while transitioning.
+        # add_enter_filler() provides language-specific transition messages.
         manager_context = contexts.add_context("manager") \
             .set_isolated(True) \
             .add_enter_filler("en-US", [
@@ -166,7 +204,8 @@ class AdvancedContextsDemoAgent(AgentBase):
             .set_step_criteria("Customer issue has been resolved by manager") \
             .set_valid_contexts(["sales", "tech_support"])
         
-        # Add language support
+        # Each context references a language by name. Define languages with
+        # different voices so each persona sounds distinct.
         self.add_language(
             name="English-Franklin",
             code="en-US",
@@ -185,7 +224,8 @@ class AdvancedContextsDemoAgent(AgentBase):
             voice="inworld.Sarah"
         )
         
-        # Add internal fillers for context switching
+        # Internal fillers are spoken when the AI triggers built-in actions like
+        # next_step or change_context. They fill silence during transitions.
         self.add_internal_filler("next_step", "en-US", [
             "Great! Let's move to the next step...",
             "Perfect! Moving forward in our conversation...",

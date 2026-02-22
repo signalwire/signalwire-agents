@@ -15,7 +15,6 @@ Example of using the redesigned InfoGathererAgent to collect answers to question
 
 import os
 import sys
-import json
 from signalwire_agents.prefabs import InfoGathererAgent
 
 def main():
@@ -37,8 +36,7 @@ def main():
         route="/contact"
     )
 
-
- # set voice
+    # Set voice
     agent.add_language(
         name="English",    # Display name for the language
         code="en-US",      # ISO language code
@@ -60,22 +58,6 @@ def main():
 
     # Set the post prompt URL to the remote server, even if you define the on_summary method it will be ignored if you set the post prompt URL
     agent.set_post_prompt_url("https://user:password@example.com/ai/post.cgi")
-    
-    # or, if you want to handle the post prompt yourself, you can define the following method which will be called with the summary and raw data
-    def xon_summary(self, summary, raw_data=None):
-        """
-        Process the collected information summary
-        
-        Args:
-            summary: Summary data from the conversation
-            raw_data: The complete raw POST data from the request
-        """
-        # Get all the answers from global data instead
-        if raw_data and "global_data" in raw_data:
-            global_data = raw_data.get("global_data", {})
-            answers = global_data.get("answers", [])    
-            print(f"Information collected: {json.dumps(answers, indent=2)}")
-
     
     # Get basic auth credentials for display
     username, password = agent.get_basic_auth_credentials()

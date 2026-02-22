@@ -128,20 +128,20 @@ class FAQBotAgent(AgentBase):
             kb_content += f"Q: {question}\n"
             kb_content += f"A: {answer}\n\n"
         
-        # Update the Knowledge Base prompt section using direct POM API
+        # Add the Knowledge Base prompt section using the public API
         # This adds the formatted FAQs to the prompt
-        self.pom.add_section("Knowledge Base", body=kb_content)
-        
-        # Update the Personality section with company name
+        self.prompt_add_section("Knowledge Base", body=kb_content)
+
+        # Add the Personality section with company name
         # This demonstrates dynamically formatting template strings with instance variables
         personality_text = self.PROMPT_SECTIONS["Personality"].format(company_name=company_name)
-        self.pom.add_section("Personality", body=personality_text)
-        
+        self.prompt_add_section("Personality", body=personality_text)
+
         # Add the Goal section
-        self.pom.add_section("Goal", body=self.PROMPT_SECTIONS["Goal"])
-        
+        self.prompt_add_section("Goal", body=self.PROMPT_SECTIONS["Goal"])
+
         # Add the Instructions section with bullet points
-        self.pom.add_section("Instructions", bullets=self.PROMPT_SECTIONS["Instructions"])
+        self.prompt_add_section("Instructions", bullets=self.PROMPT_SECTIONS["Instructions"])
         
         # Set up a post-prompt for conversation summary
         # This defines the structure of data we want to capture after the conversation

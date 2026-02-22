@@ -48,29 +48,32 @@ class KubernetesReadyAgent(AgentBase):
         
         # Setup graceful shutdown for Kubernetes
         self.setup_graceful_shutdown()
-        
+
+        # Configure voice
+        self.add_language(name="English", code="en-US", voice="inworld.Mark")
+
+        # Configure prompt using the public prompt_add_section API
+        self.prompt_add_section(
+            "Role",
+            body="You are a production-ready AI agent running in Kubernetes. "
+                 "You can help users with general questions and demonstrate cloud-native deployment patterns."
+        )
+
         # Log initialization
-        self.log.info("kubernetes_agent_initialized", 
+        self.log.info("kubernetes_agent_initialized",
                      port=self.port,
                      route=self.route)
-    
-    def get_prompt(self):
-        return """You are a production-ready AI agent running in Kubernetes. 
-        You can help users with general questions and demonstrate cloud-native deployment patterns."""
-    
+
     @AgentBase.tool(
         name="health_status",
         description="Get the health status of this agent"
     )
     def health_status(self, args, raw_data):
-        return {
-            "status": "healthy",
-            "agent": self.get_name(),
-            "route": self.route,
-            "port": self.port,
-            "functions": len(self._swaig_functions),
-            "environment": "kubernetes"
-        }
+        from signalwire_agents.core.function_result import SwaigFunctionResult
+        return SwaigFunctionResult(
+            f"Agent {self.get_name()} is healthy, running on route {self.route} "
+            f"port {self.port} in Kubernetes."
+        )
 
 if __name__ == "__main__":
     # Simple command line argument parsing

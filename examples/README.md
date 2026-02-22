@@ -123,6 +123,8 @@ swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 | File | Description |
 |------|-------------|
 | [swaig_features_agent.py](swaig_features_agent.py) | Advanced SWAIG function features and configuration |
+| [call_flow_and_actions_demo.py](call_flow_and_actions_demo.py) | Call flow verbs (pre/post-answer), debug events, SwaigFunctionResult actions (connect, SMS, record, hold, hints) |
+| [session_and_state_demo.py](session_and_state_demo.py) | Session lifecycle: on_summary hook, set_global_data, set_post_prompt, update_global_data, hangup |
 | [record_call_example.py](record_call_example.py) | Call recording configuration |
 | [room_and_sip_example.py](room_and_sip_example.py) | Room management and SIP integration |
 | [tap_example.py](tap_example.py) | Call tap/monitoring setup |
