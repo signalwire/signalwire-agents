@@ -9,7 +9,7 @@ BedrockAgent is a specialized agent implementation that integrates Amazon Bedroc
 - **Full Agent Compatibility**: Inherits all capabilities from AgentBase including skills, tools, POM, and SWAIG functions
 - **Bedrock Integration**: Generates SWML with `amazon_bedrock` verb for native Bedrock support
 - **Voice-to-Voice Model**: Uses Amazon Bedrock's fixed voice-to-voice model
-- **Seamless Migration**: Drop-in replacement for standard agents when using Bedrock
+- **Drop-in Migration**: Drop-in replacement for standard agents when using Bedrock
 
 ## Installation
 

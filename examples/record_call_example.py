@@ -98,7 +98,7 @@ def customer_service_workflow():
             control_id="cs_transfer_001",
             format="mp3",
             direction="both",
-            beep=False,  # No beep for seamless experience
+            beep=False,  # No beep so the caller doesn't hear a tone
             max_length=1800,  # 30 minutes max
             status_url="https://api.company.com/recording-status"
         ) \

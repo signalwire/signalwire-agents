@@ -519,7 +519,7 @@ def create_pc_builder_app(host: str = "0.0.0.0", port: int = 3001, log_level: st
                     "Transfer context available via ${call_data.user_name} and "
                     "${call_data.summary}"
                 ),
-                "multi_agent": "Three specialized agents working together seamlessly"
+                "multi_agent": "Three specialized agents working together"
             },
             "usage": {
                 "triage_swml": f"GET/POST http://{host}:{port}/",
@@ -544,7 +544,7 @@ if __name__ == "__main__":
     logger.info("  - Enthusiastic front desk assistant with rime.spore voice")
     logger.info("  - Greets customers and routes to specialists")
     logger.info("  - Requires customer name and comprehensive summary before transfer")
-    logger.info("  - Uses swml_transfer skill for seamless handoffs")
+    logger.info("  - Uses swml_transfer skill to hand off calls with context")
     logger.info("")
     logger.info("Sales Agent (Morgan): http://localhost:3001/sales") 
     logger.info("  - Passionate PC building expert with rime.marsh voice")

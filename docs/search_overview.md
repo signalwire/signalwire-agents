@@ -135,7 +135,7 @@ Includes everything above plus pgvector support for PostgreSQL backends.
 python -m spacy download en_core_web_sm
 ```
 
-Best for: Full-featured applications with powerful hardware.
+Best for: Full-featured applications with dedicated hardware.
 
 ### search-queryonly: Production Deployments
 

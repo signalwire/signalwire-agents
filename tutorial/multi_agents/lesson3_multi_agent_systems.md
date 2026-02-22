@@ -37,7 +37,7 @@ Customer → Triage Agent (Alex) → ┬→ Sales Agent (Morgan)
 
 1. **AgentServer**: Hosts multiple agents on the same port
 2. **Routes**: Each agent has a unique endpoint (/, /sales, /support)
-3. **Transfer Mechanism**: swml_transfer skill for seamless handoffs
+3. **Transfer Mechanism**: swml_transfer skill for agent-to-agent handoffs
 4. **Context Preservation**: Customer data flows between agents
 
 ---
@@ -143,7 +143,7 @@ url = agent.get_full_url(include_auth=True)
 
 ## Agent-to-Agent Transfers
 
-The `swml_transfer` skill enables seamless handoffs between agents while preserving context.
+The `swml_transfer` skill enables handoffs between agents while preserving context.
 
 ### Understanding swml_transfer
 
@@ -433,7 +433,7 @@ You've built a complete multi-agent system! You've mastered:
 
 **Architecture Patterns:**
 - ✅ Specialized agents for different roles
-- ✅ Seamless handoffs between agents
+- ✅ Agent-to-agent handoffs with context
 - ✅ Context flowing through the system
 - ✅ Production-ready security and monitoring
 

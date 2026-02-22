@@ -135,7 +135,7 @@ The system supports different tool patterns:
 
 ### Integration with Agent Architecture
 
-DataMap tools integrate seamlessly with the existing agent architecture:
+DataMap tools integrate with the existing agent architecture:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -305,14 +305,14 @@ Failed to load skill 'web_search': Missing required environment variables: ['GOO
 
 ### Integration Points
 
-Skills integrate seamlessly with existing agent systems:
+Skills integrate with existing agent systems:
 
 1. **SWAIG Tools**: Skills register tools that become available to the AI
 2. **Prompt System**: Skills can add prompt sections and hints
 3. **Global Data**: Skills can contribute to agent context
 4. **State Management**: Skills can access agent state if needed
 
-This architecture enables powerful one-liner integration while maintaining flexibility and extensibility.
+This architecture enables one-liner integration while maintaining flexibility and extensibility.
 
 ## Security Model
 
@@ -907,7 +907,7 @@ The contexts system integrates with the existing SWML generation pipeline:
 **Skills and Function Integration:**
 - Skills continue to work normally
 - Function restrictions apply per-step
-- DataMap tools integrate seamlessly
+- DataMap tools integrate directly
 - State management remains unchanged
 
 #### Implementation Details

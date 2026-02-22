@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MCP-SWAIG Gateway bridges Model Context Protocol (MCP) servers with SignalWire AI Gateway (SWAIG) functions, allowing SignalWire AI agents to seamlessly interact with MCP-based tools. This gateway acts as a translation layer and session manager between the two protocols.
+The MCP-SWAIG Gateway bridges Model Context Protocol (MCP) servers with SignalWire AI Gateway (SWAIG) functions, allowing SignalWire AI agents to interact with MCP-based tools. This gateway acts as a translation layer and session manager between the two protocols.
 
 ## Installation
 

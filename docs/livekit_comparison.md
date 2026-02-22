@@ -396,7 +396,7 @@ LiveKit tools return data to the LLM but cannot directly control call behavior, 
 
 12. **False Interruption Recovery** -- `resume_false_interruption` automatically recovers when background noise triggers a false interruption, resuming the agent's response. SignalWire handles barge-in configurably but doesn't have explicit false-positive recovery.
 
-13. **Agent Handoff** -- Returning a new Agent instance from a tool triggers seamless handoff with optional conversation history transfer. Clean API for multi-agent workflows.
+13. **Agent Handoff** -- Returning a new Agent instance from a tool triggers handoff with optional conversation history transfer. Clean API for multi-agent workflows.
 
 14. **Typed Userdata** -- `AgentSession[T]` with generic type parameter provides type-safe session state access across tools, agents, and handoffs. SignalWire's `global_data` is an untyped dict.
 

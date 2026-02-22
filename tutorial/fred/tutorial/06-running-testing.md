@@ -82,7 +82,7 @@ Handles function execution:
 
 ## Testing with swaig-test CLI
 
-The SignalWire SDK includes a powerful testing tool called `swaig-test`. Let's use it to explore and test Fred without running the server!
+The SignalWire SDK includes a CLI testing tool called `swaig-test`. Let's use it to explore and test Fred without running the server!
 
 ### Using swaig-test to Explore Fred
 

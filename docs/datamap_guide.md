@@ -111,7 +111,7 @@ A comprehensive guide to understanding, implementing, and testing DataMap config
 
 ### 1.1 What is DataMap
 
-DataMap is a serverless function execution system within SignalWire AI Agents that enables seamless integration with external APIs without the need for custom webhook endpoints. Unlike traditional webhook-based SWAIG functions that require you to host and maintain HTTP endpoints, DataMap functions are executed entirely within the SignalWire infrastructure.
+DataMap is a serverless function execution system within SignalWire AI Agents that enables integration with external APIs without the need for custom webhook endpoints. Unlike traditional webhook-based SWAIG functions that require you to host and maintain HTTP endpoints, DataMap functions are executed entirely within the SignalWire infrastructure.
 
 **Key Characteristics:**
 - **Serverless Architecture**: No need to host webhook endpoints
@@ -173,7 +173,7 @@ def search_knowledge(args, post_data):
 
 ### 1.3 SWML Integration Overview
 
-DataMap integrates seamlessly with SWML (SignalWire Markup Language) through the AI verb's function calling mechanism. When an AI agent needs to call a function, SWML automatically detects whether it's a traditional webhook or DataMap function and routes the execution appropriately.
+DataMap integrates with SWML (SignalWire Markup Language) through the AI verb's function calling mechanism. When an AI agent needs to call a function, SWML automatically detects whether it's a traditional webhook or DataMap function and routes the execution appropriately.
 
 **SWML AI Verb Integration:**
 ```xml
@@ -767,7 +767,7 @@ When validation fails, the AI agent receives clear error messages:
 
 ### 4.1 Template Syntax Overview
 
-Template expansion is a powerful feature in DataMap that allows you to dynamically construct URLs, headers, and request bodies based on function arguments and context variables. Understanding the syntax and usage is essential for effective DataMap configuration.
+Template expansion allows you to dynamically construct URLs, headers, and request bodies based on function arguments and context variables. Understanding the syntax and usage is essential for effective DataMap configuration.
 
 **Template Syntax:**
 ```

@@ -218,7 +218,7 @@ agent = YourAgent(
 
 ### SignalWire Agent Testing Tool
 
-The SignalWire AI Agents SDK includes a powerful testing tool (`swaig-test`) that can simulate cloud function environments for comprehensive testing before deployment.
+The SignalWire AI Agents SDK includes a testing tool (`swaig-test`) that can simulate cloud function environments for comprehensive testing before deployment.
 
 #### Cloud Function Environment Simulation
 

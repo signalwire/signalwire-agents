@@ -23,7 +23,7 @@ The `SWMLService` class provides a foundation for creating and serving SignalWir
 - Authentication
 - Centralized logging
 
-The class is designed to be extended for specific use cases, while providing powerful capabilities out of the box.
+The class is designed to be extended for specific use cases, while providing a full set of capabilities out of the box.
 
 ## Installation
 

@@ -15,7 +15,7 @@ The `WebService` class provides static file serving capabilities for the SignalW
 
 ## Overview
 
-WebService is designed to serve static files with enterprise-grade security features. It's perfect for:
+WebService is designed to serve static files with configurable security features. It's perfect for:
 - Serving agent documentation and API specs
 - Hosting static assets (images, CSS, JavaScript)
 - Serving generated reports and exports
@@ -674,4 +674,4 @@ if __name__ == "__main__":
 
 ## Summary
 
-WebService provides a secure, configurable static file server that integrates seamlessly with the SignalWire AI Agents SDK. It follows the same architectural patterns as other SDK services, making it familiar and easy to use while providing enterprise-grade security features and flexible deployment options.
+WebService provides a secure, configurable static file server that integrates with the SignalWire AI Agents SDK. It follows the same architectural patterns as other SDK services, making it familiar and easy to use while providing configurable security features and flexible deployment options.

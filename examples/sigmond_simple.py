@@ -260,7 +260,7 @@ class SigmondSimple(AgentBase):
         
         self.prompt_add_section("State_Management", bullets=[
             "The SDK is designed with a stateless-first principle - agents work perfectly without any state management.",
-            "Stateless design enables seamless deployment to serverless platforms like AWS Lambda, Google Cloud Functions, and Azure Functions.",
+            "Stateless design means agents deploy directly to serverless platforms like AWS Lambda, Google Cloud Functions, and Azure Functions.",
             "Stateless agents can be deployed as CGI scripts, Docker containers, and scaled horizontally without coordination.",
             "State management is an optional feature that you can enable when you specifically need persistent data across conversations.",
             "When enabled, access current state using the get_state method and update it with the set_state method.",
@@ -334,7 +334,7 @@ class SigmondSimple(AgentBase):
             "Full search: pip install signalwire-agents[search-full] adds document processing for PDF and DOCX.",
             "Advanced NLP: pip install signalwire-agents[search-nlp] includes spaCy for advanced text processing.",
             "All features: pip install signalwire-agents[search-all] includes everything.",
-            "Optional dependencies keep the base SDK lightweight while providing powerful extensions."
+            "Optional dependencies keep the base SDK lightweight while adding search and document processing when needed."
         ])
         
         self.prompt_add_section("Documentation_References", bullets=[

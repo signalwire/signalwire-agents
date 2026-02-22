@@ -591,7 +591,7 @@ You can override the default token validation by implementing your own `validate
 
 ## Skills System
 
-The Skills System allows you to extend your agents with powerful capabilities using simple one-liner calls. Skills are modular, reusable components that can be easily added to any agent and configured with parameters.
+The Skills System allows you to extend your agents with reusable capabilities via one-liner calls. Skills are modular, reusable components that can be easily added to any agent and configured with parameters.
 
 ### Quick Start
 
@@ -1012,7 +1012,7 @@ agent.add_skill("weather", {
 
 ### Skills with Dynamic Configuration
 
-Skills work seamlessly with dynamic configuration:
+Skills work with dynamic configuration:
 
 ```python
 class DynamicSkillAgent(AgentBase):
@@ -1209,7 +1209,7 @@ For detailed information about each parameter and advanced tuning strategies, se
 
 ## Dynamic Agent Configuration
 
-Dynamic agent configuration allows you to configure agents per-request based on parameters from the HTTP request (query parameters, body data, headers). This enables powerful patterns like multi-tenant applications, A/B testing, personalization, and localization.
+Dynamic agent configuration allows you to configure agents per-request based on parameters from the HTTP request (query parameters, body data, headers). This enables patterns like multi-tenant applications, A/B testing, personalization, and localization.
 
 ### Overview
 
@@ -1805,7 +1805,7 @@ def configure_agent(self, query_params, body_params, headers, agent):
         agent.add_language("Spanish (US)", "es-US", "rime.spore:mistv2")
 ```
 
-Dynamic agent configuration is a powerful feature that enables sophisticated, multi-tenant AI applications while maintaining the familiar AgentBase API. Start with simple parameter-based configuration and gradually add more complex logic as your use cases evolve.
+Dynamic agent configuration enables sophisticated, multi-tenant AI applications while maintaining the familiar AgentBase API. Start with simple parameter-based configuration and gradually add more complex logic as your use cases evolve.
 
 ## Advanced Features
 

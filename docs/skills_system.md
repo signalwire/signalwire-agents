@@ -1,6 +1,6 @@
 # SignalWire Agents Skills System
 
-The SignalWire Agents SDK now includes a powerful, modular skills system that allows you to add capabilities to your agents with simple one-liner calls and configurable parameters.
+The SignalWire Agents SDK now includes a modular skills system that lets you add capabilities to your agents with simple one-liner calls and configurable parameters.
 
 ## What's New
 
@@ -454,4 +454,4 @@ agent.add_skill("web_search", {
 # Done! Full web search capability with custom settings.
 ```
 
-The skills system makes SignalWire agents more modular, maintainable, configurable, and powerful than ever before! 
+The skills system makes SignalWire agents more modular, maintainable, and configurable. 

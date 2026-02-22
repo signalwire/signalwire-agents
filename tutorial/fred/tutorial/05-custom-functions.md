@@ -226,7 +226,7 @@ Replace the simple version with this enhanced one:
 
 ## Returning Results
 
-SWAIG functions must return a `SwaigFunctionResult` object. This class provides several powerful features:
+SWAIG functions must return a `SwaigFunctionResult` object. This class provides several useful features:
 
 ### Basic Result
 

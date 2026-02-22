@@ -1,6 +1,6 @@
 # Lesson 1: Introduction to SignalWire Agents
 
-Welcome to your journey of building Fred, a friendly Wikipedia-powered AI assistant! In this first lesson, we'll explore what SignalWire AI Agents are and why they're powerful for building voice applications.
+Welcome to your journey of building Fred, a friendly Wikipedia-powered AI assistant! In this first lesson, we'll explore what SignalWire AI Agents are and how they work for building voice applications.
 
 ## Table of Contents
 
