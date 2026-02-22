@@ -16,7 +16,7 @@ This example demonstrates the NEW dynamic configuration pattern.
 The exact same agent as simple_static_agent.py, but configured dynamically per-request.
 
 This agent does THE SAME THING as the static version:
-- Uses a professional voice (rime.spore)  
+- Uses a professional voice (inworld.Mark)
 - Has a 500ms speech timeout
 - Includes helpful hints
 - Sets up global data with session info
@@ -71,7 +71,7 @@ class SimpleDynamicAgent(AgentBase):
         # But now it happens fresh for every request!
         
         # Voice and language (same as static version)
-        agent.add_language("English", "en-US", "rime.spore")
+        agent.add_language("English", "en-US", "inworld.Mark")
         
         # AI parameters (same as static version)
         agent.set_params({
@@ -136,7 +136,7 @@ class SimpleDynamicAgent(AgentBase):
         # For example (commented out for this basic demo):
         #
         # if query_params.get('vip') == 'true':
-        #     agent.add_language("English", "en-US", "rime.brook")  # Premium voice
+        #     agent.add_language("English", "en-US", "inworld.Mark")  # Premium voice
         #     agent.set_params({"end_of_speech_timeout": 300})  # Faster response
         #     agent.update_global_data({"service_level": "vip"})
         #

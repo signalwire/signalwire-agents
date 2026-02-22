@@ -27,7 +27,7 @@ def main():
     agent = AgentBase("Wikipedia Assistant", route="/wiki-demo")
     
     # Configure the agent with a clear voice
-    agent.add_language("English", "en-US", "rime.spore")
+    agent.add_language("English", "en-US", "inworld.Mark")
     
     print("Creating Wikipedia search assistant...")
     

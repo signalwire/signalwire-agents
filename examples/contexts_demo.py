@@ -170,19 +170,19 @@ class AdvancedContextsDemoAgent(AgentBase):
         self.add_language(
             name="English-Franklin",
             code="en-US",
-            voice="rime.spore"
+            voice="inworld.Mark"
         )
-        
+
         self.add_language(
             name="English-Dwight",
-            code="en-US", 
-            voice="rime.marsh"
+            code="en-US",
+            voice="inworld.Blake"
         )
-        
+
         self.add_language(
             name="English-Rachael",
             code="en-US",
-            voice="rime.cove"
+            voice="inworld.Sarah"
         )
         
         # Add internal fillers for context switching
@@ -227,9 +227,9 @@ def main():
     print("  4. Return to sales from any department")
     print()
     print("Personas:")
-    print("  • Franklin (Sales) - English-Franklin with rime.spore voice")
-    print("  • Rachael (Tech Support) - English-Rachael with rime.cove voice")
-    print("  • Dwight (Manager) - English-Dwight with rime.marsh voice")
+    print("  • Franklin (Sales) - English-Franklin with inworld.Mark voice")
+    print("  • Rachael (Tech Support) - English-Rachael with inworld.Sarah voice")
+    print("  • Dwight (Manager) - English-Dwight with inworld.Blake voice")
     print()
     print("Test the agent at: http://localhost:3000/advanced-contexts-demo")
     print()

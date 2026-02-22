@@ -141,7 +141,7 @@ class SigmondRemoteSearch(AgentBase):
             {
                 "name": "English (United States)",
                 "code": "en-US", 
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "sure. hold on a second please",
                     "ok. I have to check the docs", 
@@ -152,7 +152,7 @@ class SigmondRemoteSearch(AgentBase):
             {
                 "name": "Spanish",
                 "code": "multi",
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "Claro", "espera un segundo", "Ok", "tengo que revisar la documentación"
                 ]
@@ -160,7 +160,7 @@ class SigmondRemoteSearch(AgentBase):
             {
                 "name": "French", 
                 "code": "multi",
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "bien sur", "pas de problem", "une minute", "je vais chercher dans la documentation"
                 ]

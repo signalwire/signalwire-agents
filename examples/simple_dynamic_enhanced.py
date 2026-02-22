@@ -73,14 +73,14 @@ class SimpleDynamicEnhanced(AgentBase):
         # === VOICE AND LANGUAGE CONFIGURATION ===
         if language == 'es':
             if is_vip:
-                agent.add_language("Spanish", "es-ES", "rime.pablo")  # Premium for VIP
+                agent.add_language("Spanish", "es-ES", "inworld.Sarah")  # Premium for VIP
             else:
-                agent.add_language("Spanish", "es-ES", "rime.pablo")  # Standard Spanish
+                agent.add_language("Spanish", "es-ES", "inworld.Mark")  # Standard Spanish
         else:  # English
             if is_vip:
-                agent.add_language("English", "en-US", "rime.spore")  # Premium voice for VIP
+                agent.add_language("English", "en-US", "inworld.Sarah")  # Premium voice for VIP
             else:
-                agent.add_language("English", "en-US", "rime.spore")  # Standard professional voice
+                agent.add_language("English", "en-US", "inworld.Mark")  # Standard professional voice
         
         # === AI PARAMETERS (VIP gets faster response) ===
         if is_vip:

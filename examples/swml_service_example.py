@@ -130,7 +130,7 @@ def example_using_builder():
     # Second message with options
     builder.say(
         "Isn't this easier than assembling JSON?",
-        voice="Polly.Matthew",          # Use a specific Amazon Polly voice
+        voice="inworld.Mark",          # Use a specific voice
         language="en-US"                # Specify language for TTS
     )
     # End the call

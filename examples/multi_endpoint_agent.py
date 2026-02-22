@@ -41,7 +41,7 @@ class MultiEndpointAgent(AgentBase):
         ])
         
         # Add a simple greeting skill
-        self.add_language("English", "en-US", "rime.spore:mistv2")
+        self.add_language("English", "en-US", "inworld.Mark")
         
         # Set up static files directory
         self.static_dir = Path(__file__).parent / "static_files"

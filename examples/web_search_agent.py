@@ -41,7 +41,7 @@ def main():
     agent = AgentBase("Web Search Assistant", route="/search")
     
     # Configure the agent with a pleasant voice
-    agent.add_language("English", "en-US", "rime.spore")
+    agent.add_language("English", "en-US", "inworld.Mark")
     
     # Configure Franklin the search bot's personality
     agent.prompt_add_section(

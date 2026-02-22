@@ -1451,5 +1451,6 @@ Note: This example uses gather **without** `completion_action`. After all questi
 ### Example Files
 
 - `examples/contexts_demo.py` - Multi-context agent with personas (Franklin, Rachael, Dwight)
+- `examples/gather_info_demo.py` - Structured data collection using `set_gather_info()` and `add_gather_question()`
 - `examples/survey_agent_example.py` - Survey workflow with steps
 - `examples/info_gatherer_example.py` - Information gathering workflow

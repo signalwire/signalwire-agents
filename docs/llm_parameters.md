@@ -232,3 +232,8 @@ agent.set_prompt_llm_params(
     barge_confidence=0.6
 )
 ```
+
+## Examples
+
+- `examples/llm_params_demo.py` - Three agent personas (customer service, creative, technical) demonstrating different LLM parameter configurations
+- `examples/simple_agent.py` - Basic LLM parameter tuning with `set_prompt_llm_params()`

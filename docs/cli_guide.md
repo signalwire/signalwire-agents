@@ -742,8 +742,8 @@ swaig-test examples/datasphere_webhook_env_demo.py search_knowledge '{"query":"S
 # Test DataMap function - auto-detected  
 swaig-test examples/datasphere_serverless_env_demo.py search_knowledge '{"query":"SignalWire"}'
 
-# Test external webhook function - auto-detected
-swaig-test examples/external_webhook_weather_agent.py getWeather '{"location":"New York"}' --verbose
+# Test local webhook function with get_weather
+swaig-test examples/simple_agent.py get_weather '{"location":"New York"}' --verbose
 
 # Test math skill function - auto-detected
 swaig-test examples/datasphere_serverless_env_demo.py calculate '{"expression":"25 * 47"}'
@@ -755,10 +755,10 @@ External webhook functions are automatically detected and tested by making HTTP 
 
 ```bash
 # Test external webhook with verbose output
-swaig-test examples/external_webhook_weather_agent.py getWeather '{"location":"San Francisco"}' --verbose
+swaig-test examples/my_agent.py getWeather '{"location":"San Francisco"}' --verbose
 
 # List functions with their types (local vs external)
-swaig-test examples/external_webhook_weather_agent.py --list-tools
+swaig-test examples/my_agent.py --list-tools
 ```
 
 **Example Output for External Webhook:**
@@ -811,13 +811,13 @@ You can test agents that have both local and external webhook functions:
 
 ```bash
 # Test local function
-swaig-test examples/external_webhook_weather_agent.py getHelp '{}'
+swaig-test examples/my_agent.py getHelp '{}'
 
-# Test external function  
-swaig-test examples/external_webhook_weather_agent.py getWeather '{"location":"Tokyo"}'
+# Test external function
+swaig-test examples/my_agent.py getWeather '{"location":"Tokyo"}'
 
 # Show all function types
-swaig-test examples/external_webhook_weather_agent.py --list-tools
+swaig-test examples/my_agent.py --list-tools
 ```
 
 ## SWML Generation and Testing
@@ -1141,10 +1141,10 @@ def get_weather_external(self, args, raw_data):
 
 ```bash
 # Test external webhook function
-swaig-test examples/external_webhook_weather_agent.py getWeather '{"location":"Paris"}' --verbose
+swaig-test examples/my_agent.py getWeather '{"location":"Paris"}' --verbose
 
-# Compare with local function  
-swaig-test examples/external_webhook_weather_agent.py getHelp '{}' --verbose
+# Compare with local function
+swaig-test examples/my_agent.py getHelp '{}' --verbose
 ```
 
 **External Webhook Request Format:**
@@ -1174,7 +1174,7 @@ The CLI tool sends the same payload format that SignalWire uses:
 
 ```bash
 # Test with unreachable external service
-swaig-test examples/external_webhook_weather_agent.py testBrokenWebhook '{"message":"test"}' --verbose
+swaig-test examples/my_agent.py testBrokenWebhook '{"message":"test"}' --verbose
 ```
 
 Output shows connection errors and HTTP status codes:
@@ -1438,10 +1438,10 @@ swaig-test matti_and_sigmond/dual_agent_app.py --agent-class SigmondAgent --dump
 
 ```bash
 # Test external webhook with verbose output
-swaig-test examples/external_webhook_weather_agent.py --verbose --exec getWeather --location "San Francisco"
+swaig-test examples/my_agent.py --verbose --exec getWeather --location "San Francisco"
 
 # List functions with their types (local vs external)
-swaig-test examples/external_webhook_weather_agent.py --list-tools
+swaig-test examples/my_agent.py --list-tools
 ```
 
 ### Advanced SWML Testing

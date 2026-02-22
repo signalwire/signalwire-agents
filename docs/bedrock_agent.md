@@ -214,13 +214,13 @@ BedrockAgent is fully compatible with swaig-test:
 
 ```bash
 # List functions
-swaig-test examples/bedrock_agent.py --list
+swaig-test examples/bedrock_with_skills.py --list
 
 # Dump SWML
-swaig-test examples/bedrock_agent.py --dump
+swaig-test examples/bedrock_with_skills.py --dump
 
 # Test a function
-swaig-test examples/bedrock_agent.py --function calculate_sum --args '{"a": 5, "b": 3}'
+swaig-test examples/bedrock_with_skills.py --function calculate_sum --args '{"a": 5, "b": 3}'
 ```
 
 ## Complete Example

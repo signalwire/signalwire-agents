@@ -10,7 +10,7 @@ from signalwire_agents import BedrockAgent
 agent = BedrockAgent(
     name="bedrock_server",
     system_prompt="You are a helpful AI assistant.",
-    voice_id="joanna"
+    voice_id="inworld.Mark"
 )
 
 # Add a simple tool

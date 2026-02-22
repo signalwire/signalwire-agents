@@ -462,10 +462,7 @@ for key, value in os.environ.items():
 
 ## Examples
 
-See the `examples/cloud_functions/` directory for complete working examples:
-- `google_cloud_function_example/` - Complete Google Cloud Functions deployment
-- `azure_function_example/` - Complete Azure Functions deployment
-- `multi_platform_agent/` - Agent that works across all platforms
+See `examples/lambda_agent.py` for a complete AWS Lambda deployment example.
 
 ## Support
 

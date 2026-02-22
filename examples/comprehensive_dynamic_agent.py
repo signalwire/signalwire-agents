@@ -26,13 +26,13 @@ Features demonstrated:
 Usage examples:
 
 1. Premium Healthcare Agent:
-   curl "http://localhost:3000/dynamic?tier=premium&industry=healthcare&voice=spore&test_group=A"
+   curl "http://localhost:3000/dynamic?tier=premium&industry=healthcare&voice=inworld.Sarah&test_group=A"
 
 2. Standard Finance Agent:
-   curl "http://localhost:3000/dynamic?tier=standard&industry=finance&voice=cove&test_group=B"
+   curl "http://localhost:3000/dynamic?tier=standard&industry=finance&voice=inworld.Mark&test_group=B"
 
 3. Enterprise Retail Agent:
-   curl "http://localhost:3000/dynamic?tier=enterprise&industry=retail&voice=flower&language=es&locale=mx"
+   curl "http://localhost:3000/dynamic?tier=enterprise&industry=retail&voice=inworld.Hanna&language=es&locale=mx"
 
 4. Developer Testing:
    curl "http://localhost:3000/dynamic/debug?tier=premium&debug=true"
@@ -40,7 +40,7 @@ Usage examples:
 Query Parameters:
 - tier: standard|premium|enterprise (affects features and timeouts)
 - industry: healthcare|finance|retail|general (customizes prompts and responses)
-- voice: cove|marsh|creek|brook|flower|spore (voice selection)
+- voice: inworld.Mark|inworld.Sarah|inworld.Hanna|inworld.Blake (voice selection)
 - language: en|es|fr (language support)  
 - locale: us|mx|ca|fr (locale-specific customization)
 - test_group: A|B (A/B testing configuration)
@@ -64,9 +64,9 @@ class ComprehensiveDynamicAgent(AgentBase):
         
         # Define available voice options by tier
         self.voice_options = {
-            "standard": ["rime.cove", "rime.marsh", "rime.creek"],
-            "premium": ["rime.brook", "rime.flower", "rime.spore"],
-            "enterprise": ["rime.brook", "rime.flower", "rime.spore", "rime.cove", "rime.marsh", "rime.creek"]
+            "standard": ["inworld.Mark", "inworld.Sarah", "inworld.Blake"],
+            "premium": ["inworld.Sarah", "inworld.Hanna", "inworld.Mark"],
+            "enterprise": ["inworld.Mark", "inworld.Sarah", "inworld.Hanna", "inworld.Blake"]
         }
         
         # Industry-specific configurations
@@ -135,39 +135,32 @@ class ComprehensiveDynamicAgent(AgentBase):
         available_voices = self.voice_options.get(tier, self.voice_options["standard"])
         
         # Select voice (use requested if available for tier, otherwise default)
-        # Handle both "spore" and "rime.spore" formats
-        requested_voice_full = f"rime.{requested_voice}" if requested_voice and not requested_voice.startswith("rime.") else requested_voice
-        
-        if requested_voice_full and requested_voice_full in available_voices:
-            voice = requested_voice_full
+        if requested_voice and requested_voice in available_voices:
+            voice = requested_voice
         else:
             voice = available_voices[0]  # Default to first available
         
-        # Configure language and voice (using proper engine.voice:model format)
-        # Default model is mistv2 which is optional
-        voice_model = voice  # Already in rime.voice format
-        
         if language == "en":
             if locale == "us":
-                agent.add_language("English US", "en-US", voice_model)
+                agent.add_language("English US", "en-US", voice)
             elif locale == "ca":
-                agent.add_language("English CA", "en-CA", voice_model)
+                agent.add_language("English CA", "en-CA", voice)
             else:
-                agent.add_language("English", "en-US", voice_model)
+                agent.add_language("English", "en-US", voice)
         elif language == "es":
-            # Spanish always uses rime.pablo regardless of requested voice
+            # Spanish configuration
             if locale == "mx":
-                agent.add_language("Spanish MX", "es-MX", "rime.pablo")
+                agent.add_language("Spanish MX", "es-MX", "inworld.Sarah")
             else:
-                agent.add_language("Spanish", "es-ES", "rime.pablo")
+                agent.add_language("Spanish", "es-ES", "inworld.Sarah")
         elif language == "fr":
             if locale == "ca":
-                agent.add_language("French CA", "fr-CA", "rime.alois")
+                agent.add_language("French CA", "fr-CA", "inworld.Hanna")
             else:
-                agent.add_language("French", "fr-FR", "rime.alois")
+                agent.add_language("French", "fr-FR", "inworld.Hanna")
         else:
             # Default to English
-            agent.add_language("English", "en-US", voice_model)
+            agent.add_language("English", "en-US", voice)
 
     def _configure_tier_parameters(self, agent, tier, test_group):
         """Configure parameters based on service tier"""

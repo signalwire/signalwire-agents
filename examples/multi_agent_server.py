@@ -35,7 +35,7 @@ Usage examples:
    curl "http://localhost:3000/retail?department=electronics&customer_tier=vip"
 
 4. Dynamic Agent:
-   curl "http://localhost:3000/dynamic?tier=enterprise&industry=tech&voice=spore"
+   curl "http://localhost:3000/dynamic?tier=enterprise&industry=tech&voice=inworld.Mark"
 """
 
 import os
@@ -267,10 +267,10 @@ class HealthcareAgent(AgentBase):
         
         # Configure voice based on urgency
         if urgency == 'high':
-            agent.add_language("English", "en-US", "rime.spore")  # Clear, professional voice
+            agent.add_language("English", "en-US", "inworld.Sarah")  # Clear, professional voice
             agent.set_params({"ai_model": "gpt-4.1-nano", "end_of_speech_timeout": 300})  # Faster response
         else:
-            agent.add_language("English", "en-US", "rime.spore")  # Professional voice
+            agent.add_language("English", "en-US", "inworld.Mark")  # Professional voice
             agent.set_params({"ai_model": "gpt-4.1-nano", "end_of_speech_timeout": 500})  # Normal response
         
         # Department-specific configuration
@@ -332,21 +332,21 @@ class FinanceAgent(AgentBase):
         
         # Voice and parameters based on account type
         if account_type == 'premium':
-            agent.add_language("English", "en-US", "rime.flower")
+            agent.add_language("English", "en-US", "inworld.Sarah")
             agent.set_params({
                 "ai_model": "gpt-4.1-nano",
                 "end_of_speech_timeout": 600,
                 "attention_timeout": 20000
             })
         elif account_type == 'wealth':
-            agent.add_language("English", "en-US", "rime.spore")
+            agent.add_language("English", "en-US", "inworld.Hanna")
             agent.set_params({
                 "ai_model": "gpt-4.1-nano",
                 "end_of_speech_timeout": 800,
                 "attention_timeout": 25000
             })
         else:
-            agent.add_language("English", "en-US", "rime.cove")
+            agent.add_language("English", "en-US", "inworld.Mark")
             agent.set_params({
                 "ai_model": "gpt-4.1-nano",
                 "end_of_speech_timeout": 400,
@@ -422,10 +422,10 @@ class RetailAgent(AgentBase):
         
         # Voice based on customer tier
         if customer_tier == 'vip':
-            agent.add_language("English", "en-US", "rime.spore")
+            agent.add_language("English", "en-US", "inworld.Sarah")
             agent.set_params({"ai_model": "gpt-4.1-nano", "end_of_speech_timeout": 600})
         else:
-            agent.add_language("English", "en-US", "rime.marsh")
+            agent.add_language("English", "en-US", "inworld.Mark")
             agent.set_params({"ai_model": "gpt-4.1-nano", "end_of_speech_timeout": 400})
         
         # Department-specific knowledge
@@ -506,7 +506,7 @@ if __name__ == "__main__":
     print("curl 'http://localhost:3000/healthcare?customer_id=patient123&urgency=high'")
     print("curl 'http://localhost:3000/finance?account_type=premium&service=investment'")
     print("curl 'http://localhost:3000/retail?department=electronics&customer_tier=vip'")
-    print("curl 'http://localhost:3000/dynamic?tier=enterprise&industry=tech&voice=spore'")
+    print("curl 'http://localhost:3000/dynamic?tier=enterprise&industry=tech&voice=inworld.Mark'")
     print()
     
     app = create_multi_agent_app()

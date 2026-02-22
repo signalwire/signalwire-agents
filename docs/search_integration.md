@@ -1502,3 +1502,10 @@ sw-search search ./knowledge.swsearch "test query"
 ```
 
 For comprehensive testing approaches including A/B testing, see the [Tuning Search Quality](#tuning-search-quality) section.
+
+## Examples
+
+- `examples/search_with_custom_formatter.py` - Custom response formatter callback for search results
+- `examples/sigmond_simple.py` - Simple agent with local `.swsearch` file-based knowledge search
+- `examples/sigmond_native_search.py` - Native vector search skill with local search index
+- `examples/pgvector_search_agent.py` - PGVector backend for document search

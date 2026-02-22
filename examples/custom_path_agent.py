@@ -66,7 +66,7 @@ class ChatAgent(AgentBase):
         )
         
         # Adjust voice and tone based on mood
-        voice_model = "rime.spore"
+        voice_model = "inworld.Mark"
         agent.add_language("English", "en-US", voice_model)
         
         if mood == 'professional':

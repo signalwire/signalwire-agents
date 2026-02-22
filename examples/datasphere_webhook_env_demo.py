@@ -95,7 +95,7 @@ def main():
     agent = AgentBase("DataSphere Knowledge Assistant", route="/datasphere-webhook-demo")
     
     # Configure voice
-    agent.add_language("English", "en-US", "rime.spore")
+    agent.add_language("English", "en-US", "inworld.Mark")
     
     # Add basic skills
     print("\nAdding basic skills...")

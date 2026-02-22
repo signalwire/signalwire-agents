@@ -33,8 +33,8 @@ def main():
     # Create an agent
     agent = AgentBase("Multi-Search Assistant", route="/search-demo")
     
-    # Configure the agent with rime.spore voice
-    agent.add_language("English", "en-US", "rime.spore")
+    # Configure the agent with inworld.Mark voice
+    agent.add_language("English", "en-US", "inworld.Mark")
     
     print("Creating agent with multiple web search skill instances...")
     

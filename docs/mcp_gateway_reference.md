@@ -635,6 +635,10 @@ Enable debug logging:
 }
 ```
 
+## Examples
+
+- `examples/mcp_gateway_demo.py` - Agent connecting to MCP servers through the `mcp_gateway` skill
+
 ## Future Enhancements
 
 1. **WebSocket Support**: Real-time bidirectional communication

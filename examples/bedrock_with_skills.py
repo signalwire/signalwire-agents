@@ -9,7 +9,7 @@ from signalwire_agents import BedrockAgent
 # Create a Bedrock agent
 agent = BedrockAgent(
     name="bedrock_skills_test",
-    voice_id="Matthew",
+    voice_id="inworld.Mark",
     temperature=0.8
 )
 

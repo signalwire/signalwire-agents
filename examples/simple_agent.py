@@ -158,49 +158,38 @@ class SimpleAgent(AgentBase):
         # Configure multiple languages with different voice options
         #------------------------------------------------------------------------
         
-        # Example 1: Simple format with ElevenLabs voice
+        # Example 1: Primary language with voice and fillers
         self.add_language(
             name="English",    # Display name for the language
             code="en-US",      # ISO language code
-            voice="rime.spore",  # Voice ID with provider prefix
+            voice="inworld.Mark",  # Voice ID with provider prefix
             # Phrases to use when the AI needs time to think
             speech_fillers=["Let me think about that...", "One moment please..."],
             # Phrases to use when the AI is calling a function
             function_fillers=["I'm looking that up for you...", "Let me check that..."]
         )
 
-        # Example 2: Explicit parameters with engine and model
-        self.add_language(
-            name="British English",
-            code="en-GB",
-            voice="spore",        # Voice ID without provider prefix
-            engine="rime", # The TTS engine to use
-            model="multilingual",  # Specific model for the voice
-            speech_fillers=["Just a moment...", "Thinking..."]
-        )
-
-        # Example 3: Combined string format (provider.voice:model)
+        # Example 2: Additional language with fillers
         self.add_language(
             name="Spanish",
             code="es",
-            # Format: provider.voice:model
-            voice="rime.pablo",
+            voice="inworld.Sarah",
             speech_fillers=["Un momento por favor...", "Estoy pensando..."],
             function_fillers=["Estoy buscando esa información...", "Déjame verificar..."]
         )
 
-        # Example 4: Alternative engine (Rime) with explicit parameters
+        # Example 3: Additional language (minimal)
         self.add_language(
             name="French",
             code="fr-FR",
-            voice="rime.alois"
+            voice="inworld.Hanna"
         )
 
-        # Example 5: Alternative engine with combined format
+        # Example 4: Additional language (minimal)
         self.add_language(
             name="German",
             code="de-DE",
-            voice="rime.hans:arcana"  # Format: provider.voice:model
+            voice="inworld.Blake"
         )
         
         #------------------------------------------------------------------------

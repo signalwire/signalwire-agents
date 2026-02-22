@@ -16,7 +16,7 @@ This example demonstrates the traditional way of configuring an agent with stati
 All configuration is done during initialization and remains the same for every request.
 
 This agent:
-- Uses a professional voice (rime.spore)
+- Uses a professional voice (inworld.Mark)
 - Has a 500ms speech timeout
 - Includes helpful hints
 - Sets up global data with session info
@@ -45,7 +45,7 @@ class SimpleStaticAgent(AgentBase):
         # STATIC CONFIGURATION - Set once during initialization
         
         # Voice and language (never changes)
-        self.add_language("English", "en-US", "rime.spore")
+        self.add_language("English", "en-US", "inworld.Mark")
         
         # AI parameters (never changes)
         self.set_params({
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     
     print("Starting Simple Static Agent")
     print("\nConfiguration: STATIC (set once at startup)")
-    print("- Voice: rime.spore (professional)")
+    print("- Voice: inworld.Mark (professional)")
     print("- Service Level: standard") 
     print("- Speech Timeout: 500ms")
     print("- Features: basic conversation, help desk")

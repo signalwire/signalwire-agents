@@ -42,7 +42,7 @@ def main():
     agent.add_language(
         name="English",    # Display name for the language
         code="en-US",      # ISO language code
-        voice="rime.spore"  # Voice ID with provider prefix
+        voice="inworld.Mark"  # Voice ID with provider prefix
     )
 
     # Customize the agent with additional prompt sections if desired

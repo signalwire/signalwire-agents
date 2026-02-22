@@ -135,7 +135,7 @@ class SigmondSimple(AgentBase):
             {
                 "name": "English (United States)",
                 "code": "en-US", 
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "sure. hold on a second please",
                     "ok. let me think about that", 
@@ -146,7 +146,7 @@ class SigmondSimple(AgentBase):
             {
                 "name": "Spanish",
                 "code": "multi",
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "Claro", "espera un segundo", "Ok", "déjame explicarte eso"
                 ]
@@ -154,7 +154,7 @@ class SigmondSimple(AgentBase):
             {
                 "name": "French", 
                 "code": "multi",
-                "voice": "elevenlabs.adam",
+                "voice": "inworld.Mark",
                 "function_fillers": [
                     "bien sur", "pas de problem", "une minute", "laisse-moi t'expliquer"
                 ]

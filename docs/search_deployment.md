@@ -2144,3 +2144,9 @@ for index_file in Path(DEV_DIR).glob("*.swsearch"):
 
 print("\nMigration complete!")
 ```
+
+## Examples
+
+- `examples/pgvector_search_agent.py` - PGVector backend for document search with PostgreSQL
+- `examples/search_server_standalone.py` - Standalone search server deployment
+- `examples/sigmond_remote_search.py` - Remote search via HTTP endpoint
