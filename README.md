@@ -62,10 +62,10 @@ swaig-test my_agent.py --exec get_time
 
 - **Self-contained agents** -- each agent is both a web application and an AI persona
 - **Prompt Object Model (POM)** -- structured prompt composition via `prompt_add_section()`
-- **SWAIG tools** -- define AI-callable functions with `@AgentBase.tool()` decorators
+- **SWAIG tools** -- [SWAIG (SignalWire AI Gateway)](docs/swaig_reference.md) is the platform's AI tool-calling system with native access to the media stack; define functions with `@AgentBase.tool()` decorators and the AI can invoke them mid-call
 - **Skills system** -- add capabilities with one-liners: `agent.add_skill("datetime")`
 - **Contexts and steps** -- structured multi-step workflows with navigation control
-- **DataMap tools** -- server-side API integration without webhook infrastructure
+- **DataMap tools** -- define tools that execute on SignalWire's servers, calling REST APIs without needing your own webhook endpoints
 - **Dynamic configuration** -- per-request agent customization for multi-tenant deployments
 - **Call flow control** -- pre-answer, post-answer, and post-AI verb insertion
 - **Prefab agents** -- ready-to-use archetypes (InfoGatherer, Survey, FAQ, Receptionist, Concierge)
@@ -129,7 +129,7 @@ Guides are also available in the [`docs/`](docs/) directory:
 
 - [Agent Guide](docs/agent_guide.md) -- creating agents, prompt configuration, dynamic setup
 - [Architecture](docs/architecture.md) -- SDK architecture and core concepts
-- [SDK Features](docs/sdk_features.md) -- feature overview, SDK vs raw SWML comparison
+- [SDK Features](docs/sdk_features.md) -- feature overview, SDK vs raw SWML (SignalWire Markup Language) comparison
 
 ### Core Features
 
@@ -137,7 +137,7 @@ Guides are also available in the [`docs/`](docs/) directory:
 - [Contexts and Steps](docs/contexts_guide.md) -- structured workflows, navigation, gather mode
 - [DataMap Guide](docs/datamap_guide.md) -- serverless API tools without webhooks
 - [LLM Parameters](docs/llm_parameters.md) -- temperature, top_p, barge confidence tuning
-- [SWML Service Guide](docs/swml_service_guide.md) -- low-level SWML document construction
+- [SWML Service Guide](docs/swml_service_guide.md) -- low-level construction of SWML documents (the JSON format that defines agent behavior during calls)
 
 ### Skills and Extensions
 

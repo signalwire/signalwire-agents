@@ -27,7 +27,7 @@ This tutorial covers everything you need to know to build production-ready AI vo
 
 - Integrating searchable knowledge bases with vector search
 - Building multi-agent systems with intelligent routing
-- Implementing custom SWAIG functions
+- Implementing custom SWAIG (SignalWire AI Gateway) functions
 - Managing agent-to-agent context sharing
 - Deploying to production environments
 

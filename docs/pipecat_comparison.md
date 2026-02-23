@@ -8,9 +8,9 @@
 
 ## Executive Summary
 
-This document provides an unbiased technical comparison between the **SignalWire AI Agents SDK** and **Pipecat** (by Daily.co), the two leading open-source Python frameworks for building voice AI agents. While architecturally different -- SignalWire uses declarative SWML document generation executed by a full-featured telecom platform, while Pipecat uses imperative frame-based pipelines -- both solve the fundamental problem of enabling developers to build conversational AI agents that interact via voice.
+This document provides an unbiased technical comparison between the **SignalWire AI Agents SDK** and **Pipecat** (by Daily.co), the two leading open-source Python frameworks for building voice AI agents. While architecturally different -- SignalWire uses declarative SWML (SignalWire Markup Language) document generation executed by a full-featured telecom platform, while Pipecat uses imperative frame-based pipelines -- both solve the fundamental problem of enabling developers to build conversational AI agents that interact via voice.
 
-The analysis identifies specific strengths and gaps in both frameworks, and proposes actionable improvements for the SignalWire solution that adapt Pipecat's best ideas to our declarative architecture. Crucially, this analysis considers the **full SignalWire platform capabilities** (SWML verbs, SWAIG actions, built-in functions, post-prompt analytics, debug webhooks, relay events, video avatars, PGI methodology) -- not just the Python SDK surface -- since the SDK generates documents that the platform executes with a rich feature set.
+The analysis identifies specific strengths and gaps in both frameworks, and proposes actionable improvements for the SignalWire solution that adapt Pipecat's best ideas to our declarative architecture. Crucially, this analysis considers the **full SignalWire platform capabilities** (SWML verbs, SWAIG -- SignalWire AI Gateway, the platform's tool-calling system -- actions, built-in functions, post-prompt analytics, debug webhooks, relay events, video avatars, PGI methodology) -- not just the Python SDK surface -- since the SDK generates documents that the platform executes with a rich feature set.
 
 ---
 

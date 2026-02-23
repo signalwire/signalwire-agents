@@ -10,7 +10,7 @@ The SignalWire AI Agents SDK provides a Python framework for building, deploying
 
 The SDK is built around a clear class hierarchy:
 
-- **SWMLService**: The foundation class providing SWML document creation and HTTP service capabilities
+- **SWMLService**: The foundation class providing SWML (SignalWire Markup Language) document creation and HTTP service capabilities. SWML is the JSON document format that defines how an agent behaves during a call.
   - **AgentBase**: Extends SWMLService with AI agent-specific functionality
     - **Custom Agent Classes**: User implementations like SimpleAgent
     - **Prefab Agents**: Ready-to-use agent types for common scenarios
@@ -27,7 +27,7 @@ The SDK is built around a clear class hierarchy:
    - Section-based organization (Personality, Goal, Instructions, etc.)
    - Programmatic prompt construction and manipulation
 
-3. **SWAIG Function Framework**
+3. **SWAIG (SignalWire AI Gateway) Function Framework** -- SWAIG is the platform's AI tool-calling system with native access to the media stack. When the AI decides to call a function, SWAIG handles invocation, parameter passing, and result delivery.
    - Tool definition and registration system
    - Parameter validation using JSON schema
    - Security tokens for function execution

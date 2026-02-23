@@ -5,8 +5,8 @@ This guide covers the command-line tools included with the SignalWire Agents SDK
 ## Overview
 
 The `swaig-test` CLI tool provides a complete testing environment for:
-- **SWAIG Functions**: Both webhook and DataMap functions with automatic type detection
-- **SWML Generation**: Static and dynamic agent SWML document testing with realistic fake data
+- **SWAIG Functions**: SWAIG (SignalWire AI Gateway) is the platform's AI tool-calling system. Test both webhook and DataMap functions with automatic type detection
+- **SWML Generation**: SWML (SignalWire Markup Language) is the JSON document format that defines agent behavior during calls. Test static and dynamic SWML documents with realistic fake data
 - **Mock Requests**: Complete FastAPI Request simulation for dynamic agent testing
 
 The tool automatically detects function types, provides appropriate execution environments, and simulates the SignalWire platform locally while making real HTTP requests for DataMap functions.
@@ -1270,7 +1270,7 @@ swaig-test my_agent.py my_function '{"param":"value"}' --custom-data '{"call_id"
 }
 ```
 
-### DataSphere Knowledge Search
+### DataSphere Knowledge Search (SignalWire's Cloud Document Search / RAG Service)
 
 ```bash
 # Test DataSphere serverless function

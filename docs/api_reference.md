@@ -5,8 +5,8 @@ This document provides a comprehensive reference for all public APIs in the Sign
 ## Table of Contents
 
 1. [AgentBase Class](#agentbase-class) - Core agent functionality
-2. [SwaigFunctionResult Class](#swaigfunctionresult-class) - Function response handling
-3. [DataMap Class](#datamap-class) - Serverless API integration
+2. [SwaigFunctionResult Class](#swaigfunctionresult-class) - SWAIG (SignalWire AI Gateway) function response handling
+3. [DataMap Class](#datamap-class) - Serverless API tools that execute on SignalWire's servers
 4. [Context System](#context-system) - Structured workflows
 5. [State Management](#state-management) - Persistent state
 6. [Skills System](#skills-system) - Modular capabilities
@@ -16,7 +16,7 @@ This document provides a comprehensive reference for all public APIs in the Sign
 
 ## AgentBase Class
 
-The `AgentBase` class is the foundation for creating AI agents. It extends `SWMLService` and provides comprehensive functionality for building conversational AI agents.
+The `AgentBase` class is the foundation for creating AI agents. It extends `SWMLService` (the base class for generating SWML -- SignalWire Markup Language -- documents) and provides comprehensive functionality for building conversational AI agents.
 
 ### Constructor
 

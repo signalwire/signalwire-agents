@@ -5,7 +5,7 @@
 - [Architecture Overview](#architecture-overview)
 - [Creating an Agent](#creating-an-agent)
 - [Prompt Building](#prompt-building)
-- [SWAIG Functions](#swaig-functions)
+- [SWAIG Functions (SignalWire AI Gateway)](#swaig-functions)
 - [Skills System](#skills-system)
 - [Multilingual Support](#multilingual-support)
 - [Agent Configuration](#agent-configuration)
@@ -28,12 +28,12 @@
 
 ## Introduction
 
-The `AgentBase` class provides the foundation for creating AI-powered agents using the SignalWire AI Agent SDK. It extends the `SWMLService` class, inheriting all its SWML document creation and serving capabilities, while adding AI-specific functionality.
+The `AgentBase` class provides the foundation for creating AI-powered agents using the SignalWire AI Agent SDK. It extends the `SWMLService` class, inheriting all its SWML (SignalWire Markup Language) document creation and serving capabilities, while adding AI-specific functionality. SWML is the JSON document format that tells the SignalWire platform how an agent should behave during a call.
 
 Key features of `AgentBase` include:
 
 - Structured prompt building with POM (Prompt Object Model)
-- SWAIG function definitions for AI tool access
+- SWAIG (SignalWire AI Gateway) function definitions -- SWAIG is the platform's AI tool-calling system with native access to the media stack
 - Multilingual support
 - Agent configuration (hint handling, pronunciation rules, etc.)
 - State management for conversations
@@ -243,7 +243,7 @@ Analyze the conversation and extract:
 
 ## SWAIG Functions
 
-SWAIG functions allow the AI agent to perform actions and access external systems. There are two types of SWAIG functions you can define:
+SWAIG (SignalWire AI Gateway) functions allow the AI agent to perform actions and access external systems during a call. The AI decides when to call a function based on the conversation; SWAIG handles invocation, parameter passing, and delivering the result back to the AI. There are two types of SWAIG functions you can define:
 
 ### 1. Local Webhook Functions (Standard)
 
@@ -716,7 +716,7 @@ agent.add_skill("math")
 ```
 
 #### DataSphere Skill (`datasphere`)
-Provides knowledge search capabilities using SignalWire DataSphere RAG stack.
+Provides knowledge search capabilities using SignalWire DataSphere, a cloud-hosted document search and retrieval-augmented generation (RAG) service.
 
 **Requirements:**
 - Packages: `requests`

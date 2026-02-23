@@ -2,11 +2,11 @@
 
 ## Overview
 
-BedrockAgent is a specialized agent implementation that integrates Amazon Bedrock's voice-to-voice model with SignalWire's agent ecosystem. It extends AgentBase to provide full compatibility with all SignalWire agent features while generating SWML documents with the `amazon_bedrock` verb instead of the standard `ai` verb.
+BedrockAgent is a specialized agent implementation that integrates Amazon Bedrock's voice-to-voice model with SignalWire's agent ecosystem. It extends AgentBase to provide full compatibility with all SignalWire agent features while generating SWML (SignalWire Markup Language) documents with the `amazon_bedrock` verb instead of the standard `ai` verb.
 
 ## Key Features
 
-- **Full Agent Compatibility**: Inherits all capabilities from AgentBase including skills, tools, POM, and SWAIG functions
+- **Full Agent Compatibility**: Inherits all capabilities from AgentBase including skills, tools, POM (Prompt Object Model), and SWAIG (SignalWire AI Gateway) functions
 - **Bedrock Integration**: Generates SWML with `amazon_bedrock` verb for native Bedrock support
 - **Voice-to-Voice Model**: Uses Amazon Bedrock's fixed voice-to-voice model
 - **Drop-in Migration**: Drop-in replacement for standard agents when using Bedrock

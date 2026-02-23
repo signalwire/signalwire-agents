@@ -30,7 +30,7 @@ swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 
 | File | Description |
 |------|-------------|
-| [simple_agent.py](simple_agent.py) | Full-featured agent with POM prompts, SWAIG tools, multilingual support, SIP routing, and LLM parameter tuning |
+| [simple_agent.py](simple_agent.py) | Full-featured agent with POM (Prompt Object Model) prompts, SWAIG (SignalWire AI Gateway) tools, multilingual support, SIP routing, and LLM parameter tuning |
 | [simple_static_agent.py](simple_static_agent.py) | Minimal static agent with no dynamic configuration |
 | [simple_dynamic_agent.py](simple_dynamic_agent.py) | Agent with per-request dynamic configuration callback |
 | [declarative_agent.py](declarative_agent.py) | Declarative prompt definition using `PROMPT_SECTIONS` class attribute |
@@ -72,14 +72,14 @@ swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 | [search_with_custom_formatter.py](search_with_custom_formatter.py) | Custom response formatter callback for search results |
 | [search_server_standalone.py](search_server_standalone.py) | Standalone search server without an agent |
 
-### DataMap (Serverless Tools)
+### DataMap (Tools That Run on SignalWire's Servers)
 
 | File | Description |
 |------|-------------|
 | [data_map_demo.py](data_map_demo.py) | DataMap builder API for creating server-side tools without webhooks |
 | [advanced_datamap_demo.py](advanced_datamap_demo.py) | Advanced DataMap: expressions, foreach loops, multiple webhooks, error handling |
 
-### Datasphere Integration
+### Datasphere Integration (SignalWire's Cloud Document Search / RAG Service)
 
 | File | Description |
 |------|-------------|
@@ -118,7 +118,7 @@ swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 |------|-------------|
 | [llm_params_demo.py](llm_params_demo.py) | LLM parameter tuning with three persona examples (customer service, creative, technical) |
 
-### SWAIG Features
+### SWAIG Features (SignalWire AI Gateway -- AI Tool Calling)
 
 | File | Description |
 |------|-------------|
@@ -129,7 +129,7 @@ swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 | [room_and_sip_example.py](room_and_sip_example.py) | Room management and SIP integration |
 | [tap_example.py](tap_example.py) | Call tap/monitoring setup |
 
-### SWML Services
+### SWML Services (SignalWire Markup Language -- Call Behavior Documents)
 
 | File | Description |
 |------|-------------|

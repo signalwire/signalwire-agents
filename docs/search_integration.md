@@ -28,7 +28,7 @@ class DocsAgent(AgentBase):
         })
 ```
 
-The agent automatically exposes this as a SWAIG function that the LLM can invoke when it determines a search is needed.
+The agent automatically exposes this as a SWAIG (SignalWire AI Gateway) function that the LLM can invoke when it determines a search is needed. SWAIG is the platform's AI tool-calling system.
 
 ### Configuration Options
 

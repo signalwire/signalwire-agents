@@ -1,6 +1,6 @@
 # Security Configuration Guide
 
-This guide covers the security features and configuration options available in SignalWire AI Agents SDK for both SWML-based services (including AgentBase) and the standalone Search Service.
+This guide covers the security features and configuration options available in SignalWire AI Agents SDK for both SWML-based services (SWML -- SignalWire Markup Language -- is the JSON document format that defines agent behavior) and the standalone Search Service.
 
 ## Overview
 

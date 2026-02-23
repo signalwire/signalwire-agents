@@ -111,7 +111,7 @@ A comprehensive guide to understanding, implementing, and testing DataMap config
 
 ### 1.1 What is DataMap
 
-DataMap is a serverless function execution system within SignalWire AI Agents that enables integration with external APIs without the need for custom webhook endpoints. Unlike traditional webhook-based SWAIG functions that require you to host and maintain HTTP endpoints, DataMap functions are executed entirely within the SignalWire infrastructure.
+DataMap is a serverless function execution system within SignalWire AI Agents that enables integration with external APIs without the need for custom webhook endpoints. Unlike traditional webhook-based SWAIG (SignalWire AI Gateway) functions that require you to host and maintain HTTP endpoints, DataMap functions are executed entirely within the SignalWire infrastructure. SWAIG is the platform's AI tool-calling system with native access to the media stack -- DataMap is one way to define SWAIG functions without running your own server.
 
 **Key Characteristics:**
 - **Serverless Architecture**: No need to host webhook endpoints

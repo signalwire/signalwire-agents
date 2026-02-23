@@ -8,11 +8,11 @@
 
 ## Executive Summary
 
-This document provides an unbiased technical comparison between the **SignalWire AI Agents SDK** and **LiveKit Agents** (by LiveKit Inc.), two open-source Python frameworks for building voice AI agents. While architecturally different -- SignalWire uses declarative SWML document generation executed by a full-featured telecom platform, while LiveKit uses an imperative room-based model where agents join WebRTC rooms as participants -- both solve the fundamental problem of enabling developers to build conversational AI agents that interact via voice.
+This document provides an unbiased technical comparison between the **SignalWire AI Agents SDK** and **LiveKit Agents** (by LiveKit Inc.), two open-source Python frameworks for building voice AI agents. While architecturally different -- SignalWire uses declarative SWML (SignalWire Markup Language) document generation executed by a full-featured telecom platform, while LiveKit uses an imperative room-based model where agents join WebRTC rooms as participants -- both solve the fundamental problem of enabling developers to build conversational AI agents that interact via voice.
 
 LiveKit is the better-funded and higher-profile competitor, with $182.5M in funding, a $1B valuation, and OpenAI as a customer (powering ChatGPT Voice Mode). Its agent framework has 9,300+ GitHub stars and 1M+ monthly downloads. The core server has 17,100+ stars. LiveKit Cloud offers a managed deployment path with phone numbers, SIP trunking, and an inference API.
 
-The analysis identifies specific strengths and gaps in both frameworks, and proposes actionable improvements for the SignalWire solution. Crucially, this analysis considers the **full SignalWire platform capabilities** (SWML verbs, SWAIG actions, built-in functions, post-prompt analytics, debug webhooks, relay events, video avatars, PGI methodology, enriched call_log) -- not just the Python SDK surface -- since the SDK generates documents that the platform executes with a rich feature set.
+The analysis identifies specific strengths and gaps in both frameworks, and proposes actionable improvements for the SignalWire solution. Crucially, this analysis considers the **full SignalWire platform capabilities** (SWML verbs, SWAIG -- SignalWire AI Gateway, the platform's tool-calling system -- actions, built-in functions, post-prompt analytics, debug webhooks, relay events, video avatars, PGI methodology, enriched call_log) -- not just the Python SDK surface -- since the SDK generates documents that the platform executes with a rich feature set.
 
 ---
 

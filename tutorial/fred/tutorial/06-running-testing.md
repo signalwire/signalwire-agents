@@ -67,14 +67,14 @@ Fred exposes two main HTTP endpoints:
 
 ### 1. SWML Endpoint (GET /fred)
 
-Returns Fred's configuration as a SWML document:
+Returns Fred's configuration as a SWML (SignalWire Markup Language) document:
 - **Purpose**: Tells SignalWire how Fred should behave
 - **Method**: GET
 - **Auth**: Required
 
 ### 2. SWAIG Endpoint (POST /fred/swaig/)
 
-Handles function execution:
+SWAIG (SignalWire AI Gateway) handles function execution:
 - **Purpose**: Executes Fred's functions
 - **Method**: POST
 - **Auth**: Required
