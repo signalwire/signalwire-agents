@@ -1020,7 +1020,7 @@ class WebMixin:
                 req_log.error("error_parsing_request_body", error=str(e))
                 return {"status": "error", "message": "invalid JSON"}
 
-            event_type = body.get("label", "unknown")
+            event_type = body.get("label") or body.get("action", "unknown")
             call_id = body.get("call_id")
 
             if call_id:
