@@ -115,6 +115,11 @@ class Step:
         # Gather info configuration
         self._gather_info: Optional[GatherInfo] = None
 
+        # Step behavior flags
+        self._end: bool = False
+        self._skip_user_turn: bool = False
+        self._skip_to_next_step: bool = False
+
         # Reset object for context switching from steps
         self._reset_system_prompt: Optional[str] = None
         self._reset_user_prompt: Optional[str] = None
@@ -220,6 +225,45 @@ class Step:
         self._valid_contexts = contexts
         return self
     
+    def set_end(self, end: bool) -> 'Step':
+        """
+        Set whether the conversation should end after this step
+
+        Args:
+            end: Whether to end the conversation after this step
+
+        Returns:
+            Self for method chaining
+        """
+        self._end = end
+        return self
+
+    def set_skip_user_turn(self, skip: bool) -> 'Step':
+        """
+        Set whether to skip waiting for user input after this step
+
+        Args:
+            skip: Whether to skip the user turn after this step
+
+        Returns:
+            Self for method chaining
+        """
+        self._skip_user_turn = skip
+        return self
+
+    def set_skip_to_next_step(self, skip: bool) -> 'Step':
+        """
+        Set whether to automatically advance to the next step
+
+        Args:
+            skip: Whether to skip to the next step automatically
+
+        Returns:
+            Self for method chaining
+        """
+        self._skip_to_next_step = skip
+        return self
+
     def set_gather_info(self, output_key: Optional[str] = None,
                         completion_action: Optional[str] = None,
                         prompt: Optional[str] = None) -> 'Step':
@@ -373,7 +417,16 @@ class Step:
             
         if self._valid_contexts is not None:
             step_dict["valid_contexts"] = self._valid_contexts
-        
+
+        if self._end:
+            step_dict["end"] = True
+
+        if self._skip_user_turn:
+            step_dict["skip_user_turn"] = True
+
+        if self._skip_to_next_step:
+            step_dict["skip_to_next_step"] = True
+
         # Add reset object if any reset parameters are set
         reset_obj = {}
         if self._reset_system_prompt is not None:
@@ -402,7 +455,8 @@ class Context:
         self._steps: Dict[str, Step] = {}
         self._step_order: List[str] = []
         self._valid_contexts: Optional[List[str]] = None
-        
+        self._valid_steps: Optional[List[str]] = None
+
         # Context entry parameters
         self._post_prompt: Optional[str] = None
         self._system_prompt: Optional[str] = None
@@ -530,7 +584,20 @@ class Context:
         """
         self._valid_contexts = contexts
         return self
-    
+
+    def set_valid_steps(self, steps: List[str]) -> 'Context':
+        """
+        Set which steps can be navigated to from any step in this context
+
+        Args:
+            steps: List of valid step names (include "next" for sequential flow)
+
+        Returns:
+            Self for method chaining
+        """
+        self._valid_steps = steps
+        return self
+
     def set_post_prompt(self, post_prompt: str) -> 'Context':
         """
         Set post prompt override for this context
@@ -809,7 +876,10 @@ class Context:
         
         if self._valid_contexts is not None:
             context_dict["valid_contexts"] = self._valid_contexts
-        
+
+        if self._valid_steps is not None:
+            context_dict["valid_steps"] = self._valid_steps
+
         # Add context entry parameters
         if self._post_prompt is not None:
             context_dict["post_prompt"] = self._post_prompt
