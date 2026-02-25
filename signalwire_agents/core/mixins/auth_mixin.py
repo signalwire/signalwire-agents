@@ -8,6 +8,7 @@ See LICENSE file in the project root for full license information.
 """
 
 import os
+import hmac
 import json
 import base64
 from typing import Union, Tuple
@@ -33,7 +34,8 @@ class AuthMixin:
             
         This method can be overridden by subclasses.
         """
-        return (username, password) == self._basic_auth
+        exp_user, exp_pass = self._basic_auth
+        return hmac.compare_digest(username, exp_user) and hmac.compare_digest(password, exp_pass)
     
     def get_basic_auth_credentials(self, include_source: bool = False) -> Union[Tuple[str, str], Tuple[str, str, str]]:
         """
@@ -100,10 +102,9 @@ class AuthMixin:
         # Check for HTTP_AUTHORIZATION environment variable
         auth_header = os.getenv('HTTP_AUTHORIZATION')
         if not auth_header:
-            # Also check for REMOTE_USER (if web server handled auth)
+            # Only trust REMOTE_USER if explicitly configured
             remote_user = os.getenv('REMOTE_USER')
-            if remote_user:
-                # If web server handled auth, trust it
+            if remote_user and os.getenv('SWML_TRUST_REMOTE_USER', '').lower() in ('1', 'true', 'yes'):
                 return True
             return False
         

@@ -12,6 +12,7 @@ import importlib
 import importlib.util
 import inspect
 import sys
+import threading
 from typing import Dict, List, Type, Optional, Any
 from pathlib import Path
 
@@ -25,46 +26,64 @@ class SkillRegistry:
         self._skills: Dict[str, Type[SkillBase]] = {}
         self._external_paths: List[Path] = []  # Additional paths to search for skills
         self._entry_points_loaded = False
+        self._lock = threading.RLock()
         self.logger = get_logger("skill_registry")
     
     def _load_skill_on_demand(self, skill_name: str) -> Optional[Type[SkillBase]]:
         """Load a skill on-demand by name"""
-        if skill_name in self._skills:
-            return self._skills[skill_name]
-        
-        # First, ensure entry points are loaded
-        self._load_entry_points()
-        
-        # Check if skill was loaded from entry points
-        if skill_name in self._skills:
-            return self._skills[skill_name]
-        
-        # Search in built-in skills directory
-        skills_dir = Path(__file__).parent
-        skill_class = self._load_skill_from_path(skill_name, skills_dir)
-        if skill_class:
-            return skill_class
-        
-        # Search in external paths
-        for external_path in self._external_paths:
-            skill_class = self._load_skill_from_path(skill_name, external_path)
+        with self._lock:
+            if skill_name in self._skills:
+                return self._skills[skill_name]
+
+            # Search in built-in skills directory FIRST (before entry points)
+            skills_dir = Path(__file__).parent
+            skill_class = self._load_skill_from_path(skill_name, skills_dir)
             if skill_class:
                 return skill_class
-        
-        # Search in environment variable paths
-        env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(os.pathsep)
-        for path_str in env_paths:
-            if path_str:
-                skill_class = self._load_skill_from_path(skill_name, Path(path_str))
+
+            # Then load entry points (cannot override built-in skills)
+            self._load_entry_points()
+
+            # Check if skill was loaded from entry points
+            if skill_name in self._skills:
+                return self._skills[skill_name]
+
+            # Search in external paths
+            for external_path in self._external_paths:
+                skill_class = self._load_skill_from_path(skill_name, external_path)
                 if skill_class:
                     return skill_class
-        
-        self.logger.debug(f"Skill '{skill_name}' not found in any registered paths")
-        return None
+
+            # Search in environment variable paths
+            env_paths = os.environ.get('SIGNALWIRE_SKILL_PATHS', '').split(os.pathsep)
+            for path_str in env_paths:
+                if path_str:
+                    skill_class = self._load_skill_from_path(skill_name, Path(path_str))
+                    if skill_class:
+                        return skill_class
+
+            self.logger.debug(f"Skill '{skill_name}' not found in any registered paths")
+            return None
     
     def _load_skill_from_path(self, skill_name: str, base_path: Path) -> Optional[Type[SkillBase]]:
         """Try to load a skill from a specific base path"""
+        # Prevent path traversal in skill names
+        if '..' in skill_name or os.sep in skill_name or '/' in skill_name:
+            self.logger.error(f"Invalid skill name (path traversal attempt): {skill_name}")
+            return None
+
         skill_dir = base_path / skill_name
+
+        # Verify the resolved path stays within the expected base path
+        try:
+            resolved_skill_dir = skill_dir.resolve()
+            resolved_base = base_path.resolve()
+            if not str(resolved_skill_dir).startswith(str(resolved_base) + os.sep) and resolved_skill_dir != resolved_base:
+                self.logger.error(f"Skill path escapes base directory: {skill_name}")
+                return None
+        except Exception:
+            self.logger.error(f"Failed to resolve skill path for: {skill_name}")
+            return None
         skill_file = skill_dir / "skill.py"
         
         if not skill_file.exists():
@@ -111,65 +130,66 @@ class SkillRegistry:
     def register_skill(self, skill_class: Type[SkillBase]) -> None:
         """
         Register a skill class directly
-        
+
         This allows third-party code to register skill classes without
         requiring them to be in a specific directory structure.
-        
+
         Args:
             skill_class: A class that inherits from SkillBase
-            
+
         Example:
             from my_custom_skills import MyWeatherSkill
             skill_registry.register_skill(MyWeatherSkill)
         """
-        if not issubclass(skill_class, SkillBase):
-            raise ValueError(f"{skill_class} must inherit from SkillBase")
-            
-        if not hasattr(skill_class, 'SKILL_NAME') or skill_class.SKILL_NAME is None:
-            raise ValueError(f"{skill_class} must define SKILL_NAME")
-            
-        # Validate that the skill has a proper parameter schema
-        if not hasattr(skill_class, 'get_parameter_schema') or not callable(getattr(skill_class, 'get_parameter_schema')):
-            raise ValueError(f"{skill_class.__name__} must have get_parameter_schema() classmethod")
-        
-        # Try to call get_parameter_schema to ensure it's properly implemented
-        try:
-            schema = skill_class.get_parameter_schema()
-            if not isinstance(schema, dict):
-                raise ValueError(f"{skill_class.__name__}.get_parameter_schema() must return a dictionary, got {type(schema)}")
-            
-            # Ensure it's not an empty schema (skills should at least have the base parameters)
-            if not schema:
-                raise ValueError(f"{skill_class.__name__}.get_parameter_schema() returned an empty dictionary. Skills should at least call super().get_parameter_schema()")
-            
-            # Check if the skill has overridden the method (not just inherited base)
-            skill_method = getattr(skill_class, 'get_parameter_schema', None)
-            base_method = getattr(SkillBase, 'get_parameter_schema', None)
-            
-            if skill_method and base_method:
-                # For class methods, check the underlying function
-                skill_func = skill_method.__func__ if hasattr(skill_method, '__func__') else skill_method
-                base_func = base_method.__func__ if hasattr(base_method, '__func__') else base_method
-                
-                if skill_func is base_func:
-                    # Get base schema to check if skill added any parameters
-                    base_schema = SkillBase.get_parameter_schema()
-                    if set(schema.keys()) == set(base_schema.keys()):
-                        raise ValueError(f"{skill_class.__name__} must override get_parameter_schema() to define its specific parameters")
-                
-        except AttributeError as e:
-            raise ValueError(f"{skill_class.__name__} must properly implement get_parameter_schema() classmethod")
-        except ValueError:
-            raise  # Re-raise our validation errors
-        except Exception as e:
-            raise ValueError(f"{skill_class.__name__}.get_parameter_schema() failed: {e}")
-            
-        if skill_class.SKILL_NAME in self._skills:
-            self.logger.warning(f"Skill '{skill_class.SKILL_NAME}' already registered")
-            return
-            
-        self._skills[skill_class.SKILL_NAME] = skill_class
-        self.logger.debug(f"Registered skill '{skill_class.SKILL_NAME}'")
+        with self._lock:
+            if not issubclass(skill_class, SkillBase):
+                raise ValueError(f"{skill_class} must inherit from SkillBase")
+
+            if not hasattr(skill_class, 'SKILL_NAME') or skill_class.SKILL_NAME is None:
+                raise ValueError(f"{skill_class} must define SKILL_NAME")
+
+            # Validate that the skill has a proper parameter schema
+            if not hasattr(skill_class, 'get_parameter_schema') or not callable(getattr(skill_class, 'get_parameter_schema')):
+                raise ValueError(f"{skill_class.__name__} must have get_parameter_schema() classmethod")
+
+            # Try to call get_parameter_schema to ensure it's properly implemented
+            try:
+                schema = skill_class.get_parameter_schema()
+                if not isinstance(schema, dict):
+                    raise ValueError(f"{skill_class.__name__}.get_parameter_schema() must return a dictionary, got {type(schema)}")
+
+                # Ensure it's not an empty schema (skills should at least have the base parameters)
+                if not schema:
+                    raise ValueError(f"{skill_class.__name__}.get_parameter_schema() returned an empty dictionary. Skills should at least call super().get_parameter_schema()")
+
+                # Check if the skill has overridden the method (not just inherited base)
+                skill_method = getattr(skill_class, 'get_parameter_schema', None)
+                base_method = getattr(SkillBase, 'get_parameter_schema', None)
+
+                if skill_method and base_method:
+                    # For class methods, check the underlying function
+                    skill_func = skill_method.__func__ if hasattr(skill_method, '__func__') else skill_method
+                    base_func = base_method.__func__ if hasattr(base_method, '__func__') else base_method
+
+                    if skill_func is base_func:
+                        # Get base schema to check if skill added any parameters
+                        base_schema = SkillBase.get_parameter_schema()
+                        if set(schema.keys()) == set(base_schema.keys()):
+                            raise ValueError(f"{skill_class.__name__} must override get_parameter_schema() to define its specific parameters")
+
+            except AttributeError as e:
+                raise ValueError(f"{skill_class.__name__} must properly implement get_parameter_schema() classmethod")
+            except ValueError:
+                raise  # Re-raise our validation errors
+            except Exception as e:
+                raise ValueError(f"{skill_class.__name__}.get_parameter_schema() failed: {e}")
+
+            if skill_class.SKILL_NAME in self._skills:
+                self.logger.warning(f"Skill '{skill_class.SKILL_NAME}' already registered")
+                return
+
+            self._skills[skill_class.SKILL_NAME] = skill_class
+            self.logger.debug(f"Registered skill '{skill_class.SKILL_NAME}'")
     
     def get_skill_class(self, skill_name: str) -> Optional[Type[SkillBase]]:
         """Get skill class by name, loading on-demand if needed"""
@@ -328,28 +348,29 @@ class SkillRegistry:
     def add_skill_directory(self, path: str) -> None:
         """
         Add a directory to search for skills
-        
+
         This allows third-party skill collections to be registered by path.
         Skills in these directories should follow the same structure as built-in skills:
         - Each skill in its own subdirectory
         - skill.py file containing the skill class
-        
+
         Args:
             path: Path to directory containing skill subdirectories
-            
+
         Example:
             skill_registry.add_skill_directory('/opt/custom_skills')
             # Now agent.add_skill('my_custom_skill') will search in this directory
         """
-        skill_path = Path(path)
-        if not skill_path.exists():
-            raise ValueError(f"Skill directory does not exist: {path}")
-        if not skill_path.is_dir():
-            raise ValueError(f"Path is not a directory: {path}")
-            
-        if skill_path not in self._external_paths:
-            self._external_paths.append(skill_path)
-            self.logger.info(f"Added external skill directory: {path}")
+        with self._lock:
+            skill_path = Path(path)
+            if not skill_path.exists():
+                raise ValueError(f"Skill directory does not exist: {path}")
+            if not skill_path.is_dir():
+                raise ValueError(f"Path is not a directory: {path}")
+
+            if skill_path not in self._external_paths:
+                self._external_paths.append(skill_path)
+                self.logger.info(f"Added external skill directory: {path}")
     
     def _load_entry_points(self) -> None:
         """
@@ -379,10 +400,27 @@ class SkillRegistry:
             else:
                 skill_entries = all_eps.get('signalwire_agents.skills', [])
 
+            # Determine built-in skill names for conflict detection
+            builtin_skills_dir = Path(__file__).parent
+            builtin_skill_names = set()
+            for item in builtin_skills_dir.iterdir():
+                if item.is_dir() and not item.name.startswith('__'):
+                    skill_file = item / "skill.py"
+                    if skill_file.exists():
+                        builtin_skill_names.add(item.name)
+
             for entry_point in skill_entries:
                 try:
                     skill_class = entry_point.load()
                     if issubclass(skill_class, SkillBase):
+                        # Block entry points from overriding built-in skills
+                        skill_name = getattr(skill_class, 'SKILL_NAME', None)
+                        if skill_name and (skill_name in builtin_skill_names or skill_name in self._skills):
+                            self.logger.error(
+                                f"Entry point '{entry_point.name}' tried to register skill '{skill_name}' "
+                                f"which conflicts with a built-in skill. Skipping."
+                            )
+                            continue
                         self.register_skill(skill_class)
                         self.logger.info(f"Loaded skill '{skill_class.SKILL_NAME}' from entry point '{entry_point.name}'")
                     else:

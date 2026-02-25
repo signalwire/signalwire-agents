@@ -55,6 +55,11 @@ class SchemaUtils:
 
         # Check env var override (env var can disable, but explicit False in code wins)
         env_skip = os.environ.get('SWML_SKIP_SCHEMA_VALIDATION', '').lower() in ('1', 'true', 'yes')
+        if env_skip:
+            import logging
+            logging.getLogger("signalwire.schema_utils").warning(
+                "SWML schema validation disabled via environment variable"
+            )
         self._validation_enabled = schema_validation and not env_skip
 
         self.schema_path = schema_path

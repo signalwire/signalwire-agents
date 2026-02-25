@@ -79,7 +79,7 @@ class SessionManager:
             self.secret_key.encode(),
             message.encode(),
             hashlib.sha256
-        ).hexdigest()[:16]  # Use first 16 chars of signature for shorter tokens
+        ).hexdigest()[:32]  # Use first 32 chars of signature for stronger tokens
         
         # Combine all parts into the token
         token = f"{call_id}.{function_name}.{expiry}.{nonce}.{signature}"
@@ -127,6 +127,10 @@ class SessionManager:
             # Special case: if call_id is None or empty, use the call_id from the token
             # This helps with scenarios where the call_id isn't provided in the request
             if not call_id:
+                import logging
+                logging.getLogger("signalwire.session_manager").warning(
+                    "call_id not provided in request, falling back to token's call_id"
+                )
                 call_id = token_call_id
             
             # Verify the function matches
@@ -144,9 +148,9 @@ class SessionManager:
                 self.secret_key.encode(),
                 message.encode(),
                 hashlib.sha256
-            ).hexdigest()[:16]
-            
-            if token_signature != expected_signature:
+            ).hexdigest()[:32]
+
+            if not hmac.compare_digest(token_signature, expected_signature):
                 return False
                 
             # Finally, verify the call_id matches unless we're in special case
@@ -224,7 +228,7 @@ class SessionManager:
                 return {
                     "valid_format": False,
                     "parts_count": len(parts),
-                    "decoded": decoded_token
+                    "token_length": len(token) if token else 0
                 }
                 
             token_call_id, token_function, token_expiry, token_nonce, token_signature = parts
@@ -245,12 +249,12 @@ class SessionManager:
             return {
                 "valid_format": True,
                 "components": {
-                    "call_id": token_call_id,
+                    "call_id": token_call_id[:8] + "..." if len(token_call_id) > 8 else token_call_id,
                     "function": token_function,
                     "expiry": token_expiry,
                     "expiry_date": expiry_date,
                     "nonce": token_nonce,
-                    "signature": token_signature
+                    "signature": token_signature[:8] + "..."
                 },
                 "status": {
                     "current_time": current_time,
@@ -263,5 +267,5 @@ class SessionManager:
             return {
                 "valid_format": False,
                 "error": str(e),
-                "token": token
+                "token_length": len(token) if token else 0
             }

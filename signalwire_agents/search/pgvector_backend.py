@@ -8,10 +8,16 @@ See LICENSE file in the project root for full license information.
 """
 
 import json
+import re
 from typing import List, Dict, Any, Optional
 
 from signalwire_agents.core.logging_config import get_logger
 from datetime import datetime
+
+
+def _sanitize_collection_name(collection_name: str) -> str:
+    """Sanitize a collection name to prevent SQL injection"""
+    return re.sub(r'[^a-zA-Z0-9_]', '_', collection_name)
 
 try:
     import psycopg2
@@ -180,18 +186,19 @@ class PgVectorBackend:
         
         return metadata_dict
 
-    def store_chunks(self, chunks: List[Dict[str, Any]], collection_name: str, 
+    def store_chunks(self, chunks: List[Dict[str, Any]], collection_name: str,
                     config: Dict[str, Any]):
         """
         Store document chunks in the database
-        
+
         Args:
             chunks: List of processed chunks with embeddings
             collection_name: Name of the collection
             config: Configuration metadata
         """
         self._ensure_connection()
-        
+
+        collection_name = _sanitize_collection_name(collection_name)
         table_name = f"chunks_{collection_name}"
         
         # Prepare data for batch insert
@@ -299,7 +306,8 @@ class PgVectorBackend:
     def get_stats(self, collection_name: str) -> Dict[str, Any]:
         """Get statistics for a collection"""
         self._ensure_connection()
-        
+
+        collection_name = _sanitize_collection_name(collection_name)
         table_name = f"chunks_{collection_name}"
         
         with self.conn.cursor() as cursor:
@@ -374,7 +382,7 @@ class PgVectorSearchBackend:
     def __init__(self, connection_string: str, collection_name: str):
         """
         Initialize search backend
-        
+
         Args:
             connection_string: PostgreSQL connection string
             collection_name: Name of the collection to search
@@ -384,10 +392,10 @@ class PgVectorSearchBackend:
                 "pgvector dependencies not available. Install with: "
                 "pip install psycopg2-binary pgvector"
             )
-        
+
         self.connection_string = connection_string
-        self.collection_name = collection_name
-        self.table_name = f"chunks_{collection_name}"
+        self.collection_name = _sanitize_collection_name(collection_name)
+        self.table_name = f"chunks_{self.collection_name}"
         self.conn = None
         self._connect()
         self.config = self._load_config()

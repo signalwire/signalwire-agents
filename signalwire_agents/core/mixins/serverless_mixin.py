@@ -9,11 +9,15 @@ See LICENSE file in the project root for full license information.
 
 import os
 import json
+import re
 import sys
 from typing import Optional, Dict, Any
 
 from signalwire_agents.core.logging_config import get_execution_mode
 from signalwire_agents.core.function_result import SwaigFunctionResult
+
+# Maximum allowed CGI request body size (10MB)
+MAX_CGI_BODY_SIZE = 10 * 1024 * 1024
 
 
 class ServerlessMixin:
@@ -55,6 +59,8 @@ class ServerlessMixin:
                     import sys
                     content_length = os.getenv('CONTENT_LENGTH')
                     if content_length and content_length.isdigit():
+                        if int(content_length) > MAX_CGI_BODY_SIZE:
+                            return {"error": "Request body too large", "max_size": MAX_CGI_BODY_SIZE}
                         try:
                             post_data = sys.stdin.read(int(content_length))
                             if post_data:
@@ -191,27 +197,31 @@ class ServerlessMixin:
     def _execute_swaig_function(self, function_name: str, args: Optional[Dict[str, Any]] = None, call_id: Optional[str] = None, raw_data: Optional[Dict[str, Any]] = None):
         """
         Execute a SWAIG function in serverless context
-        
+
         Args:
             function_name: Name of the function to execute
             args: Function arguments dictionary
             call_id: Optional call ID
             raw_data: Optional raw request data
-            
+
         Returns:
             Function execution result
         """
+        # Validate function name format before dispatch
+        if function_name and not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', function_name):
+            return {"error": f"Invalid function name format: '{function_name}'"}
+
         # Use the existing logger
         req_log = self.log.bind(
             endpoint="serverless_swaig",
             function=function_name
         )
-        
+
         if call_id:
             req_log = req_log.bind(call_id=call_id)
-            
+
         req_log.debug("serverless_function_call_received")
-        
+
         try:
             # Validate function exists
             if function_name not in self._tool_registry._swaig_functions:

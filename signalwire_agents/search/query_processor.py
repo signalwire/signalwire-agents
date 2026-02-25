@@ -79,6 +79,7 @@ def load_spacy_model(language: str):
 
 # Model cache - stores multiple models by name
 _model_cache = {}  # model_name -> SentenceTransformer instance
+_MAX_MODEL_CACHE_SIZE = 5
 import threading
 _model_lock = threading.Lock()
 
@@ -88,7 +89,13 @@ def set_global_model(model):
         # Try to get model name from various attributes
         model_name = getattr(model, 'model_name', None) or getattr(model, '_model_name', None)
         if model_name:
-            _model_cache[model_name] = model
+            with _model_lock:
+                if model_name not in _model_cache and len(_model_cache) >= _MAX_MODEL_CACHE_SIZE:
+                    # Evict the oldest entry
+                    oldest_key = next(iter(_model_cache))
+                    del _model_cache[oldest_key]
+                    logger.info(f"Model cache full, evicted: {oldest_key}")
+                _model_cache[model_name] = model
             logger.info(f"Model added to cache: {model_name}")
 
 def _get_cached_model(model_name: str = None):
@@ -119,6 +126,11 @@ def _get_cached_model(model_name: str = None):
             model = SentenceTransformer(model_name)
             # Store the model name for identification
             model.model_name = model_name
+            # Evict oldest entry if cache is full
+            if len(_model_cache) >= _MAX_MODEL_CACHE_SIZE:
+                oldest_key = next(iter(_model_cache))
+                del _model_cache[oldest_key]
+                logger.info(f"Model cache full, evicted: {oldest_key}")
             # Add to cache
             _model_cache[model_name] = model
             logger.info(f"Successfully loaded and cached model: {model_name}")

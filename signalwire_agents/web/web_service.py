@@ -546,7 +546,7 @@ class WebService:
         print(f"\nSignalWire Web Service starting...")
         print(f"URL: {startup_url}")
         print(f"Directories: {', '.join(self.directories.keys()) if self.directories else 'None'}")
-        print(f"Basic Auth: {username}:{password}")
+        print(f"Basic Auth: {username}:(credentials configured)")
         print(f"Directory Browsing: {'Enabled' if self.enable_directory_browsing else 'Disabled'}")
         if ssl_kwargs:
             print(f"SSL: Enabled")

@@ -10,6 +10,7 @@ See LICENSE file in the project root for full license information.
 """Spider skill for fast web scraping with SignalWire AI Agents."""
 import re
 import logging
+import collections
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin, urlparse
 import requests
@@ -177,8 +178,9 @@ class SpiderSkill(SkillBase):
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         
-        # Cache for responses
-        self.cache = {} if self.cache_enabled else None
+        # Cache for responses (bounded OrderedDict for LRU-style eviction)
+        self.cache = collections.OrderedDict() if self.cache_enabled else None
+        self._cache_max_size = 100
         
         # XPath expressions for unwanted elements
         self.remove_xpaths = [
@@ -212,6 +214,15 @@ class SpiderSkill(SkillBase):
             self.logger.error("Max depth cannot be negative")
             return False
             
+        # Pre-compile follow patterns for performance
+        self._compiled_follow_patterns = []
+        follow_patterns = self.params.get('follow_patterns', [])
+        for pattern in follow_patterns:
+            try:
+                self._compiled_follow_patterns.append(re.compile(pattern))
+            except re.error as e:
+                self.logger.error(f"Invalid follow pattern '{pattern}': {e}")
+
         self.logger.info(f"Spider skill configured: delay={self.delay}s, max_pages={self.max_pages}, max_depth={self.max_depth}")
         return True
     
@@ -275,8 +286,10 @@ class SpiderSkill(SkillBase):
             response = self.session.get(url, timeout=self.timeout)
             response.raise_for_status()
             
-            # Cache successful responses
-            if self.cache_enabled:
+            # Cache successful responses (with size limit)
+            if self.cache_enabled and self.cache is not None:
+                if len(self.cache) >= self._cache_max_size:
+                    self.cache.popitem(last=False)  # Evict oldest
                 self.cache[url] = response
                 
             return response
@@ -417,12 +430,17 @@ class SpiderSkill(SkillBase):
         url = args.get('url', '').strip()
         if not url:
             return SwaigFunctionResult("Please provide a URL to scrape")
-        
+
         # Validate URL
         parsed = urlparse(url)
         if not parsed.scheme or not parsed.netloc:
             return SwaigFunctionResult(f"Invalid URL: {url}")
-        
+
+        # SSRF protection
+        from signalwire_agents.utils.url_validator import validate_url
+        if not validate_url(url):
+            return SwaigFunctionResult("URL rejected: cannot access private or internal URLs")
+
         # Fetch the page
         response = self._fetch_url(url)
         if not response:
@@ -460,11 +478,16 @@ class SpiderSkill(SkillBase):
         start_url = args.get('start_url', '').strip()
         if not start_url:
             return SwaigFunctionResult("Please provide a starting URL for the crawl")
-        
+
+        # SSRF protection
+        from signalwire_agents.utils.url_validator import validate_url
+        if not validate_url(start_url):
+            return SwaigFunctionResult("URL rejected: cannot access private or internal URLs")
+
         # Use configured parameters (not from args)
         max_depth = self.max_depth
         max_pages = self.max_pages
-        follow_patterns = self.params.get('follow_patterns', [])
+        follow_patterns = self._compiled_follow_patterns if hasattr(self, '_compiled_follow_patterns') else []
         
         # Validate parameters
         if max_depth < 0:
@@ -515,7 +538,7 @@ class SpiderSkill(SkillBase):
                         
                         # Check if we should follow this link
                         if follow_patterns:
-                            if not any(re.search(pattern, absolute_url) for pattern in follow_patterns):
+                            if not any(pattern.search(absolute_url) for pattern in follow_patterns):
                                 continue
                         
                         # Only follow same domain by default
@@ -549,10 +572,15 @@ class SpiderSkill(SkillBase):
     def _extract_structured_handler(self, args: Dict[str, Any], raw_data: Dict[str, Any]) -> SwaigFunctionResult:
         """Handle structured data extraction."""
         url = args.get('url', '').strip()
-        
+
         if not url:
             return SwaigFunctionResult("Please provide a URL")
-        
+
+        # SSRF protection
+        from signalwire_agents.utils.url_validator import validate_url
+        if not validate_url(url):
+            return SwaigFunctionResult("URL rejected: cannot access private or internal URLs")
+
         # Use configured selectors from params
         selectors = self.params.get('selectors', {})
         if not selectors:

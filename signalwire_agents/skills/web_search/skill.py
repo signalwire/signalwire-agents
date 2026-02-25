@@ -76,6 +76,10 @@ class GoogleSearchScraper:
             Tuple of (text_content, quality_metrics)
         """
         try:
+            from signalwire_agents.utils.url_validator import validate_url
+            if not validate_url(url):
+                return "", {"error": "URL rejected by SSRF protection", "quality_score": 0}
+
             # Convert to JSON endpoint
             if not url.endswith('.json'):
                 json_url = url.rstrip('/') + '.json'
@@ -202,6 +206,10 @@ class GoogleSearchScraper:
         Original HTML extraction method (renamed from extract_text_from_url)
         """
         try:
+            from signalwire_agents.utils.url_validator import validate_url
+            if not validate_url(url):
+                return "", {"error": "URL rejected by SSRF protection", "quality_score": 0}
+
             response = self.session.get(url, timeout=timeout)
             response.raise_for_status()
 

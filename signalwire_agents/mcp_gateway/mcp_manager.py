@@ -408,7 +408,8 @@ class MCPManager:
         self.config = config
         self.services: Dict[str, MCPService] = {}
         self.clients: Dict[str, MCPClient] = {}
-        
+        self._clients_lock = threading.RLock()
+
         # Get sandbox directory from config or use default
         self.sandbox_base_dir = config.get('session', {}).get('sandbox_dir', './sandbox')
         
@@ -458,63 +459,67 @@ class MCPManager:
     
     def create_client(self, service_name: str) -> MCPClient:
         """Create a new MCP client for a service"""
-        service = self.services.get(service_name)
-        if not service:
-            raise ValueError(f"Unknown service: {service_name}")
-        
-        if not service.enabled:
-            raise ValueError(f"Service '{service_name}' is disabled")
-        
-        client = MCPClient(service, self.sandbox_base_dir)
-        if not client.start():
-            raise RuntimeError(f"Failed to start MCP service '{service_name}'")
-        
-        # Track active client for cleanup
-        self.clients[f"{service_name}_{id(client)}"] = client
-        
-        return client
+        with self._clients_lock:
+            service = self.services.get(service_name)
+            if not service:
+                raise ValueError(f"Unknown service: {service_name}")
+
+            if not service.enabled:
+                raise ValueError(f"Service '{service_name}' is disabled")
+
+            client = MCPClient(service, self.sandbox_base_dir)
+            if not client.start():
+                raise RuntimeError(f"Failed to start MCP service '{service_name}'")
+
+            # Track active client for cleanup
+            self.clients[f"{service_name}_{id(client)}"] = client
+
+            return client
     
     def get_service_tools(self, service_name: str) -> List[Dict[str, Any]]:
         """Get tools for a service by starting a temporary instance"""
-        client = None
-        client_key = None
-        try:
-            client = self.create_client(service_name)
-            client_key = f"{service_name}_{id(client)}"
-            return client.get_tools()
-        finally:
-            if client:
-                client.stop()
-                if client_key and client_key in self.clients:
-                    del self.clients[client_key]
-
-    def validate_services(self) -> Dict[str, bool]:
-        """Validate that all services can be started"""
-        results = {}
-
-        for service_name in self.services:
+        with self._clients_lock:
+            client = None
+            client_key = None
             try:
                 client = self.create_client(service_name)
                 client_key = f"{service_name}_{id(client)}"
-                client.stop()
-                if client_key in self.clients:
-                    del self.clients[client_key]
-                results[service_name] = True
-                logger.info(f"Service '{service_name}' validation: OK")
-            except Exception as e:
-                results[service_name] = False
-                logger.error(f"Service '{service_name}' validation failed: {e}")
-        
-        return results
+                return client.get_tools()
+            finally:
+                if client:
+                    client.stop()
+                    if client_key and client_key in self.clients:
+                        del self.clients[client_key]
+
+    def validate_services(self) -> Dict[str, bool]:
+        """Validate that all services can be started"""
+        with self._clients_lock:
+            results = {}
+
+            for service_name in self.services:
+                try:
+                    client = self.create_client(service_name)
+                    client_key = f"{service_name}_{id(client)}"
+                    client.stop()
+                    if client_key in self.clients:
+                        del self.clients[client_key]
+                    results[service_name] = True
+                    logger.info(f"Service '{service_name}' validation: OK")
+                except Exception as e:
+                    results[service_name] = False
+                    logger.error(f"Service '{service_name}' validation failed: {e}")
+
+            return results
     
     def shutdown(self):
         """Shutdown all active MCP clients"""
-        logger.info(f"Shutting down {len(self.clients)} active MCP clients")
-        
-        # Stop all clients
-        for client_id, client in list(self.clients.items()):
-            try:
-                client.stop()
-                self.clients.pop(client_id, None)
-            except Exception as e:
-                logger.error(f"Error stopping client {client_id}: {e}")
+        with self._clients_lock:
+            logger.info(f"Shutting down {len(self.clients)} active MCP clients")
+
+            # Stop all clients
+            for client_id, client in list(self.clients.items()):
+                try:
+                    client.stop()
+                    self.clients.pop(client_id, None)
+                except Exception as e:
+                    logger.error(f"Error stopping client {client_id}: {e}")

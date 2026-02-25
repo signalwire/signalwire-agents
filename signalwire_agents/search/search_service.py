@@ -265,14 +265,24 @@ class SearchService:
         
         @self.app.post("/reload_index")
         async def reload_index(
-            index_name: str, 
+            index_name: str,
             index_path: str,
             credentials: HTTPBasicCredentials = None if not security else Depends(security)
         ):
             """Reload or add new index/collection"""
             if security:
                 self._get_current_username(credentials)
-            
+
+            # Validate index_path for security
+            if '..' in index_path:
+                raise HTTPException(status_code=400, detail="Invalid index path")
+            if self.backend != 'pgvector' and not index_path.endswith('.swsearch'):
+                raise HTTPException(status_code=400, detail="Index path must end with .swsearch")
+            if self.backend != 'pgvector':
+                import os
+                if not os.path.exists(index_path):
+                    raise HTTPException(status_code=400, detail="Index file not found")
+
             if self.backend == 'pgvector':
                 # For pgvector, index_path is actually the collection name
                 self.indexes[index_name] = index_path
@@ -556,7 +566,7 @@ class SearchService:
         print(f"\nSignalWire Search Service starting...")
         print(f"URL: {startup_url}")
         print(f"Indexes: {', '.join(self.indexes.keys()) if self.indexes else 'None'}")
-        print(f"Basic Auth: {username}:{password}")
+        print(f"Basic Auth: {username}:(credentials configured)")
         if ssl_kwargs:
             print(f"SSL: Enabled")
         print("")

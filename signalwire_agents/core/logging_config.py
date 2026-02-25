@@ -22,9 +22,20 @@ Uses structlog with stdlib integration so that:
 
 import logging
 import os
+import re
 import sys
 
 import structlog
+
+_CONTROL_CHAR_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
+
+
+def strip_control_chars(logger, method_name, event_dict):
+    """Strip control characters from log event values to prevent log injection."""
+    for key, value in event_dict.items():
+        if isinstance(value, str):
+            event_dict[key] = _CONTROL_CHAR_RE.sub('', value)
+    return event_dict
 
 # Global flag to ensure configuration only happens once
 _logging_configured = False
@@ -133,6 +144,7 @@ def _get_structlog_processors():
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
+        strip_control_chars,
     ]
 
 
@@ -158,6 +170,7 @@ def _get_formatter_processors():
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
+        strip_control_chars,
         _drop_internal_keys,
     ]
 

@@ -74,20 +74,24 @@ class ConfigLoader:
         """Get the raw configuration (before substitution)."""
         return self._config or {}
     
-    def substitute_vars(self, value: Any) -> Any:
+    def substitute_vars(self, value: Any, max_depth: int = 10) -> Any:
         """
         Recursively substitute environment variables in configuration values.
-        
+
         Supports ${VAR|default} syntax where:
         - VAR is the environment variable name
         - default is the fallback value if VAR is not set
-        
+
         Args:
             value: The value to process (can be string, dict, list, etc.)
-            
+            max_depth: Maximum recursion depth to prevent infinite loops
+
         Returns:
             The value with all environment variables substituted
         """
+        if max_depth <= 0:
+            raise ValueError("Maximum variable substitution depth exceeded")
+
         if isinstance(value, str):
             # Pattern to match ${VAR} or ${VAR|default}
             pattern = r'\$\{([^}|]+)(?:\|([^}]*))?\}'
@@ -112,11 +116,11 @@ class ConfigLoader:
                 
         elif isinstance(value, dict):
             # Recursively process dictionary
-            return {k: self.substitute_vars(v) for k, v in value.items()}
-            
+            return {k: self.substitute_vars(v, max_depth - 1) for k, v in value.items()}
+
         elif isinstance(value, list):
             # Recursively process list
-            return [self.substitute_vars(item) for item in value]
+            return [self.substitute_vars(item, max_depth - 1) for item in value]
             
         else:
             # Return other types as-is

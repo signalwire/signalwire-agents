@@ -62,7 +62,10 @@ class AgentServer:
             title="SignalWire AI Agents",
             description="Hosted SignalWire AI Agents",
             version="0.1.2",
-            redirect_slashes=False
+            redirect_slashes=False,
+            docs_url=None,
+            redoc_url=None,
+            openapi_url=None
         )
         
         # Keep track of registered agents
@@ -368,19 +371,25 @@ class AgentServer:
                     swml = agent._render_swml()
                     return self._format_cgi_response(swml, content_type="application/json")
                 except Exception as e:
-                    error_response = {"error": f"Failed to generate SWML: {str(e)}"}
+                    self.logger.error(f"Failed to generate SWML: {str(e)}")
+                    error_response = {"error": "Failed to generate SWML"}
                     return self._format_cgi_response(error_response, status="500 Internal Server Error")
-                    
+
             elif path_info.startswith(route_clean + "/"):
                 # Request to agent sub-path
                 relative_path = path_info[len(route_clean):].lstrip("/")
-                
+
+                MAX_CGI_BODY_SIZE = 10 * 1024 * 1024  # 10MB
+
                 if relative_path == "swaig":
                     # SWAIG function call - parse stdin for POST data
                     try:
                         # Read POST data from stdin
                         content_length = os.getenv('CONTENT_LENGTH')
                         if content_length:
+                            if int(content_length) > MAX_CGI_BODY_SIZE:
+                                error_response = {"error": "Request body too large"}
+                                return self._format_cgi_response(error_response, status="413 Payload Too Large")
                             raw_data = sys.stdin.buffer.read(int(content_length))
                             try:
                                 post_data = json.loads(raw_data.decode('utf-8'))
@@ -392,18 +401,28 @@ class AgentServer:
                         # Execute SWAIG function
                         result = agent._execute_swaig_function("", post_data, None, None)
                         return self._format_cgi_response(result, content_type="application/json")
-                        
+
                     except Exception as e:
-                        error_response = {"error": f"SWAIG function failed: {str(e)}"}
+                        self.logger.error(f"SWAIG function failed: {str(e)}")
+                        error_response = {"error": "SWAIG function failed"}
                         return self._format_cgi_response(error_response, status="500 Internal Server Error")
-                
+
                 elif relative_path.startswith("swaig/"):
                     # Direct function call like /matti/swaig/function_name
                     function_name = relative_path[6:]  # Remove "swaig/"
+
+                    # Validate function name format before dispatch
+                    if function_name and not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', function_name):
+                        error_response = {"error": f"Invalid function name format: '{function_name}'"}
+                        return self._format_cgi_response(error_response, status="400 Bad Request")
+
                     try:
-                        # Read POST data from stdin  
+                        # Read POST data from stdin
                         content_length = os.getenv('CONTENT_LENGTH')
                         if content_length:
+                            if int(content_length) > MAX_CGI_BODY_SIZE:
+                                error_response = {"error": "Request body too large"}
+                                return self._format_cgi_response(error_response, status="413 Payload Too Large")
                             raw_data = sys.stdin.buffer.read(int(content_length))
                             try:
                                 post_data = json.loads(raw_data.decode('utf-8'))
@@ -414,9 +433,10 @@ class AgentServer:
 
                         result = agent._execute_swaig_function(function_name, post_data, None, None)
                         return self._format_cgi_response(result, content_type="application/json")
-                        
+
                     except Exception as e:
-                        error_response = {"error": f"Function call failed: {str(e)}"}
+                        self.logger.error(f"Function call failed: {str(e)}")
+                        error_response = {"error": "Function call failed"}
                         return self._format_cgi_response(error_response, status="500 Internal Server Error")
         
         # No matching agent found
@@ -458,10 +478,11 @@ class AgentServer:
                         "body": json.dumps(swml) if isinstance(swml, dict) else swml
                     }
                 except Exception as e:
+                    self.logger.error(f"Failed to generate SWML: {str(e)}")
                     return {
                         "statusCode": 500,
                         "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": f"Failed to generate SWML: {str(e)}"})
+                        "body": json.dumps({"error": "Failed to generate SWML"})
                     }
                     
             elif path.startswith(route_clean + "/"):
@@ -490,10 +511,11 @@ class AgentServer:
                         }
                         
                     except Exception as e:
+                        self.logger.error(f"Function call failed: {str(e)}")
                         return {
                             "statusCode": 500,
                             "headers": {"Content-Type": "application/json"},
-                            "body": json.dumps({"error": f"Function call failed: {str(e)}"})
+                            "body": json.dumps({"error": "Function call failed"})
                         }
         
         # No matching agent found
@@ -539,18 +561,11 @@ class AgentServer:
         """
         @self.app.get("/health")
         def health_check():
-            return {
-                "status": "ok",
-                "agents": len(self.agents),
-                "routes": list(self.agents.keys())
-            }
+            return {"status": "ok"}
 
         @self.app.get("/ready")
         def readiness_check():
-            return {
-                "status": "ready",
-                "agents": len(self.agents)
-            }
+            return {"status": "ready"}
 
     def _run_server(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
         """Original server mode logic"""
@@ -594,7 +609,7 @@ class AgentServer:
             agent_url = agent.get_full_url(include_auth=False)
             self.logger.info(f"Agent '{agent.get_name()}' available at:")
             self.logger.info(f"URL: {agent_url}")
-            self.logger.info(f"Basic Auth: {username}:{password}")
+            self.logger.info(f"Basic Auth: {username}:(credentials configured)")
         
         # Start the server with or without SSL
         if ssl_enabled and ssl_cert_path and ssl_key_path:

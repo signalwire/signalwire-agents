@@ -143,18 +143,59 @@ class SWAIGFunction:
                 "Sorry, I couldn't complete that action. Please try again or contact support if the issue persists."
             ).to_dict()
         
-    def validate_args(self, args: Dict[str, Any]) -> bool:
+    def validate_args(self, args: Dict[str, Any]) -> tuple:
         """
-        Validate the arguments against the parameter schema
-        
+        Validate the arguments against the parameter schema.
+
+        Uses jsonschema_rs if available for fast validation, falls back to
+        jsonschema if available, otherwise skips validation.
+
         Args:
             args: Arguments to validate
-            
+
         Returns:
-            True if valid, False otherwise
+            Tuple of (is_valid: bool, errors: list[str])
+            If no validation library is available, returns (True, [])
         """
-        # TODO: Implement JSON Schema validation
-        return True
+        schema = self._ensure_parameter_structure()
+        if not schema or not schema.get('properties'):
+            return True, []
+
+        # Try jsonschema_rs first (fast Rust-based validator)
+        try:
+            import jsonschema_rs
+            validator = jsonschema_rs.JSONSchema(schema)
+            if validator.is_valid(args):
+                return True, []
+            else:
+                errors = []
+                for error in validator.iter_errors(args):
+                    errors.append(str(error))
+                return False, errors
+        except ImportError:
+            pass
+        except Exception as e:
+            logging.debug(f"jsonschema_rs validation error for {self.name}: {e}")
+            pass
+
+        # Fall back to jsonschema (pure Python)
+        try:
+            import jsonschema
+            validator = jsonschema.Draft7Validator(schema)
+            validation_errors = list(validator.iter_errors(args))
+            if not validation_errors:
+                return True, []
+            else:
+                errors = [str(e.message) for e in validation_errors]
+                return False, errors
+        except ImportError:
+            pass
+        except Exception as e:
+            logging.debug(f"jsonschema validation error for {self.name}: {e}")
+            pass
+
+        # No validation library available - skip validation
+        return True, []
         
     def to_swaig(self, base_url: str, token: Optional[str] = None, call_id: Optional[str] = None, include_auth: bool = True) -> Dict[str, Any]:
         """

@@ -14,6 +14,7 @@ Base SWML Service for SignalWire Agents
 """
 
 import os
+import hmac
 import inspect
 import json
 import secrets
@@ -862,8 +863,8 @@ class SWMLService:
         print(f"Service '{self.name}' is available at:")
         print(f"URL: {startup_url}")
         print(f"URL with trailing slash: {startup_url}/")
-        print(f"Basic Auth: {username}:{password}")
-        
+        print(f"Basic Auth: {username}:(credentials configured)")
+
         # Check if SIP routing is enabled and log additional info
         if self._routing_callbacks:
             print(f"Callback endpoints:")
@@ -913,9 +914,9 @@ class SWMLService:
             decoded = base64.b64decode(credentials).decode("utf-8")
             username, password = decoded.split(":", 1)
             
-            # Compare with our credentials
+            # Compare with our credentials using timing-safe comparison
             expected_username, expected_password = self._basic_auth
-            return username == expected_username and password == expected_password
+            return hmac.compare_digest(username, expected_username) and hmac.compare_digest(password, expected_password)
         except Exception:
             return False
     
@@ -1097,7 +1098,11 @@ class SWMLService:
         # If SWML_PROXY_URL_BASE was already set (e.g., from environment), don't override it
         if self._proxy_url_base:
             return
-            
+
+        # Only trust proxy headers if explicitly configured
+        if not os.getenv('SWML_TRUST_PROXY_HEADERS', '').lower() in ('1', 'true', 'yes'):
+            return
+
         # First check for standard X-Forwarded headers (used by most proxies including ngrok)
         forwarded_host = request.headers.get("X-Forwarded-Host")
         forwarded_proto = request.headers.get("X-Forwarded-Proto", "http")

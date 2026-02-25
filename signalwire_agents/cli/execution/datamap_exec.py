@@ -231,6 +231,11 @@ def execute_datamap_function(datamap_config: Dict[str, Any], args: Dict[str, Any
             response_data = None
             
             try:
+                # SSRF protection
+                from signalwire_agents.utils.url_validator import validate_url
+                if not validate_url(url):
+                    raise ValueError(f"URL rejected by SSRF protection: {url}")
+
                 # Make the HTTP request
                 if method == "GET":
                     response = requests.get(url, headers=expanded_headers, timeout=HTTP_REQUEST_TIMEOUT)

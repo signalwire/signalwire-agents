@@ -7,6 +7,7 @@ Licensed under the MIT License.
 See LICENSE file in the project root for full license information.
 """
 
+import ast
 import re
 from typing import List, Dict, Any
 
@@ -41,28 +42,66 @@ class MathSkill(SkillBase):
             handler=self._calculate_handler
         )
         
+    # Allowed AST node types for safe math evaluation
+    _SAFE_OPERATORS = {
+        ast.Add: lambda a, b: a + b,
+        ast.Sub: lambda a, b: a - b,
+        ast.Mult: lambda a, b: a * b,
+        ast.Div: lambda a, b: a / b,
+        ast.Mod: lambda a, b: a % b,
+        ast.Pow: lambda a, b: a ** b,
+        ast.UAdd: lambda a: +a,
+        ast.USub: lambda a: -a,
+    }
+
+    def _safe_eval(self, node):
+        """Recursively evaluate an AST node, allowing only safe math operations."""
+        if isinstance(node, ast.Expression):
+            return self._safe_eval(node.body)
+        elif isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return node.value
+            raise ValueError(f"Unsupported constant type: {type(node.value).__name__}")
+        elif isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+            if op_type not in self._SAFE_OPERATORS:
+                raise ValueError(f"Unsupported binary operator: {op_type.__name__}")
+            left = self._safe_eval(node.left)
+            right = self._safe_eval(node.right)
+            # Cap exponent to prevent resource exhaustion
+            if op_type is ast.Pow and isinstance(right, (int, float)) and right > 1000:
+                raise ValueError("Exponent too large (maximum is 1000)")
+            return self._SAFE_OPERATORS[op_type](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+            if op_type not in self._SAFE_OPERATORS:
+                raise ValueError(f"Unsupported unary operator: {op_type.__name__}")
+            operand = self._safe_eval(node.operand)
+            return self._SAFE_OPERATORS[op_type](operand)
+        else:
+            raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+
     def _calculate_handler(self, args, raw_data):
         """Handler for calculate tool"""
         expression = args.get("expression", "").strip()
-        
+
         if not expression:
             return SwaigFunctionResult("Please provide a mathematical expression to calculate.")
-        
-        # Security: only allow safe mathematical operations
-        safe_chars = re.compile(r'^[0-9+\-*/().\s%**]+$')
-        if not safe_chars.match(expression):
-            return SwaigFunctionResult(
-                "Invalid expression. Only numbers and basic math operators (+, -, *, /, %, **, parentheses) are allowed."
-            )
-        
+
         try:
-            # Evaluate the expression safely
-            result = eval(expression, {"__builtins__": {}}, {})
-            
+            # Parse the expression into an AST
+            tree = ast.parse(expression, mode='eval')
+            # Evaluate using safe AST walker
+            result = self._safe_eval(tree)
+
             return SwaigFunctionResult(f"{expression} = {result}")
-            
+
         except ZeroDivisionError:
             return SwaigFunctionResult("Error: Division by zero is not allowed.")
+        except (ValueError, SyntaxError, TypeError) as e:
+            return SwaigFunctionResult(
+                f"Invalid expression. Only numbers and basic math operators (+, -, *, /, %, **, parentheses) are allowed."
+            )
         except Exception as e:
             return SwaigFunctionResult(f"Error calculating '{expression}': Invalid expression")
         

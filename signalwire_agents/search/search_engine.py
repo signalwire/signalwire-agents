@@ -225,6 +225,7 @@ class SearchEngine:
                 SELECT id, content, embedding, filename, section, tags, metadata
                 FROM chunks
                 WHERE embedding IS NOT NULL AND embedding != ''
+                LIMIT 10000
             ''')
             
             results = []
@@ -524,23 +525,29 @@ class SearchEngine:
                 
         return results
     
+    @staticmethod
+    def _escape_like(value: str) -> str:
+        """Escape LIKE wildcard characters in user input"""
+        return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
     def _filename_search(self, query: str, count: int) -> List[Dict[str, Any]]:
         """Search for query in filenames with term coverage scoring"""
         conn = None
         try:
             conn = sqlite3.connect(self.index_path)
             cursor = conn.cursor()
-            
+
             query_lower = query.lower()
             terms = query_lower.split()
-            
-            # First try exact phrase match
+
+            # First try exact phrase match (escape LIKE wildcards in user input)
+            escaped_query = self._escape_like(query_lower)
             cursor.execute('''
                 SELECT DISTINCT id, content, filename, section, tags, metadata
                 FROM chunks
-                WHERE LOWER(filename) LIKE ?
+                WHERE LOWER(filename) LIKE ? ESCAPE '\\'
                 LIMIT ?
-            ''', (f'%{query_lower}%', count))
+            ''', (f'%{escaped_query}%', count))
             
             results = []
             seen_ids = set()
@@ -574,12 +581,12 @@ class SearchEngine:
             
             # Then search for files containing ANY of the terms
             if terms and len(results) < count * 3:  # Get more candidates
-                # Build OR query for any term match
+                # Build OR query for any term match (escape LIKE wildcards)
                 conditions = []
                 params = []
                 for term in terms:
-                    conditions.append("LOWER(filename) LIKE ?")
-                    params.append(f'%{term}%')
+                    conditions.append("LOWER(filename) LIKE ? ESCAPE '\\'")
+                    params.append(f'%{self._escape_like(term)}%')
                 
                 sql = f'''
                     SELECT DISTINCT id, content, filename, section, tags, metadata
@@ -674,12 +681,12 @@ class SearchEngine:
             
             if has_metadata_text:
                 # Use the new metadata_text column for efficient searching
-                # Build conditions for each term
+                # Build conditions for each term (escape LIKE wildcards)
                 conditions = []
                 params = []
                 for term in terms:
-                    conditions.append("metadata_text LIKE ?")
-                    params.append(f"%{term}%")
+                    conditions.append("metadata_text LIKE ? ESCAPE '\\'")
+                    params.append(f"%{self._escape_like(term)}%")
 
                 if conditions:
                     query_sql = f'''
@@ -752,11 +759,18 @@ class SearchEngine:
                     # Limit conditions to avoid too broad search
                     conditions_to_use = specific_conditions[:10]
                     params_to_use = specific_params[:10]
+                    # Use parameterized query for seen_ids to prevent SQL injection
+                    if seen_ids:
+                        seen_placeholders = ','.join(['?' for _ in seen_ids])
+                        not_in_clause = f'AND id NOT IN ({seen_placeholders})'
+                        params_to_use.extend(list(seen_ids))
+                    else:
+                        not_in_clause = 'AND id NOT IN (0)'
                     query_sql = f'''
                         SELECT id, content, filename, section, tags, metadata
                         FROM chunks
                         WHERE ({' OR '.join(conditions_to_use)})
-                        AND id NOT IN ({','.join(str(id) for id in seen_ids) if seen_ids else '0'})
+                        {not_in_clause}
                         LIMIT ?
                     '''
                     params_to_use.append(count * 5)

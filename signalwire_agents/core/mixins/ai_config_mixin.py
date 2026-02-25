@@ -7,6 +7,7 @@ Licensed under the MIT License.
 See LICENSE file in the project root for full license information.
 """
 
+import threading
 from typing import List, Dict, Any, Optional
 
 
@@ -243,21 +244,27 @@ class AIConfigMixin:
             Self for method chaining
         """
         if data and isinstance(data, dict):
-            self._global_data.update(data)
+            if not hasattr(self, '_global_data_lock'):
+                self._global_data_lock = threading.Lock()
+            with self._global_data_lock:
+                self._global_data.update(data)
         return self
 
     def update_global_data(self, data: Dict[str, Any]) -> 'AgentBase':
         """
         Update the global data with new values
-        
+
         Args:
             data: Dictionary of global data to update
-            
+
         Returns:
             Self for method chaining
         """
         if data and isinstance(data, dict):
-            self._global_data.update(data)
+            if not hasattr(self, '_global_data_lock'):
+                self._global_data_lock = threading.Lock()
+            with self._global_data_lock:
+                self._global_data.update(data)
         return self
 
     def set_native_functions(self, function_names: List[str]) -> 'AgentBase':

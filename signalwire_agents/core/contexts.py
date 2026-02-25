@@ -17,6 +17,9 @@ contains its own prompt, completion criteria, and function restrictions.
 
 from typing import Dict, List, Optional, Union, Any
 
+MAX_CONTEXTS = 50
+MAX_STEPS_PER_CONTEXT = 100
+
 
 class GatherQuestion:
     """Represents a single question in a gather_info configuration"""
@@ -511,6 +514,9 @@ class Context:
         if name in self._steps:
             raise ValueError(f"Step '{name}' already exists in context '{self.name}'")
 
+        if len(self._steps) >= MAX_STEPS_PER_CONTEXT:
+            raise ValueError(f"Maximum steps per context ({MAX_STEPS_PER_CONTEXT}) exceeded")
+
         step = Step(name)
         self._steps[name] = step
         self._step_order.append(name)
@@ -938,7 +944,10 @@ class ContextBuilder:
         """
         if name in self._contexts:
             raise ValueError(f"Context '{name}' already exists")
-        
+
+        if len(self._contexts) >= MAX_CONTEXTS:
+            raise ValueError(f"Maximum number of contexts ({MAX_CONTEXTS}) exceeded")
+
         context = Context(name)
         self._contexts[name] = context
         self._context_order.append(name)

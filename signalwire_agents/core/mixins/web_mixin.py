@@ -44,31 +44,21 @@ class WebMixin:
             from fastapi.middleware.cors import CORSMiddleware
             
             # Create a FastAPI app with explicit redirect_slashes=False
-            app = FastAPI(redirect_slashes=False)
-            
+            app = FastAPI(redirect_slashes=False, docs_url=None, redoc_url=None, openapi_url=None)
+
             # Add health and ready endpoints directly to the main app to avoid conflicts with catch-all
             @app.get("/health")
             @app.post("/health")
             async def health_check():
                 """Health check endpoint for Kubernetes liveness probe"""
-                return {
-                    "status": "healthy",
-                    "agent": self.get_name(),
-                    "route": self.route,
-                    "functions": len(self._tool_registry._swaig_functions)
-                }
-            
+                return {"status": "healthy"}
+
             @app.get("/ready")
             @app.post("/ready")
             async def readiness_check():
                 """Readiness check endpoint for Kubernetes readiness probe"""
-                return {
-                    "status": "ready",
-                    "agent": self.get_name(),
-                    "route": self.route,
-                    "functions": len(self._tool_registry._swaig_functions)
-                }
-            
+                return {"status": "ready"}
+
             # Add CORS middleware if needed
             app.add_middleware(
                 CORSMiddleware,
@@ -150,20 +140,15 @@ class WebMixin:
         
         if self._app is None:
             # Create a FastAPI app with explicit redirect_slashes=False
-            app = FastAPI(redirect_slashes=False)
-            
+            app = FastAPI(redirect_slashes=False, docs_url=None, redoc_url=None, openapi_url=None)
+
             # Add health and ready endpoints directly to the main app to avoid conflicts with catch-all
             @app.get("/health")
             @app.post("/health")
             async def health_check():
                 """Health check endpoint for Kubernetes liveness probe"""
-                return {
-                    "status": "healthy",
-                    "agent": self.get_name(),
-                    "route": self.route,
-                    "functions": len(self._tool_registry._swaig_functions)
-                }
-            
+                return {"status": "healthy"}
+
             @app.get("/ready")
             @app.post("/ready")
             async def readiness_check():
@@ -174,13 +159,11 @@ class WebMixin:
                     hasattr(self, 'schema_utils') and
                     self.schema_utils is not None
                 )
-                
+
                 status_code = 200 if ready else 503
                 return Response(
                     content=json.dumps({
-                        "status": "ready" if ready else "not_ready",
-                        "agent": self.get_name(),
-                        "initialized": ready
+                        "status": "ready" if ready else "not_ready"
                     }),
                     status_code=status_code,
                     media_type="application/json"
@@ -271,8 +254,8 @@ class WebMixin:
         # Print user-friendly startup message (keep this for development UX)
         print(f"Agent '{self.name}' is available at:")
         print(f"URL: {startup_url}")
-        print(f"Basic Auth: {username}:{password} (source: {source})")
-        
+        print(f"Basic Auth: {username}:(credentials configured) (source: {source})")
+
         # Check if SSL is enabled and start uvicorn accordingly
         if getattr(self, 'ssl_enabled', False) and getattr(self, 'ssl_cert_path', None) and getattr(self, 'ssl_key_path', None):
             self.log.info("starting_with_ssl", cert=self.ssl_cert_path, key=self.ssl_key_path)
@@ -322,7 +305,7 @@ class WebMixin:
                 return {
                     "statusCode": 500,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": str(e)})
+                    "body": json.dumps({"error": "Internal server error"})
                 }
             else:
                 raise
@@ -426,8 +409,11 @@ class WebMixin:
         # Check for proxy headers
         forwarded_host = request.headers.get("X-Forwarded-Host")
         forwarded_proto = request.headers.get("X-Forwarded-Proto", "http")
-        
-        if forwarded_host:
+
+        # Only trust proxy headers if explicitly configured or proxy URL is set from env
+        _trust_proxy = getattr(self, '_proxy_url_base_from_env', False) or os.getenv('SWML_TRUST_PROXY_HEADERS', '').lower() in ('1', 'true', 'yes')
+
+        if forwarded_host and _trust_proxy:
             # Only update proxy URL if it wasn't set from environment
             if not getattr(self, '_proxy_url_base_from_env', False):
                 # Set proxy_url_base on both self and super() to ensure it's shared
@@ -565,11 +551,11 @@ class WebMixin:
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )
-    
+
     async def _handle_debug_request(self, request: Request):
         """Handle GET/POST requests to the debug endpoint"""
         req_log = self.log.bind(
@@ -627,17 +613,16 @@ class WebMixin:
             req_log.info("request_successful")
             return Response(
                 content=swml,
-                media_type="application/json",
-                headers={"X-Debug": "true"}
+                media_type="application/json"
             )
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )
-    
+
     async def _handle_swaig_request(self, request: Request, response: Response):
         """Handle GET/POST requests to the SWAIG endpoint"""
         req_log = self.log.bind(
@@ -679,8 +664,12 @@ class WebMixin:
                     req_log.debug("request_body", body=json.dumps(body))
             except Exception as e:
                 req_log.error("error_parsing_request_body", error=str(e))
-                body = {}
-            
+                return Response(
+                    content=json.dumps({"error": "Invalid JSON in request body"}),
+                    status_code=400,
+                    media_type="application/json"
+                )
+
             # Extract function name
             function_name = body.get("function")
             if not function_name:
@@ -707,7 +696,10 @@ class WebMixin:
                         req_log.debug("raw_arguments_parsed", args=json.dumps(args))
                     except Exception as e:
                         req_log.error("error_parsing_raw_arguments", error=str(e), raw=body["argument"]["raw"])
-            
+
+            if not isinstance(args, dict):
+                args = {}
+
             # Get call_id from body
             call_id = body.get("call_id")
             if call_id:
@@ -773,12 +765,12 @@ class WebMixin:
                 return result_dict
             except Exception as e:
                 req_log.error("function_execution_error", error=str(e))
-                return {"error": str(e), "function": function_name}
+                return {"error": "Function execution failed", "function": function_name}
                 
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )
@@ -923,11 +915,11 @@ class WebMixin:
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )
-    
+
     async def _handle_check_for_input_request(self, request: Request):
         """Handle GET/POST requests to the check_for_input endpoint"""
         req_log = self.log.bind(
@@ -961,7 +953,15 @@ class WebMixin:
                     req_log.error("error_parsing_request_body", error=str(e))
             else:
                 conversation_id = request.query_params.get("conversation_id")
-            
+
+            # Validate conversation_id format
+            if conversation_id and (len(conversation_id) > 256 or not all(c.isalnum() or c in '-_.' for c in conversation_id)):
+                return Response(
+                    content=json.dumps({"error": "Invalid conversation_id format"}),
+                    status_code=400,
+                    media_type="application/json"
+                )
+
             if not conversation_id:
                 req_log.warning("missing_conversation_id")
                 return Response(
@@ -981,11 +981,11 @@ class WebMixin:
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )
-    
+
     async def _handle_debug_events_request(self, request: Request):
         """Handle POST requests delivering debug webhook events from the AI module"""
         req_log = self.log.bind(
@@ -1044,7 +1044,7 @@ class WebMixin:
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": str(e)}),
+                content=json.dumps({"error": "Internal server error"}),
                 status_code=500,
                 media_type="application/json"
             )

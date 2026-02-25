@@ -54,12 +54,13 @@ class Session:
 class SessionManager:
     """Manages MCP server sessions with automatic cleanup"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], max_total_sessions: int = 500):
         self.config = config
         self.sessions: Dict[str, Session] = {}
         self.lock = threading.RLock()
         self.cleanup_interval = config.get('session', {}).get('cleanup_interval', 60)
         self.max_sessions_per_service = config.get('session', {}).get('max_sessions_per_service', 100)
+        self.max_total_sessions = config.get('session', {}).get('max_total_sessions', max_total_sessions)
         self.default_timeout = config.get('session', {}).get('default_timeout', 300)
         self._shutdown = threading.Event()
         
@@ -78,6 +79,10 @@ class SessionManager:
                 logger.warning(f"Session {session_id} already exists, closing old session")
                 self.close_session(session_id)
             
+            # Check total session limit
+            if len(self.sessions) >= self.max_total_sessions:
+                raise RuntimeError(f"Maximum session limit ({self.max_total_sessions}) reached")
+
             # Check service limits
             service_count = sum(1 for s in self.sessions.values() if s.service_name == service_name)
             if service_count >= self.max_sessions_per_service:

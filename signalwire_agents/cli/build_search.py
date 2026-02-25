@@ -11,8 +11,25 @@ import argparse
 import sys
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse
 
 from signalwire_agents.search.models import MODEL_ALIASES, DEFAULT_MODEL, resolve_model_alias
+
+
+def _mask_connection_string(conn_str):
+    """Mask password in connection string for safe logging."""
+    try:
+        parsed = urlparse(conn_str)
+        if parsed.password:
+            masked = parsed._replace(
+                netloc=f"{parsed.username}:****@{parsed.hostname}" +
+                       (f":{parsed.port}" if parsed.port else "")
+            )
+            return urlunparse(masked)
+    except Exception:
+        pass
+    return "****"
+
 
 def main():
     """Main entry point for the build-search command"""
@@ -404,7 +421,7 @@ Examples:
             print(f"  Output file: {args.output}")
         else:
             print(f"  Collection name: {args.output}")
-            print(f"  Connection: {args.connection_string}")
+            print(f"  Connection: {_mask_connection_string(args.connection_string)}")
         print(f"  File types (for directories): {file_types}")
         print(f"  Exclude patterns: {exclude_patterns}")
         print(f"  Languages: {languages}")
@@ -589,7 +606,7 @@ Examples:
                 sys.exit(1)
         else:
             print(f"\n✓ Search collection created successfully: {args.output}")
-            print(f"   Connection: {args.connection_string}")
+            print(f"   Connection: {_mask_connection_string(args.connection_string)}")
         
     except KeyboardInterrupt:
         print("\n\nBuild interrupted by user")

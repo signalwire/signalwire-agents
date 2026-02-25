@@ -1280,6 +1280,10 @@ class AgentBase(
         ephemeral_agent._global_data = copy.deepcopy(self._global_data)
         ephemeral_agent._function_includes = copy.deepcopy(self._function_includes)
 
+        # Deep copy routing callbacks to prevent cross-agent mutation
+        if hasattr(self, '_routing_callbacks'):
+            ephemeral_agent._routing_callbacks = self._routing_callbacks.copy()
+
         # Copy debug events settings
         ephemeral_agent._debug_events_enabled = self._debug_events_enabled
         ephemeral_agent._debug_events_level = self._debug_events_level

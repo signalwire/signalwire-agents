@@ -514,15 +514,6 @@ def get_token():
         return JSONResponse({{"error": str(e)}}, status_code=500)
 
 
-@server.app.get("/get_credentials")
-def get_credentials():
-    """Get basic auth credentials for curl examples."""
-    return {{
-        "user": os.getenv("SWML_BASIC_AUTH_USER", ""),
-        "password": os.getenv("SWML_BASIC_AUTH_PASSWORD", "")
-    }}
-
-
 @server.app.get("/get_resource_info")
 def get_resource_info():
     """Get SWML handler resource info for dashboard link."""
@@ -1033,8 +1024,6 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
 
     <script src="https://cdn.signalwire.com/@signalwire/client"></script>
     <script>
-        let authCreds = null;
-
         function switchTab(tabEl, contentId) {{
             const endpoint = tabEl.closest('.endpoint');
             endpoint.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1068,8 +1057,8 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
                     options.headers['Content-Type'] = 'application/json';
                     options.body = JSON.stringify(body);
                 }}
-                if (requiresAuth && authCreds) {{
-                    options.headers['Authorization'] = 'Basic ' + btoa(authCreds.user + ':' + authCreds.password);
+                if (requiresAuth) {{
+                    // Credentials are not exposed in the browser; use curl examples instead
                 }}
 
                 const resp = await fetch(path, options);
@@ -1281,20 +1270,10 @@ curl -X POST <span class="base-url"></span>/swml/swaig/ \\
                 el.textContent = baseUrl;
             }});
 
-            // Fetch auth credentials
-            try {{
-                const credsResp = await fetch('/get_credentials');
-                if (credsResp.ok) {{
-                    authCreds = await credsResp.json();
-                    document.querySelectorAll('.auth-creds').forEach(function(el) {{
-                        el.textContent = authCreds.user + ':' + authCreds.password;
-                    }});
-                }}
-            }} catch (e) {{
-                document.querySelectorAll('.auth-creds').forEach(function(el) {{
-                    el.textContent = 'user:password';
-                }});
-            }}
+            // Auth credentials are not exposed in the browser for security
+            document.querySelectorAll('.auth-creds').forEach(function(el) {{
+                el.textContent = 'user:password';
+            }});
 
             // Fetch resource info for dashboard link
             try {{

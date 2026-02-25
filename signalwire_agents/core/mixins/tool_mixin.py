@@ -9,10 +9,13 @@ See LICENSE file in the project root for full license information.
 
 from typing import Dict, Any, List, Optional, Callable
 import json
+import logging
 
 from signalwire_agents.core.swaig_function import SWAIGFunction
 from signalwire_agents.core.function_result import SwaigFunctionResult
 from signalwire_agents.core.agent.tools.decorator import ToolDecorator
+
+_tool_mixin_logger = logging.getLogger(__name__)
 
 
 class ToolMixin:
@@ -152,7 +155,18 @@ class ToolMixin:
         if hasattr(func, 'webhook_url') and func.webhook_url:
             # External webhook functions should be called directly by SignalWire, not locally
             return {"response": f"External webhook function '{name}' should be executed by SignalWire at {func.webhook_url}, not locally"}
-        
+
+        # Validate arguments against the parameter schema (soft validation - warn but proceed)
+        if hasattr(func, 'validate_args') and args:
+            try:
+                is_valid, errors = func.validate_args(args)
+                if not is_valid:
+                    _tool_mixin_logger.warning(
+                        f"Argument validation failed for function '{name}': {'; '.join(errors)}"
+                    )
+            except Exception as e:
+                _tool_mixin_logger.debug(f"Argument validation error for function '{name}': {e}")
+
         # Call the handler for regular SWAIG functions
         try:
             result = func.handler(args, raw_data)

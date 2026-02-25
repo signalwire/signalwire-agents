@@ -142,10 +142,16 @@ class MCPGatewaySkill(SkillBase):
         self.retry_attempts = self.params.get('retry_attempts', 3)
         self.request_timeout = self.params.get('request_timeout', 30)
         self.verify_ssl = self.params.get('verify_ssl', True)
-        
+
+        # SSRF protection for gateway URL
+        from signalwire_agents.utils.url_validator import validate_url
+        if not validate_url(self.gateway_url):
+            self.logger.error("Gateway URL rejected by SSRF protection: %s", self.gateway_url)
+            return False
+
         # Session ID will be set from call_id when first tool is used
         self.session_id = None
-        
+
         # Validate gateway connection
         try:
             response = requests.get(

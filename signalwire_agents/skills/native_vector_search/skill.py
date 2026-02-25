@@ -288,6 +288,12 @@ class NativeVectorSearchSkill(SkillBase):
         # **EARLY REMOTE CHECK - Option 1**
         # If remote URL is configured, skip all heavy local imports and just validate remote connectivity
         if self.remote_url:
+            # SSRF protection for remote URL
+            from signalwire_agents.utils.url_validator import validate_url
+            if not validate_url(self.remote_url):
+                self.logger.error("Remote URL rejected by SSRF protection: %s", self.remote_url)
+                return False
+
             self.use_remote = True
             self.search_engine = None  # No local search engine needed
             self.logger.info(f"Using remote search server: {self.remote_url}")
