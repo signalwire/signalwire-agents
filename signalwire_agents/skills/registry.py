@@ -78,7 +78,9 @@ class SkillRegistry:
         try:
             resolved_skill_dir = skill_dir.resolve()
             resolved_base = base_path.resolve()
-            if not str(resolved_skill_dir).startswith(str(resolved_base) + os.sep) and resolved_skill_dir != resolved_base:
+            try:
+                resolved_skill_dir.relative_to(resolved_base)
+            except ValueError:
                 self.logger.error(f"Skill path escapes base directory: {skill_name}")
                 return None
         except Exception:
@@ -189,7 +191,7 @@ class SkillRegistry:
                 return
 
             self._skills[skill_class.SKILL_NAME] = skill_class
-            self.logger.debug(f"Registered skill '{skill_class.SKILL_NAME}'")
+            self.logger.debug("skill_registered", extra={"skill": skill_class.SKILL_NAME})
     
     def get_skill_class(self, skill_name: str) -> Optional[Type[SkillBase]]:
         """Get skill class by name, loading on-demand if needed"""

@@ -137,28 +137,24 @@ class TestQueryVectorization:
     
     def test_vectorize_query_success(self):
         """Test successful query vectorization"""
-        with patch('builtins.__import__') as mock_import:
-            mock_transformers = Mock()
-            mock_model = Mock()
-            mock_embedding = [0.1, 0.2, 0.3]
-            mock_model.encode.return_value = mock_embedding
-            mock_transformers.SentenceTransformer.return_value = mock_model
-            
-            def import_side_effect(name, *args, **kwargs):
-                if name == 'sentence_transformers':
-                    return mock_transformers
-                elif name == 'numpy':
-                    return Mock()
-                else:
-                    return Mock()
-            
-            mock_import.side_effect = import_side_effect
-            
+        from signalwire_agents.search import query_processor as _qp
+
+        mock_model = Mock()
+        mock_embedding = [0.1, 0.2, 0.3]
+        mock_model.encode.return_value = mock_embedding
+
+        # Clear model cache so _get_cached_model loads a fresh model
+        _qp._model_cache.clear()
+
+        with patch('sentence_transformers.SentenceTransformer', return_value=mock_model) as mock_st:
             result = vectorize_query("test query")
-            
-            mock_transformers.SentenceTransformer.assert_called_once_with('sentence-transformers/all-mpnet-base-v2')
+
+            mock_st.assert_called_once_with('sentence-transformers/all-mpnet-base-v2')
             mock_model.encode.assert_called_once_with("test query", show_progress_bar=False)
             assert result == mock_embedding
+
+        # Clean up cached mock model
+        _qp._model_cache.clear()
     
     def test_vectorize_query_import_error(self):
         """Test query vectorization when sentence-transformers not available"""

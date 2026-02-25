@@ -82,7 +82,7 @@ class MCPClient:
         
         # Check if sandboxing is disabled
         if not sandbox_config.get('enabled', True):
-            logger.info(f"Sandboxing disabled for '{self.service.name}'")
+            logger.warning(f"Sandboxing disabled for '{self.service.name}'")
             return os.environ.copy(), sandbox_config.get('working_dir', os.getcwd())
         
         # Create a subdirectory in the sandbox base for this process
@@ -147,13 +147,18 @@ class MCPClient:
                 # Log but don't fail - some systems might not support all operations
                 logger.warning(f"Resource limit warning: {e}")
         
-        # Drop privileges if running as root (currently disabled)
-        # NOTE: Disabled for now - needs more testing with MCP servers
-        # if os.getuid() == 0:
-        #     nobody_uid = pwd.getpwnam('nobody').pw_uid
-        #     os.setgroups([])  # Remove supplementary groups
-        #     os.setgid(nobody_uid)  # Set GID first
-        #     os.setuid(nobody_uid)  # Then UID
+        # Drop privileges if running as root (opt-in via sandbox config)
+        if sandbox_config.get('drop_privileges', False):
+            if os.getuid() == 0:
+                try:
+                    nobody_uid = pwd.getpwnam('nobody').pw_uid
+                    os.setgroups([])  # Remove supplementary groups
+                    os.setgid(nobody_uid)  # Set GID first
+                    os.setuid(nobody_uid)  # Then UID
+                except Exception as e:
+                    logger.warning(f"Failed to drop privileges: {e}")
+        elif os.getuid() == 0:
+            logger.warning(f"Running MCP service '{self.service.name}' as root without drop_privileges enabled")
     
     def start(self) -> bool:
         """Start the MCP server process and initialize connection"""
@@ -197,7 +202,7 @@ class MCPClient:
             
             # Get available tools
             self.tools = self._list_tools()
-            logger.info(f"MCP service '{self.service.name}' started with {len(self.tools)} tools")
+            logger.info("mcp_service_started", extra={"service": self.service.name, "tool_count": len(self.tools)})
             
             return True
             
@@ -226,9 +231,9 @@ class MCPClient:
                         }
                     self._send_message(request)
                     time.sleep(0.2)  # Very brief wait
-                except:
+                except Exception:
                     pass
-                
+
                 # Check if still running
                 if self.process.poll() is None:
                     # Terminate process
@@ -247,9 +252,9 @@ class MCPClient:
                 try:
                     if self.process.poll() is None:
                         self.process.kill()
-                except:
+                except Exception:
                     pass
-            
+
             self.process = None
             logger.info(f"Stopped MCP service '{self.service.name}'")
         
@@ -366,9 +371,9 @@ class MCPClient:
                 if stderr_output:
                     logger.error(f"Process '{self.service.name}' exited with code {self.process.returncode}")
                     logger.error(f"Stderr: {stderr_output}")
-            except:
+            except Exception:
                 pass
-        
+
         logger.info(f"Read loop ended for '{self.service.name}'")
     
     def _initialize(self) -> bool:
@@ -438,7 +443,7 @@ class MCPManager:
             )
             
             self.services[name] = service
-            logger.info(f"Loaded service '{name}': {service.description}")
+            logger.info("service_loaded", extra={"service": name, "description": service.description})
     
     def get_service(self, service_name: str) -> Optional[MCPService]:
         """Get a service definition by name"""

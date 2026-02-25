@@ -138,8 +138,9 @@ class TestGetInstanceKey:
 class TestSetupRemoteMode:
     """Test setup() when remote_url is configured."""
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.native_vector_search.skill.requests", create=True)
-    def test_remote_setup_success(self, mock_requests_mod):
+    def test_remote_setup_success(self, mock_requests_mod, mock_validate):
         """Successful health check sets use_remote=True and search_available=True."""
         mock_response = Mock()
         mock_response.status_code = 200
@@ -155,8 +156,9 @@ class TestSetupRemoteMode:
         assert skill.search_available is True
         assert skill.search_engine is None
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.native_vector_search.skill.requests", create=True)
-    def test_remote_setup_auth_failure(self, mock_requests_mod):
+    def test_remote_setup_auth_failure(self, mock_requests_mod, mock_validate):
         """401 from remote server means search_available=False."""
         mock_response = Mock()
         mock_response.status_code = 401
@@ -170,8 +172,9 @@ class TestSetupRemoteMode:
         assert result is False
         assert skill.search_available is False
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.native_vector_search.skill.requests", create=True)
-    def test_remote_setup_non_200_status(self, mock_requests_mod):
+    def test_remote_setup_non_200_status(self, mock_requests_mod, mock_validate):
         """Non-200 and non-401 status returns False."""
         mock_response = Mock()
         mock_response.status_code = 500
@@ -185,7 +188,8 @@ class TestSetupRemoteMode:
         assert result is False
         assert skill.search_available is False
 
-    def test_remote_setup_connection_error(self):
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
+    def test_remote_setup_connection_error(self, mock_validate):
         """Connection failure returns False."""
         mock_requests_mod = Mock()
         mock_requests_mod.get.side_effect = ConnectionError("refused")

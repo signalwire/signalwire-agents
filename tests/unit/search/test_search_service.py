@@ -294,9 +294,10 @@ class TestSearchServiceInit:
         _patch_external_deps["security_instance"].log_config.assert_called_once_with("SearchService")
 
     def test_no_fastapi_sets_app_none(self):
-        # FastAPI is already None due to our stubs
-        svc = SearchService()
-        assert svc.app is None
+        # Patch FastAPI to None so the constructor skips app creation
+        with patch("signalwire_agents.search.search_service.FastAPI", None):
+            svc = SearchService()
+            assert svc.app is None
 
 
 # ===================================================================
@@ -789,10 +790,11 @@ class TestStartStop:
     """Tests for start and stop methods."""
 
     def test_start_no_app_raises(self):
-        svc = SearchService()
-        # app is None because FastAPI is stubbed as None
-        with pytest.raises(RuntimeError, match="FastAPI not available"):
-            svc.start()
+        with patch("signalwire_agents.search.search_service.FastAPI", None):
+            svc = SearchService()
+            # app is None because FastAPI is patched to None
+            with pytest.raises(RuntimeError, match="FastAPI not available"):
+                svc.start()
 
     def test_start_with_custom_port(self):
         svc = SearchService()
@@ -866,10 +868,11 @@ class TestSetupSecurity:
     """Tests for security middleware setup."""
 
     def test_setup_security_no_app(self):
-        svc = SearchService()
-        assert svc.app is None
-        # Should not raise when app is None
-        svc._setup_security()
+        with patch("signalwire_agents.search.search_service.FastAPI", None):
+            svc = SearchService()
+            assert svc.app is None
+            # Should not raise when app is None
+            svc._setup_security()
 
 
 # ===================================================================
@@ -880,10 +883,11 @@ class TestSetupRoutes:
     """Tests for route setup."""
 
     def test_setup_routes_no_app(self):
-        svc = SearchService()
-        assert svc.app is None
-        # Should not raise when app is None
-        svc._setup_routes()
+        with patch("signalwire_agents.search.search_service.FastAPI", None):
+            svc = SearchService()
+            assert svc.app is None
+            # Should not raise when app is None
+            svc._setup_routes()
 
 
 # ===================================================================

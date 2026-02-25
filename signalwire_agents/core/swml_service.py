@@ -969,7 +969,22 @@ class SWMLService:
                       include_auth=include_auth,
                       caller=inspect.stack()[1].function if len(inspect.stack()) > 1 else "unknown")
         
-        # Check if we have proxy information from a request
+        # Check per-request proxy URL (contextvars) first for async safety
+        try:
+            from signalwire_agents.core.mixins.web_mixin import _request_proxy_url
+            ctx_proxy = _request_proxy_url.get(None)
+            if ctx_proxy:
+                base = ctx_proxy.rstrip('/')
+                self.log.debug("Using per-request proxy URL", proxy_url_base=base)
+                if include_auth:
+                    username, password = self._basic_auth
+                    url = urlparse(base)
+                    base = url._replace(netloc=f"{username}:{password}@{url.netloc}").geturl()
+                return base
+        except (ImportError, LookupError):
+            pass
+
+        # Check if we have proxy information from instance attribute (fallback)
         if hasattr(self, '_proxy_url_base') and self._proxy_url_base:
             base = self._proxy_url_base.rstrip('/')
             self.log.debug("Using proxy URL base", proxy_url_base=base)
@@ -1097,10 +1112,6 @@ class SWMLService:
         """
         # If SWML_PROXY_URL_BASE was already set (e.g., from environment), don't override it
         if self._proxy_url_base:
-            return
-
-        # Only trust proxy headers if explicitly configured
-        if not os.getenv('SWML_TRUST_PROXY_HEADERS', '').lower() in ('1', 'true', 'yes'):
             return
 
         # First check for standard X-Forwarded headers (used by most proxies including ngrok)

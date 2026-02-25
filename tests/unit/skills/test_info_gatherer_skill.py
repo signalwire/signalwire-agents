@@ -289,8 +289,8 @@ class TestStartQuestions:
         raw = self._raw_data("intake", SAMPLE_QUESTIONS)
         result = skill._handle_start_questions({}, raw)
         text = result.to_dict()["response"]
-        assert "Ask the user" in text
-        assert "Answer recorded" not in text
+        assert "Ask each question one at a time" in text
+        assert "Previous answer saved" not in text
 
     def test_no_questions(self):
         skill = _setup_skill({"questions": SAMPLE_QUESTIONS, "prefix": "intake"})
@@ -334,7 +334,7 @@ class TestSubmitAnswer:
         result = skill._handle_submit_answer({"answer": "John Doe"}, raw)
         d = result.to_dict()
         assert "What is your email?" in d["response"]
-        assert "Answer recorded" in d["response"]
+        assert "Previous answer saved" in d["response"]
 
     def test_submit_stores_answer_in_global_data(self):
         skill = _setup_skill({"questions": SAMPLE_QUESTIONS, "prefix": "intake"})
@@ -392,7 +392,7 @@ class TestSubmitAnswer:
         raw = self._raw_data("intake", SAMPLE_QUESTIONS, index=0)
         result = skill._handle_submit_answer({"answer": "John"}, raw)
         text = result.to_dict()["response"]
-        assert "MUST read the answer back" in text
+        assert "Read the answer back" in text
 
 
 # ===========================================================================
@@ -469,39 +469,39 @@ class TestQuestionInstruction:
         text = InfoGathererSkill._generate_question_instruction(
             "What is your name?", needs_confirmation=False, is_first_question=True,
         )
-        assert "Ask the user" in text
+        assert "Ask each question one at a time" in text
         assert "What is your name?" in text
-        assert "Previous Answer" not in text
+        assert "Previous answer saved" not in text
 
     def test_subsequent_question_format(self):
         text = InfoGathererSkill._generate_question_instruction(
             "What is your email?", needs_confirmation=False, is_first_question=False,
         )
-        assert "Answer recorded" in text
+        assert "Previous answer saved" in text
         assert "What is your email?" in text
 
     def test_confirmation_required(self):
         text = InfoGathererSkill._generate_question_instruction(
             "SSN?", needs_confirmation=True, is_first_question=True,
         )
-        assert "MUST read the answer back" in text
+        assert "Read the answer back" in text
 
     def test_no_confirmation(self):
         text = InfoGathererSkill._generate_question_instruction(
             "Color?", needs_confirmation=False, is_first_question=True,
         )
-        assert "MUST read the answer back" not in text
+        assert "Read the answer back" not in text
 
     def test_prompt_add_included(self):
         text = InfoGathererSkill._generate_question_instruction(
             "DOB?", needs_confirmation=False, is_first_question=True,
             prompt_add="Format in YYYY-MM-DD",
         )
-        assert "Additional instructions: Format in YYYY-MM-DD" in text
+        assert "Note: Format in YYYY-MM-DD" in text
 
     def test_prompt_add_empty(self):
         text = InfoGathererSkill._generate_question_instruction(
             "DOB?", needs_confirmation=False, is_first_question=True,
             prompt_add="",
         )
-        assert "Additional instructions" not in text
+        assert "Note:" not in text

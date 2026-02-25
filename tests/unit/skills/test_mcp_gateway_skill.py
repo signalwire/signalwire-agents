@@ -168,8 +168,9 @@ class TestSkillInitialization:
 class TestSetup:
     """Test the setup() method."""
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_success_with_basic_auth(self, mock_get):
+    def test_setup_success_with_basic_auth(self, mock_get, mock_validate):
         """setup() should succeed when basic auth params are provided and health check passes."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -184,8 +185,9 @@ class TestSetup:
         assert skill.gateway_url == "https://gateway.example.com"
         mock_get.assert_called_once()
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_success_with_token_auth(self, mock_get):
+    def test_setup_success_with_token_auth(self, mock_get, mock_validate):
         """setup() should succeed with auth_token and gateway_url."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -231,8 +233,9 @@ class TestSetup:
         result = skill.setup()
         assert result is False
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_fails_on_health_check_error(self, mock_get):
+    def test_setup_fails_on_health_check_error(self, mock_get, mock_validate):
         """setup() should return False when the health check raises an exception."""
         mock_get.side_effect = ConnectionError("unreachable")
 
@@ -241,8 +244,9 @@ class TestSetup:
 
         assert result is False
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_fails_on_health_check_http_error(self, mock_get):
+    def test_setup_fails_on_health_check_http_error(self, mock_get, mock_validate):
         """setup() should return False when health check returns non-200."""
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = Exception("500 Server Error")
@@ -253,8 +257,9 @@ class TestSetup:
 
         assert result is False
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_stores_configuration_defaults(self, mock_get):
+    def test_setup_stores_configuration_defaults(self, mock_get, mock_validate):
         """setup() should store default values for optional params."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -271,8 +276,9 @@ class TestSetup:
         assert skill.verify_ssl is True
         assert skill.session_id is None
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_stores_custom_configuration(self, mock_get):
+    def test_setup_stores_custom_configuration(self, mock_get, mock_validate):
         """setup() should store custom values for optional params."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -298,8 +304,9 @@ class TestSetup:
         assert skill.request_timeout == 60
         assert skill.verify_ssl is False
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_setup_health_check_url(self, mock_get):
+    def test_setup_health_check_url(self, mock_get, mock_validate):
         """setup() should call /health on the gateway URL."""
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -1197,9 +1204,10 @@ class TestIntegration:
         assert isinstance(result, SwaigFunctionResult)
         assert result.response == "The sum is 5"
 
+    @patch("signalwire_agents.utils.url_validator.validate_url", return_value=True)
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.request")
     @patch("signalwire_agents.skills.mcp_gateway.skill.requests.get")
-    def test_full_lifecycle(self, mock_get, mock_request):
+    def test_full_lifecycle(self, mock_get, mock_request, mock_validate):
         """Test full skill lifecycle: setup -> register -> call -> hangup."""
         # Health check
         health_response = Mock()

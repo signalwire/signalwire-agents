@@ -100,7 +100,7 @@ class MathSkill(SkillBase):
             return SwaigFunctionResult("Error: Division by zero is not allowed.")
         except (ValueError, SyntaxError, TypeError) as e:
             return SwaigFunctionResult(
-                f"Invalid expression. Only numbers and basic math operators (+, -, *, /, %, **, parentheses) are allowed."
+                f"Error: Invalid expression. Only numbers and basic math operators (+, -, *, /, %, **, parentheses) are allowed."
             )
         except Exception as e:
             return SwaigFunctionResult(f"Error calculating '{expression}': Invalid expression")

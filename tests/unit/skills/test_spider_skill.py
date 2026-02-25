@@ -895,6 +895,7 @@ class TestCrawlSiteHandler:
         default_skill.max_depth = 1
         default_skill.delay = 0
         default_skill.params["follow_patterns"] = [r"/blog/"]
+        default_skill._compiled_follow_patterns = [re.compile(r"/blog/")]
 
         page_content = (
             b"<html><body>"

@@ -373,6 +373,8 @@ class TestSearchEngineHybridSearch:
         engine._keyword_search_only.assert_called_once_with('test query', 2, None, None)
         assert len(results) == 1
     
+    @patch('signalwire_agents.search.search_engine.np', None)
+    @patch('signalwire_agents.search.search_engine.cosine_similarity', None)
     def test_search_with_tags_filter(self):
         """Test search with tag filtering"""
         engine = SearchEngine(backend='sqlite', index_path=self.db_path)

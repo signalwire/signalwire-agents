@@ -28,17 +28,18 @@ class SessionManager:
     or store any information in memory. All validation is done using cryptographic
     signatures with the tokens containing all necessary information.
     """
-    def __init__(self, token_expiry_secs: int = 3600, secret_key: Optional[str] = None):
+    def __init__(self, token_expiry_secs: int = 900, secret_key: Optional[str] = None):
         """
         Initialize the session manager
-        
+
         Args:
-            token_expiry_secs: Seconds until tokens expire (default: 60 minutes)
+            token_expiry_secs: Seconds until tokens expire (default: 15 minutes)
             secret_key: Secret key for signing tokens (generated if not provided)
         """
         self.token_expiry_secs = token_expiry_secs
         # Use provided secret key or generate a secure one
         self.secret_key = secret_key or secrets.token_hex(32)
+        self._debug_mode = False
     
     def create_session(self, call_id: Optional[str] = None) -> str:
         """
@@ -69,7 +70,7 @@ class SessionManager:
         """
         # Create token parts
         expiry = int(time.time()) + self.token_expiry_secs
-        nonce = secrets.token_hex(4)
+        nonce = secrets.token_hex(8)
         
         # Create the message to sign
         message = f"{call_id}:{function_name}:{expiry}:{nonce}"
@@ -79,7 +80,7 @@ class SessionManager:
             self.secret_key.encode(),
             message.encode(),
             hashlib.sha256
-        ).hexdigest()[:32]  # Use first 32 chars of signature for stronger tokens
+        ).hexdigest()
         
         # Combine all parts into the token
         token = f"{call_id}.{function_name}.{expiry}.{nonce}.{signature}"
@@ -124,14 +125,13 @@ class SessionManager:
                 
             token_call_id, token_function, token_expiry, token_nonce, token_signature = parts
             
-            # Special case: if call_id is None or empty, use the call_id from the token
-            # This helps with scenarios where the call_id isn't provided in the request
+            # Reject validation if call_id is not provided
             if not call_id:
                 import logging
                 logging.getLogger("signalwire.session_manager").warning(
-                    "call_id not provided in request, falling back to token's call_id"
+                    "call_id not provided in request, rejecting token validation"
                 )
-                call_id = token_call_id
+                return False
             
             # Verify the function matches
             if token_function != function_name:
@@ -148,7 +148,7 @@ class SessionManager:
                 self.secret_key.encode(),
                 message.encode(),
                 hashlib.sha256
-            ).hexdigest()[:32]
+            ).hexdigest()  # Full HMAC digest for maximum security[:32]
 
             if not hmac.compare_digest(token_signature, expected_signature):
                 return False
@@ -208,16 +208,18 @@ class SessionManager:
     def debug_token(self, token: str) -> Dict[str, Any]:
         """
         Debug a token without validating it
-        
+
         This method decodes the token and extracts its components for debugging purposes
-        without performing validation.
-        
+        without performing validation. Requires _debug_mode to be True.
+
         Args:
             token: The token to debug
-            
+
         Returns:
             Dictionary with token components and analysis
         """
+        if not self._debug_mode:
+            return {"error": "debug mode not enabled"}
         try:
             # Decode the token
             decoded_token = base64.urlsafe_b64decode(token.encode()).decode()

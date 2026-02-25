@@ -21,12 +21,14 @@ def _sanitize_collection_name(collection_name: str) -> str:
 
 try:
     import psycopg2
+    from psycopg2 import sql as psycopg2_sql
     from psycopg2.extras import execute_values
     from pgvector.psycopg2 import register_vector
     PGVECTOR_AVAILABLE = True
 except ImportError:
     PGVECTOR_AVAILABLE = False
     psycopg2 = None
+    psycopg2_sql = None
     register_vector = None
 
 try:
@@ -98,47 +100,54 @@ class PgVectorBackend:
             import re
             sanitized_name = re.sub(r'[^a-zA-Z0-9_]', '_', collection_name)
             table_name = f"chunks_{sanitized_name}"
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS {table_name} (
+            tbl = psycopg2_sql.Identifier(table_name)
+            idx_embedding = psycopg2_sql.Identifier(f"idx_{table_name}_embedding")
+            idx_content = psycopg2_sql.Identifier(f"idx_{table_name}_content")
+            idx_tags = psycopg2_sql.Identifier(f"idx_{table_name}_tags")
+            idx_metadata = psycopg2_sql.Identifier(f"idx_{table_name}_metadata")
+            idx_metadata_text = psycopg2_sql.Identifier(f"idx_{table_name}_metadata_text")
+
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {tbl} (
                     id SERIAL PRIMARY KEY,
                     content TEXT NOT NULL,
                     processed_content TEXT,
-                    embedding vector({embedding_dim}),
+                    embedding vector(%s),
                     filename TEXT,
                     section TEXT,
                     tags JSONB DEFAULT '[]'::jsonb,
                     metadata JSONB DEFAULT '{{}}'::jsonb,
-                    metadata_text TEXT,  -- Searchable text representation of all metadata
+                    metadata_text TEXT,
                     created_at TIMESTAMP DEFAULT NOW()
                 )
-            """)
-            
+            """).format(tbl=tbl), (embedding_dim,))
+
             # Create indexes
-            cursor.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_embedding 
-                ON {table_name} USING ivfflat (embedding vector_cosine_ops)
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
+                ON {tbl} USING ivfflat (embedding vector_cosine_ops)
                 WITH (lists = 100)
-            """)
-            
-            cursor.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_content 
-                ON {table_name} USING gin (content gin_trgm_ops)
-            """)
-            
-            cursor.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_tags 
-                ON {table_name} USING gin (tags)
-            """)
-            
-            cursor.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_metadata 
-                ON {table_name} USING gin (metadata)
-            """)
-            
-            cursor.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_metadata_text 
-                ON {table_name} USING gin (metadata_text gin_trgm_ops)
-            """)
+            """).format(idx=idx_embedding, tbl=tbl))
+
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
+                ON {tbl} USING gin (content gin_trgm_ops)
+            """).format(idx=idx_content, tbl=tbl))
+
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
+                ON {tbl} USING gin (tags)
+            """).format(idx=idx_tags, tbl=tbl))
+
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
+                ON {tbl} USING gin (metadata)
+            """).format(idx=idx_metadata, tbl=tbl))
+
+            cursor.execute(psycopg2_sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
+                ON {tbl} USING gin (metadata_text gin_trgm_ops)
+            """).format(idx=idx_metadata_text, tbl=tbl))
             
             # Create config table
             cursor.execute("""
@@ -267,13 +276,15 @@ class PgVectorBackend:
         
         # Batch insert chunks
         with self.conn.cursor() as cursor:
-            execute_values(
-                cursor,
-                f"""
-                INSERT INTO {table_name} 
+            tbl = psycopg2_sql.Identifier(table_name)
+            insert_query = psycopg2_sql.SQL("""
+                INSERT INTO {tbl}
                 (content, processed_content, embedding, filename, section, tags, metadata, metadata_text)
                 VALUES %s
-                """,
+            """).format(tbl=tbl)
+            execute_values(
+                cursor,
+                insert_query.as_string(self.conn),
                 data,
                 template="(%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)"
             )
@@ -311,12 +322,13 @@ class PgVectorBackend:
         table_name = f"chunks_{collection_name}"
         
         with self.conn.cursor() as cursor:
+            tbl = psycopg2_sql.Identifier(table_name)
             # Get chunk count
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            cursor.execute(psycopg2_sql.SQL("SELECT COUNT(*) FROM {tbl}").format(tbl=tbl))
             total_chunks = cursor.fetchone()[0]
-            
+
             # Get unique files
-            cursor.execute(f"SELECT COUNT(DISTINCT filename) FROM {table_name}")
+            cursor.execute(psycopg2_sql.SQL("SELECT COUNT(DISTINCT filename) FROM {tbl}").format(tbl=tbl))
             total_files = cursor.fetchone()[0]
             
             # Get config
@@ -361,7 +373,8 @@ class PgVectorBackend:
         table_name = f"chunks_{sanitized}"
 
         with self.conn.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+            tbl = psycopg2_sql.Identifier(table_name)
+            cursor.execute(psycopg2_sql.SQL("DROP TABLE IF EXISTS {tbl}").format(tbl=tbl))
             cursor.execute(
                 "DELETE FROM collection_config WHERE collection_name = %s",
                 (collection_name,)
@@ -487,25 +500,27 @@ class PgVectorSearchBackend:
         """Perform vector similarity search"""
         with self.conn.cursor() as cursor:
             # Set probes for IVFFlat index to ensure we get enough results
-            cursor.execute(f"SET LOCAL ivfflat.probes = {max(count, 10)}")
-            # Build query
-            query = f"""
+            cursor.execute("SET LOCAL ivfflat.probes = %s", (max(count, 10),))
+            # Build query parts
+            tbl = psycopg2_sql.Identifier(self.table_name)
+            parts = [psycopg2_sql.SQL("""
                 SELECT id, content, filename, section, tags, metadata,
                        1 - (embedding <=> %s::vector) as similarity
-                FROM {self.table_name}
+                FROM {tbl}
                 WHERE embedding IS NOT NULL
-            """
-            
+            """).format(tbl=tbl)]
+
             params = [query_vector]
-            
+
             # Add tag filter if specified
             if tags:
-                query += " AND tags ?| %s"
+                parts.append(psycopg2_sql.SQL(" AND tags ?| %s"))
                 params.append(tags)
-            
-            query += " ORDER BY embedding <=> %s::vector LIMIT %s"
+
+            parts.append(psycopg2_sql.SQL(" ORDER BY embedding <=> %s::vector LIMIT %s"))
             params.extend([query_vector, count])
 
+            query = psycopg2_sql.SQL("").join(parts)
             cursor.execute(query, params)
 
             results = []
@@ -532,24 +547,26 @@ class PgVectorSearchBackend:
         """Perform full-text search"""
         with self.conn.cursor() as cursor:
             # Use PostgreSQL text search
-            query = f"""
+            tbl = psycopg2_sql.Identifier(self.table_name)
+            parts = [psycopg2_sql.SQL("""
                 SELECT id, content, filename, section, tags, metadata,
-                       ts_rank(to_tsvector('english', content), 
+                       ts_rank(to_tsvector('english', content),
                               plainto_tsquery('english', %s)) as rank
-                FROM {self.table_name}
+                FROM {tbl}
                 WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
-            """
-            
+            """).format(tbl=tbl)]
+
             params = [enhanced_text, enhanced_text]
-            
+
             # Add tag filter if specified
             if tags:
-                query += " AND tags ?| %s"
+                parts.append(psycopg2_sql.SQL(" AND tags ?| %s"))
                 params.append(tags)
-            
-            query += " ORDER BY rank DESC LIMIT %s"
+
+            parts.append(psycopg2_sql.SQL(" ORDER BY rank DESC LIMIT %s"))
             params.append(count)
-            
+
+            query = psycopg2_sql.SQL("").join(parts)
             cursor.execute(query, params)
             
             results = []
@@ -583,29 +600,33 @@ class PgVectorSearchBackend:
             # Build WHERE conditions
             where_conditions = []
             params = []
-            
+
             # Use metadata_text for trigram search
             if query_terms:
                 # Create AND conditions for all terms
                 for term in query_terms:
-                    where_conditions.append(f"metadata_text ILIKE %s")
+                    where_conditions.append(psycopg2_sql.SQL("metadata_text ILIKE %s"))
                     params.append(f'%{term}%')
-            
+
             # Add tag filter if specified
             if tags:
-                where_conditions.append("tags ?| %s")
+                where_conditions.append(psycopg2_sql.SQL("tags ?| %s"))
                 params.append(tags)
-            
+
             # Build query
-            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
-            
-            query = f"""
+            tbl = psycopg2_sql.Identifier(self.table_name)
+            if where_conditions:
+                where_clause = psycopg2_sql.SQL(" AND ").join(where_conditions)
+            else:
+                where_clause = psycopg2_sql.SQL("1=1")
+
+            query = psycopg2_sql.SQL("""
                 SELECT id, content, filename, section, tags, metadata,
                        metadata_text
-                FROM {self.table_name}
+                FROM {tbl}
                 WHERE {where_clause}
                 LIMIT %s
-            """
+            """).format(tbl=tbl, where_clause=where_clause)
             
             params.append(count)
             

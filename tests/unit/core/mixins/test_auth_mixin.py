@@ -279,9 +279,14 @@ class TestCheckCgiAuth:
             assert mixin._check_cgi_auth() is False
 
     def test_remote_user_trusted(self):
-        """REMOTE_USER without HTTP_AUTHORIZATION returns True (web server trust)."""
+        """REMOTE_USER without HTTP_AUTHORIZATION returns True only with SWML_TRUST_REMOTE_USER."""
         mixin = ConcreteAuthMixin(("admin", "secret"))
+        # Without SWML_TRUST_REMOTE_USER, REMOTE_USER is not trusted
         env = {"REMOTE_USER": "someuser"}
+        with patch.dict(os.environ, env, clear=True):
+            assert mixin._check_cgi_auth() is False
+        # With SWML_TRUST_REMOTE_USER, REMOTE_USER is trusted
+        env = {"REMOTE_USER": "someuser", "SWML_TRUST_REMOTE_USER": "true"}
         with patch.dict(os.environ, env, clear=True):
             assert mixin._check_cgi_auth() is True
 

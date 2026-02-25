@@ -68,6 +68,18 @@ class AgentServer:
             openapi_url=None
         )
         
+        # Add security headers middleware
+        @self.app.middleware("http")
+        async def add_security_headers(request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            ssl_enabled_env = os.environ.get('SWML_SSL_ENABLED', '').lower()
+            if ssl_enabled_env in ('true', '1', 'yes'):
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            return response
+
         # Keep track of registered agents
         self.agents: Dict[str, AgentBase] = {}
 
@@ -120,7 +132,7 @@ class AgentServer:
         router = agent.as_router()
         self.app.include_router(router, prefix=route)
 
-        self.logger.info(f"Registered agent '{agent.get_name()}' at route '{route}'")
+        self.logger.info("agent_registered", extra={"agent": agent.get_name(), "route": route})
         
         # If SIP routing is enabled and auto-mapping is on, register SIP usernames for this agent
         if self._sip_routing_enabled:
@@ -283,7 +295,7 @@ class AgentServer:
         # and rebuild the app if needed
         del self.agents[route]
         
-        self.logger.info(f"Unregistered agent at route '{route}'")
+        self.logger.info("agent_unregistered", extra={"route": route})
         return True
     
     def get_agents(self) -> List[Tuple[str, AgentBase]]:
@@ -482,7 +494,7 @@ class AgentServer:
                     return {
                         "statusCode": 500,
                         "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": "Failed to generate SWML"})
+                        "body": json.dumps({"error": str(e)})
                     }
                     
             elif path.startswith(route_clean + "/"):
@@ -561,11 +573,18 @@ class AgentServer:
         """
         @self.app.get("/health")
         def health_check():
-            return {"status": "ok"}
+            return {
+                "status": "ok",
+                "agents": len(self.agents),
+                "routes": list(self.agents.keys())
+            }
 
         @self.app.get("/ready")
         def readiness_check():
-            return {"status": "ready"}
+            return {
+                "status": "ready",
+                "agents": len(self.agents)
+            }
 
     def _run_server(self, host: Optional[str] = None, port: Optional[int] = None) -> None:
         """Original server mode logic"""

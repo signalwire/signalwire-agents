@@ -35,6 +35,8 @@ class AuthMixin:
         This method can be overridden by subclasses.
         """
         exp_user, exp_pass = self._basic_auth
+        if exp_user is None or exp_pass is None:
+            return False
         return hmac.compare_digest(username, exp_user) and hmac.compare_digest(password, exp_pass)
     
     def get_basic_auth_credentials(self, include_source: bool = False) -> Union[Tuple[str, str], Tuple[str, str, str]]:

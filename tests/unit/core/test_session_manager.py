@@ -31,7 +31,7 @@ class TestSessionManager:
         
         assert manager.secret_key is not None
         assert len(manager.secret_key) >= 32  # Should be secure length
-        assert manager.token_expiry_secs == 3600  # Default 1 hour
+        assert manager.token_expiry_secs == 900  # Default 15 minutes
     
     def test_initialization_with_custom_params(self):
         """Test initialization with custom parameters"""
@@ -161,9 +161,9 @@ class TestSessionManager:
         
         token = manager.generate_token("test_function", "call_123")
         
-        # Should work with empty call_id (uses call_id from token)
-        assert manager.validate_token("", "test_function", token) is True
-        assert manager.validate_token(None, "test_function", token) is True
+        # Should reject with empty call_id (no longer falls back to token's call_id)
+        assert manager.validate_token("", "test_function", token) is False
+        assert manager.validate_token(None, "test_function", token) is False
     
     def test_validate_tool_token_alias(self):
         """Test validate_tool_token alias"""
@@ -178,7 +178,8 @@ class TestSessionManager:
     def test_debug_token(self):
         """Test token debugging functionality"""
         manager = SessionManager()
-        
+        manager._debug_mode = True
+
         token = manager.generate_token("test_function", "call_123")
         debug_info = manager.debug_token(token)
         
@@ -204,7 +205,8 @@ class TestSessionManager:
     def test_debug_token_invalid(self):
         """Test debugging invalid token"""
         manager = SessionManager()
-        
+        manager._debug_mode = True
+
         debug_info = manager.debug_token("invalid_token")
         
         assert debug_info is not None
@@ -239,10 +241,10 @@ class TestSessionManagerErrorHandling:
         assert isinstance(token, str)
         assert manager.validate_token("call_123", "", token) is True
         
-        # Empty call_id
+        # Empty call_id - validation should now reject empty call_id
         token = manager.generate_token("test_func", "")
         assert isinstance(token, str)
-        assert manager.validate_token("", "test_func", token) is True
+        assert manager.validate_token("", "test_func", token) is False
     
     def test_validation_with_corrupted_token(self):
         """Test validation with corrupted token data"""
@@ -274,6 +276,7 @@ class TestSessionManagerIntegration:
     def test_complete_token_workflow(self):
         """Test complete token management workflow"""
         manager = SessionManager()
+        manager._debug_mode = True
         
         # 1. Create session
         call_id = manager.create_session()
@@ -288,7 +291,8 @@ class TestSessionManagerIntegration:
         
         # 4. Debug token
         debug_info = manager.debug_token(token)
-        assert debug_info["components"]["call_id"] == call_id
+        # call_id may be truncated in debug output ([:8] + "..." for long IDs)
+        assert call_id.startswith(debug_info["components"]["call_id"].replace("...", ""))
         assert debug_info["components"]["function"] == "get_balance"
         
         # 5. Legacy session management
@@ -409,6 +413,7 @@ class TestSessionManagerIntegration:
     def test_token_structure_consistency(self):
         """Test token structure consistency"""
         manager = SessionManager()
+        manager._debug_mode = True
         
         # Generate multiple tokens
         tokens = []

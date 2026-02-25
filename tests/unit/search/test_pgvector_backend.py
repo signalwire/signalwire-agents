@@ -24,6 +24,51 @@ from datetime import datetime
 # pick up our mocks.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Lightweight fakes for psycopg2.sql so that SQL(...).format(...) yields
+# objects whose str() contains the actual SQL text and identifiers.
+# ---------------------------------------------------------------------------
+
+class _FakeIdentifier:
+    """Mimics psycopg2.sql.Identifier for testing."""
+    def __init__(self, name):
+        self._name = name
+    def __repr__(self):
+        return f"Identifier({self._name!r})"
+    def __str__(self):
+        return self._name
+
+
+class _FakeComposed:
+    """Mimics psycopg2.sql.Composed for testing."""
+    def __init__(self, parts):
+        self._parts = list(parts)
+    def __str__(self):
+        return "".join(str(p) for p in self._parts)
+    def as_string(self, conn):
+        return str(self)
+
+
+class _FakeSQL:
+    """Mimics psycopg2.sql.SQL for testing."""
+    def __init__(self, template):
+        self._template = template
+    def format(self, **kwargs):
+        result = self._template
+        for key, val in kwargs.items():
+            result = result.replace("{" + key + "}", str(val))
+        return _FakeComposed([result])
+    def join(self, parts):
+        return _FakeComposed([str(p) for p in parts])
+    def __str__(self):
+        return self._template
+
+
+class _FakeSqlModule:
+    SQL = _FakeSQL
+    Identifier = _FakeIdentifier
+
+
 # Create mock modules for psycopg2 and pgvector
 mock_psycopg2 = MagicMock()
 mock_psycopg2_extras = MagicMock()
@@ -32,18 +77,33 @@ mock_register_vector = MagicMock()
 mock_execute_values = MagicMock()
 
 mock_psycopg2.extras = mock_psycopg2_extras
+mock_psycopg2.sql = _FakeSqlModule()
 mock_psycopg2_extras.execute_values = mock_execute_values
 mock_pgvector_psycopg2.register_vector = mock_register_vector
 
 import sys
 
-sys.modules.setdefault('psycopg2', mock_psycopg2)
-sys.modules.setdefault('psycopg2.extras', mock_psycopg2_extras)
+# Create a proper module-like object for psycopg2.sql
+_fake_sql_module = type('Module', (), {
+    'SQL': _FakeSQL, 'Identifier': _FakeIdentifier,
+    '__name__': 'psycopg2.sql',
+})()
+mock_psycopg2.sql = _fake_sql_module
+
+# Force-set modules (don't use setdefault for psycopg2 since it may already be set)
+sys.modules['psycopg2'] = mock_psycopg2
+sys.modules['psycopg2.sql'] = _fake_sql_module
+sys.modules['psycopg2.extras'] = mock_psycopg2_extras
 sys.modules.setdefault('pgvector', MagicMock())
 sys.modules.setdefault('pgvector.psycopg2', mock_pgvector_psycopg2)
 
+# Force reload the module to pick up the fake SQL classes
+import importlib
+if 'signalwire_agents.search.pgvector_backend' in sys.modules:
+    del sys.modules['signalwire_agents.search.pgvector_backend']
+
 # Now import the module under test.  Because we injected the mocks above,
-# PGVECTOR_AVAILABLE will be True.
+# PGVECTOR_AVAILABLE will be True and psycopg2_sql will be our fake module.
 from signalwire_agents.search.pgvector_backend import (
     PgVectorBackend,
     PgVectorSearchBackend,
@@ -255,7 +315,12 @@ class TestPgVectorBackendCreateSchema:
 
         # Main table
         assert any("CREATE TABLE IF NOT EXISTS chunks_my_collection" in sql for sql in executed_sqls)
-        assert any("vector(512)" in sql for sql in executed_sqls)
+        # embedding dimension is passed as a parameter, check it's in the params
+        create_table_calls = [c for c in mock_cursor.execute.call_args_list
+                              if "CREATE TABLE IF NOT EXISTS" in str(c[0][0]) and "chunks_" in str(c[0][0])]
+        assert len(create_table_calls) > 0
+        # The dimension is passed as a parameter tuple
+        assert any(512 in (c[0][1] if len(c[0]) > 1 else ()) for c in create_table_calls)
 
         # Indexes (embedding, content, tags, metadata, metadata_text)
         assert any("idx_chunks_my_collection_embedding" in sql for sql in executed_sqls)
@@ -292,11 +357,11 @@ class TestPgVectorBackendCreateSchema:
 
         backend.create_schema("test")
 
-        executed_sqls = [
-            str(c[0][0]).strip() for c in mock_cursor.execute.call_args_list
-        ]
-
-        assert any("vector(768)" in sql for sql in executed_sqls)
+        # embedding dimension is passed as a parameter, check it's in the params
+        create_table_calls = [c for c in mock_cursor.execute.call_args_list
+                              if "CREATE TABLE IF NOT EXISTS" in str(c[0][0]) and "chunks_" in str(c[0][0])]
+        assert len(create_table_calls) > 0
+        assert any(768 in (c[0][1] if len(c[0]) > 1 else ()) for c in create_table_calls)
 
     def test_create_schema_calls_ensure_connection(self):
         """Test that create_schema checks connection"""

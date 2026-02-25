@@ -43,7 +43,7 @@ class GoogleSearchScraper:
         }
 
         try:
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
 

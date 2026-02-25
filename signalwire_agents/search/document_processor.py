@@ -182,8 +182,23 @@ class DocumentProcessor:
             else:
                 file_type = 'text/plain'
         else:
-            mime = magic.Magic(mime=True)
-            file_type = mime.from_file(file_path)
+            try:
+                mime = magic.Magic(mime=True)
+                file_type = mime.from_file(file_path)
+            except (FileNotFoundError, IOError, OSError):
+                # Fall back to extension-based detection if magic can't read the file
+                file_path_obj = Path(file_path)
+                extension = file_path_obj.suffix.lower()
+                ext_map = {
+                    '.pdf': 'application/pdf',
+                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    '.txt': 'text/plain', '.md': 'text/plain',
+                    '.html': 'text/html',
+                    '.rtf': 'application/rtf',
+                    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                }
+                file_type = ext_map.get(extension, 'text/plain')
 
         if 'pdf' in file_type:
             return self._extract_pdf(file_path)

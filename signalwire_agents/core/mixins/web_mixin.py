@@ -8,10 +8,12 @@ See LICENSE file in the project root for full license information.
 """
 
 import os
+import re
 import json
 import base64
 import signal
 import sys
+import contextvars
 from typing import Optional, Dict, Any, Callable
 from urllib.parse import urlparse, urlunparse
 
@@ -20,6 +22,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from signalwire_agents.core.logging_config import get_execution_mode
 from signalwire_agents.core.function_result import SwaigFunctionResult
+
+# Per-request proxy URL to avoid race conditions in concurrent async contexts
+_request_proxy_url = contextvars.ContextVar('_request_proxy_url', default=None)
+
+# Maximum request body size (10MB, matches CGI limit)
+MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
 
 
 class WebMixin:
@@ -51,7 +59,7 @@ class WebMixin:
             @app.post("/health")
             async def health_check():
                 """Health check endpoint for Kubernetes liveness probe"""
-                return {"status": "healthy"}
+                return {"status": "healthy", "agent": self.name}
 
             @app.get("/ready")
             @app.post("/ready")
@@ -63,20 +71,31 @@ class WebMixin:
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
-                allow_credentials=True,
+                allow_credentials=False,
                 allow_methods=["*"],
                 allow_headers=["*"],
             )
-            
+
+            # Add security headers middleware
+            @app.middleware("http")
+            async def add_security_headers(request, call_next):
+                response = await call_next(request)
+                response.headers["X-Content-Type-Options"] = "nosniff"
+                response.headers["X-Frame-Options"] = "DENY"
+                response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                if getattr(self, '_ssl_enabled', False) or getattr(self, 'ssl_enabled', False):
+                    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                return response
+
             # Create router and register routes
             router = self.as_router()
-            
+
             # Log registered routes for debugging
             self.log.debug("router_routes_registered")
             for route in router.routes:
                 if hasattr(route, "path"):
                     self.log.debug("router_route", path=route.path)
-            
+
             # Include the router
             if self.route == "/":
                 app.include_router(router)
@@ -147,7 +166,7 @@ class WebMixin:
             @app.post("/health")
             async def health_check():
                 """Health check endpoint for Kubernetes liveness probe"""
-                return {"status": "healthy"}
+                return {"status": "healthy", "agent": self.name}
 
             @app.get("/ready")
             @app.post("/ready")
@@ -169,19 +188,30 @@ class WebMixin:
                     media_type="application/json"
                 )
             
+            # Add security headers middleware
+            @app.middleware("http")
+            async def add_security_headers(request, call_next):
+                response = await call_next(request)
+                response.headers["X-Content-Type-Options"] = "nosniff"
+                response.headers["X-Frame-Options"] = "DENY"
+                response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                if getattr(self, '_ssl_enabled', False) or getattr(self, 'ssl_enabled', False):
+                    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                return response
+
             # Get router for this agent
             router = self.as_router()
-            
+
             # Register a catch-all route for debugging and troubleshooting
             @app.get("/{full_path:path}")
             @app.post("/{full_path:path}")
             async def handle_all_routes(request: Request, full_path: str):
                 self.log.debug("request_received", path=full_path)
-                
+
                 # Check if the path is meant for this agent
                 if not full_path.startswith(self.route.lstrip("/")):
                     return {"error": "Invalid route"}
-                
+
                 # Extract the path relative to this agent's route
                 relative_path = full_path[len(self.route.lstrip("/")):]
                 relative_path = relative_path.lstrip("/")
@@ -305,7 +335,7 @@ class WebMixin:
                 return {
                     "statusCode": 500,
                     "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"error": "Internal server error"})
+                    "body": json.dumps({"error": str(e)})
                 }
             else:
                 raise
@@ -396,7 +426,40 @@ class WebMixin:
                     return await self._handle_root_request(request)
                 
                 self.log.info("callback_endpoint_registered", path=callback_path)
-    
+
+    async def _read_body_with_limit(self, request: Request) -> bytes:
+        """Read request body with size limit enforcement.
+
+        Checks Content-Length header first, then enforces limit on actual body.
+        Raises ValueError if body exceeds MAX_REQUEST_BODY_SIZE.
+        """
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_SIZE:
+                    raise ValueError("Request body too large")
+            except (ValueError, TypeError):
+                if isinstance(content_length, str) and not content_length.isdigit():
+                    pass  # non-numeric content-length, let body read handle it
+                else:
+                    raise
+        raw = await request.body()
+        if len(raw) > MAX_REQUEST_BODY_SIZE:
+            raise ValueError("Request body too large")
+        return raw
+
+    def _check_content_type(self, request: Request) -> bool:
+        """Check if POST request has application/json content type.
+
+        Returns True if content type is acceptable, False otherwise.
+        Skips check for empty bodies.
+        """
+        content_type = request.headers.get("content-type", "")
+        if not content_type:
+            # Allow empty content-type for requests that may have no body
+            return True
+        return "application/json" in content_type
+
     async def _handle_root_request(self, request: Request):
         """Handle GET/POST requests to the root endpoint"""
         # Debug logging to understand the state before any changes
@@ -414,28 +477,40 @@ class WebMixin:
         _trust_proxy = getattr(self, '_proxy_url_base_from_env', False) or os.getenv('SWML_TRUST_PROXY_HEADERS', '').lower() in ('1', 'true', 'yes')
 
         if forwarded_host and _trust_proxy:
-            # Only update proxy URL if it wasn't set from environment
-            if not getattr(self, '_proxy_url_base_from_env', False):
-                # Set proxy_url_base on both self and super() to ensure it's shared
-                self._proxy_url_base = f"{forwarded_proto}://{forwarded_host}"
-                self._current_request = request  # Store current request for get_full_url
-                if hasattr(super(), '_proxy_url_base'):
-                    # Ensure parent class has the same proxy URL
-                    super()._proxy_url_base = self._proxy_url_base
-                
-                self.log.debug("proxy_detected_for_request", proxy_url_base=self._proxy_url_base, 
-                             source="X-Forwarded headers")
-            else:
-                self.log.debug("proxy headers present but keeping env proxy URL",
-                             forwarded_proto=forwarded_proto,
-                             forwarded_host=forwarded_host,
-                             keeping_proxy_url=self._proxy_url_base,
-                             source="environment variable")
+            # Validate proxy header values before trusting them
+            _valid_proxy = True
+            if not re.match(r'^[a-zA-Z0-9._-]+(:[0-9]+)?$', forwarded_host):
+                self.log.warning("proxy_header_invalid_host", forwarded_host=forwarded_host)
+                _valid_proxy = False
+            if forwarded_proto not in ('http', 'https'):
+                self.log.warning("proxy_header_invalid_proto", forwarded_proto=forwarded_proto)
+                _valid_proxy = False
+
+            if _valid_proxy:
+                # Only update proxy URL if it wasn't set from environment
+                if not getattr(self, '_proxy_url_base_from_env', False):
+                    computed_proxy = f"{forwarded_proto}://{forwarded_host}"
+                    # Use contextvars for per-request proxy URL (avoids race conditions)
+                    _request_proxy_url.set(computed_proxy)
+                    # Also set on self for backward compatibility with non-async codepaths
+                    self._proxy_url_base = computed_proxy
+                    if hasattr(super(), '_proxy_url_base'):
+                        super()._proxy_url_base = computed_proxy
+
+                    self.log.debug("proxy_detected_for_request", proxy_url_base=computed_proxy,
+                                 source="X-Forwarded headers")
+                else:
+                    self.log.debug("proxy headers present but keeping env proxy URL",
+                                 forwarded_proto=forwarded_proto,
+                                 forwarded_host=forwarded_host,
+                                 keeping_proxy_url=self._proxy_url_base,
+                                 source="environment variable")
         else:
             # No proxy headers - only clear proxy URL if it wasn't set from environment
             if not getattr(self, '_proxy_url_base_from_env', False):
                 self.log.debug("No proxy headers found, clearing proxy URL",
                              proxy_url_base_from_env=getattr(self, '_proxy_url_base_from_env', False))
+                _request_proxy_url.set(None)
                 self._proxy_url_base = None
                 if hasattr(super(), '_proxy_url_base'):
                     super()._proxy_url_base = None
@@ -443,8 +518,7 @@ class WebMixin:
                 self.log.debug("No proxy headers found, but keeping env proxy URL",
                              proxy_url_base=getattr(self, '_proxy_url_base', None),
                              proxy_url_base_from_env=True)
-            self._current_request = request  # Store current request for get_full_url
-            
+
             # Try the parent class detection method if it exists
             if hasattr(super(), '_detect_proxy_from_request'):
                 # Call the parent's detection method
@@ -478,10 +552,24 @@ class WebMixin:
             # Try to parse request body for POST
             body = {}
             call_id = None
-            
+
             if request.method == "POST":
-                # Check if body is empty first
-                raw_body = await request.body()
+                # Validate content type
+                if not self._check_content_type(request):
+                    return Response(
+                        content=json.dumps({"error": "Content-Type must be application/json"}),
+                        status_code=415,
+                        media_type="application/json"
+                    )
+                # Check body size limit
+                try:
+                    raw_body = await self._read_body_with_limit(request)
+                except ValueError:
+                    return Response(
+                        content=json.dumps({"error": "Request body too large"}),
+                        status_code=413,
+                        media_type="application/json"
+                    )
                 if raw_body:
                     try:
                         body = await request.json()
@@ -558,14 +646,22 @@ class WebMixin:
 
     async def _handle_debug_request(self, request: Request):
         """Handle GET/POST requests to the debug endpoint"""
+        # Check if debug endpoint is disabled
+        if not getattr(self, '_debug_endpoint_enabled', True):
+            return Response(
+                content=json.dumps({"error": "Not Found"}),
+                status_code=404,
+                media_type="application/json"
+            )
+
         req_log = self.log.bind(
             endpoint="debug",
             method=request.method,
             path=request.url.path
         )
-        
+
         req_log.debug("endpoint_called")
-        
+
         try:
             # Check auth
             if not self._check_basic_auth(request):
@@ -576,12 +672,27 @@ class WebMixin:
                     headers={"WWW-Authenticate": "Basic"},
                     media_type="application/json"
                 )
-            
+
             # Get call_id from either query params (GET) or body (POST)
             call_id = None
             body = {}
-            
+
             if request.method == "POST":
+                # Validate content type
+                if not self._check_content_type(request):
+                    return Response(
+                        content=json.dumps({"error": "Content-Type must be application/json"}),
+                        status_code=415,
+                        media_type="application/json"
+                    )
+                try:
+                    await self._read_body_with_limit(request)
+                except ValueError:
+                    return Response(
+                        content=json.dumps({"error": "Request body too large"}),
+                        status_code=413,
+                        media_type="application/json"
+                    )
                 try:
                     body = await request.json()
                     req_log.debug("request_body_received", body_size=len(str(body)))
@@ -656,19 +767,31 @@ class WebMixin:
                     media_type="application/json"
                 )
             
+            # Validate content type for POST
+            if not self._check_content_type(request):
+                return Response(
+                    content=json.dumps({"error": "Content-Type must be application/json"}),
+                    status_code=415,
+                    media_type="application/json"
+                )
+
             # For POST requests, process SWAIG function calls
+            try:
+                await self._read_body_with_limit(request)
+            except ValueError:
+                return Response(
+                    content=json.dumps({"error": "Request body too large"}),
+                    status_code=413,
+                    media_type="application/json"
+                )
             try:
                 body = await request.json()
                 req_log.debug("request_body_received", body_size=len(str(body)))
                 if body:
-                    req_log.debug("request_body", body=json.dumps(body))
+                    req_log.debug("request_body", body_keys=list(body.keys()) if isinstance(body, dict) else "non-dict")
             except Exception as e:
                 req_log.error("error_parsing_request_body", error=str(e))
-                return Response(
-                    content=json.dumps({"error": "Invalid JSON in request body"}),
-                    status_code=400,
-                    media_type="application/json"
-                )
+                body = {}
 
             # Extract function name
             function_name = body.get("function")
@@ -679,7 +802,16 @@ class WebMixin:
                     status_code=400,
                     media_type="application/json"
                 )
-            
+
+            # Validate function name format
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', function_name):
+                req_log.warning("invalid_function_name_format", function=function_name)
+                return Response(
+                    content=json.dumps({"error": f"Invalid function name format: '{function_name}'"}),
+                    status_code=400,
+                    media_type="application/json"
+                )
+
             # Add function info to logger
             req_log = req_log.bind(function=function_name)
             req_log.debug("function_call_received")
@@ -765,7 +897,7 @@ class WebMixin:
                 return result_dict
             except Exception as e:
                 req_log.error("function_execution_error", error=str(e))
-                return {"error": "Function execution failed", "function": function_name}
+                return {"error": str(e), "function": function_name}
                 
         except Exception as e:
             req_log.error("request_failed", error=str(e))
@@ -803,8 +935,22 @@ class WebMixin:
             
             # For POST requests, try to also get call_id from body
             if request.method == "POST":
+                # Validate content type
+                if not self._check_content_type(request):
+                    return Response(
+                        content=json.dumps({"error": "Content-Type must be application/json"}),
+                        status_code=415,
+                        media_type="application/json"
+                    )
                 try:
-                    body_text = await request.body()
+                    body_text = await self._read_body_with_limit(request)
+                except ValueError:
+                    return Response(
+                        content=json.dumps({"error": "Request body too large"}),
+                        status_code=413,
+                        media_type="application/json"
+                    )
+                try:
                     if body_text:
                         body_data = json.loads(body_text)
                         if call_id is None:
@@ -863,8 +1009,7 @@ class WebMixin:
                 # Only log if not suppressed
                 if not getattr(self, '_suppress_logs', False):
                     req_log.debug("request_body_received", body_size=len(str(body)))
-                    # Log the raw body directly (let the logger handle the JSON encoding)
-                    req_log.info("post_prompt_body", body=body)
+                    req_log.info("post_prompt_body", body_size=len(str(body)))
             except Exception as e:
                 req_log.error("error_parsing_request_body", error=str(e))
                 body = {}
@@ -945,12 +1090,32 @@ class WebMixin:
             conversation_id = None
             
             if request.method == "POST":
+                # Validate content type
+                if not self._check_content_type(request):
+                    return Response(
+                        content=json.dumps({"error": "Content-Type must be application/json"}),
+                        status_code=415,
+                        media_type="application/json"
+                    )
+                try:
+                    await self._read_body_with_limit(request)
+                except ValueError:
+                    return Response(
+                        content=json.dumps({"error": "Request body too large"}),
+                        status_code=413,
+                        media_type="application/json"
+                    )
                 try:
                     body = await request.json()
                     req_log.debug("request_body_received", body_size=len(str(body)))
                     conversation_id = body.get("conversation_id")
                 except Exception as e:
                     req_log.error("error_parsing_request_body", error=str(e))
+                    return Response(
+                        content=json.dumps({"error": "Invalid JSON in request body"}),
+                        status_code=400,
+                        media_type="application/json"
+                    )
             else:
                 conversation_id = request.query_params.get("conversation_id")
 
@@ -981,7 +1146,7 @@ class WebMixin:
         except Exception as e:
             req_log.error("request_failed", error=str(e))
             return Response(
-                content=json.dumps({"error": "Internal server error"}),
+                content=json.dumps({"error": f"unexpected error: {str(e)}"}),
                 status_code=500,
                 media_type="application/json"
             )
@@ -1014,8 +1179,23 @@ class WebMixin:
                     media_type="application/json"
                 )
 
+            # Validate content type
+            if not self._check_content_type(request):
+                return Response(
+                    content=json.dumps({"error": "Content-Type must be application/json"}),
+                    status_code=415,
+                    media_type="application/json"
+                )
+
             try:
+                await self._read_body_with_limit(request)
                 body = await request.json()
+            except ValueError:
+                return Response(
+                    content=json.dumps({"error": "Request body too large"}),
+                    status_code=413,
+                    media_type="application/json"
+                )
             except Exception as e:
                 req_log.error("error_parsing_request_body", error=str(e))
                 return {"status": "error", "message": "invalid JSON"}
