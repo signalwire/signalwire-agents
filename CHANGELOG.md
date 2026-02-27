@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.22] - 2026-02-27
+
+### Bug Fixes
+- Fix serverless webhook URL missing agent route prefix (e.g. `/swaig/` instead of `/swml/swaig/`) causing SWAIG function calls to fail with "Invalid route" when agent uses a non-root route — affects Lambda, GCloud Functions, Azure Functions, and CGI
+
 ## [1.0.19] - 2026-02-19
 
 ### New Features
