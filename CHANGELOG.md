@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.21] - 2026-02-27
+
+### Bug Fixes
+- Add missing `url_validator` module for SSRF protection (fixes `ImportModuleError` on import)
+
 ## [1.0.20] - 2026-02-27
 
 ### Bug Fixes
