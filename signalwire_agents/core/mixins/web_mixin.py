@@ -855,7 +855,9 @@ class WebMixin:
                             req_log.debug("token_debug", debug=json.dumps(debug_info))
                         # Check if the function requires a valid token
                         func_entry = self._tool_registry._swaig_functions.get(function_name)
-                        if func_entry and func_entry.get('secure', True):
+                        if func_entry and (
+                            func_entry.secure if hasattr(func_entry, 'secure') else func_entry.get('secure', True)
+                        ):
                             return SwaigFunctionResult(
                                 response="I'm sorry, the security token for this function is invalid or expired. I cannot execute this action."
                             ).to_dict()
