@@ -1200,8 +1200,9 @@ class AgentBase(
             if endpoint in ["swaig", "post_prompt"]:
                 endpoint = f"{endpoint}/"
                 
-            # Build the full webhook URL
-            url = f"{base_url}/{endpoint}"
+            # Build the full webhook URL (include route prefix, e.g. /swml)
+            route = self.route.rstrip('/') if self.route and self.route != "/" else ""
+            url = f"{base_url}{route}/{endpoint}"
             
             # Add query parameters if any (only if they have values)
             if query_params:

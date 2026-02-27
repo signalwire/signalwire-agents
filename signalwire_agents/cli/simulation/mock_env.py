@@ -272,7 +272,7 @@ def load_env_file(env_file_path: str) -> Dict[str, str]:
     if not os.path.exists(env_file_path):
         raise FileNotFoundError(f"Environment file not found: {env_file_path}")
     
-    with open(env_file_path, 'r') as f:
+    with open(env_file_path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:

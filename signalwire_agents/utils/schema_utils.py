@@ -160,7 +160,7 @@ class SchemaUtils:
             self.log.debug("loading_schema", path=self.schema_path, exists=os.path.exists(self.schema_path))
             
             if os.path.exists(self.schema_path):
-                with open(self.schema_path, "r") as f:
+                with open(self.schema_path, "r", encoding="utf-8") as f:
                     schema = json.load(f)
                 self.log.debug("schema_loaded_successfully", 
                               path=self.schema_path,

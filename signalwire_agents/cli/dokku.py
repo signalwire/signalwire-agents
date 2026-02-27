@@ -2083,7 +2083,7 @@ def cmd_deploy(args):
     if not app_name and Path('app.json').exists():
         import json
         try:
-            with open('app.json') as f:
+            with open('app.json', encoding='utf-8') as f:
                 app_json = json.load(f)
                 app_name = app_json.get('name')
         except Exception:
@@ -2209,7 +2209,7 @@ def _get_app_name() -> str:
     if Path('app.json').exists():
         import json
         try:
-            with open('app.json') as f:
+            with open('app.json', encoding='utf-8') as f:
                 return json.load(f).get('name', '')
         except Exception:
             pass

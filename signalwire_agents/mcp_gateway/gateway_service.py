@@ -232,13 +232,13 @@ class MCPGateway:
                     }
                 }
                 
-                with open(config_path, 'w') as f:
+                with open(config_path, 'w', encoding='utf-8') as f:
                     json.dump(default_config, f, indent=2)
                 
                 logger.info(f"Created default config at {config_path}")
                 return default_config
         
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
         
         # Apply environment variable substitution

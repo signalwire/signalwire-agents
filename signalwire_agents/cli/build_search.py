@@ -544,7 +544,7 @@ Examples:
                 print(f"✓ Created {len(chunk_files_created)} JSON files in {args.output_dir}")
                 total_chunks = 0
                 for f in chunk_files_created:
-                    with open(f) as fh:
+                    with open(f, encoding="utf-8") as fh:
                         total_chunks += len(json.load(fh)['chunks'])
                 print(f"  Total chunks: {total_chunks}")
             

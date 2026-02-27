@@ -54,7 +54,7 @@ class ConfigLoader:
         for path in self.config_paths:
             if os.path.exists(path):
                 try:
-                    with open(path, 'r') as f:
+                    with open(path, 'r', encoding='utf-8') as f:
                         self._config = json.load(f)
                         self._config_file = path
                         logger.info("config_loaded", path=path)

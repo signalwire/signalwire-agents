@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.20] - 2026-02-27
+
+### Bug Fixes
+- Fix serverless webhook URL missing agent route prefix (e.g. `/swaig/` instead of `/swml/swaig/`) causing SWAIG function calls to fail with "Invalid route" when agent uses a non-root route
+- Add explicit `encoding="utf-8"` to all `open()` calls across CLI tools, config loader, MCP gateway, and schema utils
+
 ## [1.0.19] - 2026-02-19
 
 ### New Features
