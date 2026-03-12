@@ -36,6 +36,7 @@ dependencies = [
     "pytz>=2023.3",
     "lxml>=4.9.0",
     "jsonschema-rs>=0.20.0",
+    "websockets>=12.0",
 ]
 
 # Optional dependencies for search functionality

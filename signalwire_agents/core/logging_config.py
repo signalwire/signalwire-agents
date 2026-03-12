@@ -233,6 +233,7 @@ def _get_sdk_logger_names():
         "swml_service", "agent_base", "AgentServer", "skill_registry",
         "skill_manager", "security_config", "config_loader", "auth_handler",
         "web_service", "search_service", "bedrock_agent",
+        "relay_client", "relay_call",
     ]
 
 

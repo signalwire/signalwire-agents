@@ -128,18 +128,23 @@ def add_skill_directory(path):
     from signalwire_agents.skills.registry import skill_registry
     return skill_registry.add_skill_directory(path)
 
+def SignalWireClient(*args, **kwargs):
+    """Create a SignalWire REST API client (lazy import)"""
+    from signalwire_agents.rest import SignalWireClient as _SignalWireClient
+    return _SignalWireClient(*args, **kwargs)
+
 __all__ = [
     "AgentBase",
-    "AgentServer", 
+    "AgentServer",
     "SWMLService",
     "SWMLBuilder",
     "SwaigFunctionResult",
     "SWAIGFunction",
     "DataMap",
-    "create_simple_api_tool", 
+    "create_simple_api_tool",
     "create_expression_tool",
     "ContextBuilder",
-    "Context", 
+    "Context",
     "Step",
     "create_simple_context",
     "WebService",
@@ -149,5 +154,6 @@ __all__ = [
     "list_skills_with_params",
     "register_skill",
     "add_skill_directory",
-    "BedrockAgent"
+    "BedrockAgent",
+    "SignalWireClient",
 ]

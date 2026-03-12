@@ -119,6 +119,53 @@ swaig-test examples/simple_agent.py --dump-swml
 swaig-test examples/simple_agent.py --exec get_weather --location "New York"
 ```
 
+## RELAY Client
+
+Real-time call control and messaging over WebSocket. The RELAY client connects to SignalWire via the Blade protocol and gives you imperative, async control over live phone calls and SMS/MMS.
+
+```python
+from signalwire_agents.relay import RelayClient
+
+client = RelayClient(project="...", token="...", host="example.signalwire.com", contexts=["default"])
+
+@client.on_call
+async def handle(call):
+    await call.answer()
+    action = await call.play([{"type": "tts", "params": {"text": "Welcome!"}}])
+    await action.wait()
+    await call.hangup()
+
+client.run()
+```
+
+- 57+ calling methods (play, record, collect, detect, tap, stream, AI, conferencing, and more)
+- SMS/MMS messaging with delivery tracking
+- Action objects with `wait()`, `stop()`, `pause()`, `resume()`
+- Auto-reconnect with exponential backoff
+
+See the **[RELAY documentation](relay/README.md)** for the full guide, API reference, and examples.
+
+## REST Client
+
+Synchronous REST client for managing SignalWire resources and controlling calls over HTTP. No WebSocket required.
+
+```python
+from signalwire_agents.rest import SignalWireClient
+
+client = SignalWireClient(project="...", token="...", host="example.signalwire.com")
+
+client.fabric.ai_agents.create(name="Support Bot", prompt={"text": "You are helpful."})
+client.calling.play(call_id, play=[{"type": "tts", "text": "Hello!"}])
+client.phone_numbers.search(area_code="512")
+client.datasphere.documents.search(query_string="billing policy")
+```
+
+- Namespaced sub-objects for every API: Fabric (13 resource types), Calling (37 commands), Video, Datasphere, Compat (Twilio-compatible), and more
+- Shared `requests.Session` for connection pooling
+- Dict returns -- raw JSON, no wrapper objects
+
+See the **[REST documentation](rest/README.md)** for the full guide, API reference, and examples.
+
 ## Documentation
 
 Full reference documentation is available at **[developer.signalwire.com/sdks/agents-sdk](https://developer.signalwire.com/sdks/agents-sdk)**.
